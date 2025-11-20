@@ -1,7 +1,7 @@
 use crate::database::user::{create_user, get_user_by_email, verify_password};
 use crate::db::get_client;
 use crate::error::app_error::AppError;
-use crate::models::user::{CreateUserRequest, LoginRequest, User};
+use crate::models::user::{CreateUserRequest, LoginRequest, UserResponse};
 use deadpool_postgres::Pool;
 use rocket::State;
 use rocket::http::{Cookie, CookieJar, Status};
@@ -11,7 +11,7 @@ use rocket::serde::json::Json;
 pub async fn post_user(
     pool: &State<Pool>,
     payload: Json<CreateUserRequest>,
-) -> Result<Json<User>, AppError> {
+) -> Result<(Status, Json<UserResponse>), AppError> {
     let client = get_client(pool).await?;
     let user = get_user_by_email(&client, &payload.email).await?;
     if user.is_some() {
@@ -19,9 +19,13 @@ pub async fn post_user(
     }
 
     let user = create_user(&client, &payload.name, &payload.email, &payload.password).await?;
-
     if let Some(user) = user {
-        Ok(Json(user))
+        let user_response = UserResponse {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+        };
+        Ok((Status::Created, Json(user_response)))
     } else {
         Err(AppError::Db("User does not exist".to_string()))
     }
@@ -32,7 +36,7 @@ pub async fn post_user_login(
     pool: &State<Pool>,
     cookies: &CookieJar<'_>,
     payload: Json<LoginRequest>,
-) -> Result<(), AppError> {
+) -> Result<Status, AppError> {
     let client = get_client(pool).await?;
     if let Some(user) = get_user_by_email(&client, &payload.email).await? {
         verify_password(&user, &payload.password).await?;
@@ -40,7 +44,7 @@ pub async fn post_user_login(
         cookies.add_private(Cookie::build(("user", value)).path("/").build());
     }
 
-    Ok(())
+    Ok(Status::Ok)
 }
 
 #[rocket::post("/users/logout")]

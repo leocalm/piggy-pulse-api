@@ -53,14 +53,13 @@ pub async fn verify_password(user: &User, password: &str) -> Result<(), AppError
 
 fn map_response_to_model(result: &[Row]) -> Option<User> {
     result.first().map(|user| User {
-            id: user.get("id"),
-            name: user.get("name"),
-            email: user.get("email"),
-            salt: user.get("salt"),
-            password_hash: user.get("password_hash"),
-            created_at: user.get("created_at"),
-            updated_at: user.get("updated_at"),
-        })
+        id: user.get("id"),
+        name: user.get("name"),
+        email: user.get("email"),
+        password_hash: user.get("password_hash"),
+        created_at: user.get("created_at"),
+        updated_at: user.get("updated_at"),
+    })
 }
 
 fn password_hash(password: &str) -> (String, String) {

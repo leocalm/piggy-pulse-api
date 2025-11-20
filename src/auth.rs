@@ -19,12 +19,13 @@ impl<'r> FromRequest<'r> for CurrentUser {
         let cookies = req.cookies();
         if let Some(cookie) = cookies.get_private("user")
             && let Some((id_str, username)) = cookie.value().split_once(':')
-                && let Ok(id) = Uuid::parse_str(id_str) {
-                    return Outcome::Success(CurrentUser {
-                        id,
-                        username: username.to_string(),
-                    });
-                }
+            && let Ok(id) = Uuid::parse_str(id_str)
+        {
+            return Outcome::Success(CurrentUser {
+                id,
+                username: username.to_string(),
+            });
+        }
 
         Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials))
     }

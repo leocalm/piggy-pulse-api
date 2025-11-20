@@ -6,6 +6,7 @@ mod models;
 mod routes;
 
 use crate::db::stage_db;
+use crate::routes::account::{get_account, list_all_accounts, post_account, put_account};
 use crate::routes::budget::{health, list_budgets, post_budget};
 use crate::routes::error::{conflict, not_found};
 use crate::routes::user::{post_user, post_user_login, post_user_logout};
@@ -37,7 +38,11 @@ fn rocket() -> Rocket<Build> {
                 list_budgets,
                 post_user,
                 post_user_login,
-                post_user_logout
+                post_user_logout,
+                post_account,
+                list_all_accounts,
+                get_account,
+                put_account
             ],
         )
         .register("/api", catchers![not_found, conflict])

@@ -12,6 +12,9 @@ pub enum AppError {
     InvalidCredentials,
     PasswordHash(String),
     UserAlreadyExists(String),
+    BadRequest(String),
+    NotFound(String),
+    CurrencyDoesNotExist(String),
 }
 
 impl std::fmt::Display for AppError {
@@ -23,6 +26,9 @@ impl std::fmt::Display for AppError {
             Self::Db(s) => write!(f, "Database error: {}", s),
             Self::PasswordHash(s) => write!(f, "Password hash error: {}", s),
             Self::UserAlreadyExists(s) => write!(f, "User {} already exists", s),
+            Self::BadRequest(s) => write!(f, "Bad request: {}", s),
+            Self::NotFound(s) => write!(f, "Not found: {}", s),
+            Self::CurrencyDoesNotExist(s) => write!(f, "Currency not found: {}", s),
         }
     }
 }
@@ -50,6 +56,9 @@ impl From<AppError> for Status {
             AppError::Db(_) => Status::InternalServerError,
             AppError::Unauthorized => Status::Unauthorized,
             AppError::UserAlreadyExists(_) => Status::Conflict,
+            AppError::BadRequest(_) => Status::BadRequest,
+            AppError::NotFound(_) => Status::NotFound,
+            AppError::CurrencyDoesNotExist(_) => Status::BadRequest,
         }
     }
 }
