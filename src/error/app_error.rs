@@ -15,6 +15,7 @@ pub enum AppError {
     BadRequest(String),
     NotFound(String),
     CurrencyDoesNotExist(String),
+    UuidError(String),
 }
 
 impl std::fmt::Display for AppError {
@@ -29,6 +30,7 @@ impl std::fmt::Display for AppError {
             Self::BadRequest(s) => write!(f, "Bad request: {}", s),
             Self::NotFound(s) => write!(f, "Not found: {}", s),
             Self::CurrencyDoesNotExist(s) => write!(f, "Currency not found: {}", s),
+            Self::UuidError(s) => write!(f, "Uuid error: {}", s),
         }
     }
 }
@@ -47,6 +49,12 @@ impl From<password_hash::Error> for AppError {
     }
 }
 
+impl From<uuid::Error> for AppError {
+    fn from(e: uuid::Error) -> Self {
+        AppError::UserAlreadyExists(e.to_string())
+    }
+}
+
 impl From<AppError> for Status {
     fn from(e: AppError) -> Self {
         match e {
@@ -59,6 +67,7 @@ impl From<AppError> for Status {
             AppError::BadRequest(_) => Status::BadRequest,
             AppError::NotFound(_) => Status::NotFound,
             AppError::CurrencyDoesNotExist(_) => Status::BadRequest,
+            AppError::UuidError(_) => Status::BadRequest,
         }
     }
 }

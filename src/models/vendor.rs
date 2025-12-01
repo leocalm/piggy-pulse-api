@@ -3,34 +3,30 @@ use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Serialize, Debug)]
-pub struct Budget {
+pub struct Vendor {
     pub id: Uuid,
     pub name: String,
-    pub start_day: i32,
     pub created_at: DateTime<Utc>,
     pub deleted: bool,
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Deserialize, Debug)]
-pub struct BudgetRequest {
+pub struct VendorRequest {
     pub name: String,
-    pub start_day: i32,
 }
 
 #[derive(Serialize, Debug)]
-pub struct BudgetResponse {
+pub struct VendorResponse {
     pub id: Uuid,
     pub name: String,
-    pub start_day: i32,
 }
 
-impl From<&Budget> for BudgetResponse {
-    fn from(budget: &Budget) -> Self {
+impl From<&Vendor> for VendorResponse {
+    fn from(vendor: &Vendor) -> Self {
         Self {
-            id: budget.id,
-            name: budget.name.clone(),
-            start_day: budget.start_day,
+            id: vendor.id,
+            name: vendor.name.clone(),
         }
     }
 }

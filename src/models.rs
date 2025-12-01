@@ -1,4 +1,9 @@
 pub mod account;
 pub mod budget;
-pub mod health;
+pub mod budget_category;
+pub mod category;
+pub mod currency;
+pub mod dashboard;
+pub mod transaction;
 pub mod user;
+pub mod vendor;

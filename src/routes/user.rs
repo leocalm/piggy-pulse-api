@@ -1,7 +1,7 @@
 use crate::database::user::{create_user, get_user_by_email, verify_password};
 use crate::db::get_client;
 use crate::error::app_error::AppError;
-use crate::models::user::{CreateUserRequest, LoginRequest, UserResponse};
+use crate::models::user::{LoginRequest, UserRequest, UserResponse};
 use deadpool_postgres::Pool;
 use rocket::State;
 use rocket::http::{Cookie, CookieJar, Status};
@@ -10,7 +10,7 @@ use rocket::serde::json::Json;
 #[rocket::post("/users", data = "<payload>")]
 pub async fn post_user(
     pool: &State<Pool>,
-    payload: Json<CreateUserRequest>,
+    payload: Json<UserRequest>,
 ) -> Result<(Status, Json<UserResponse>), AppError> {
     let client = get_client(pool).await?;
     let user = get_user_by_email(&client, &payload.email).await?;
@@ -19,16 +19,7 @@ pub async fn post_user(
     }
 
     let user = create_user(&client, &payload.name, &payload.email, &payload.password).await?;
-    if let Some(user) = user {
-        let user_response = UserResponse {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-        };
-        Ok((Status::Created, Json(user_response)))
-    } else {
-        Err(AppError::Db("User does not exist".to_string()))
-    }
+    Ok((Status::Created, Json(UserResponse::from(&user))))
 }
 
 #[rocket::post("/users/login", data = "<payload>")]

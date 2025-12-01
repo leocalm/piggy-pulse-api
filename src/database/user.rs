@@ -11,7 +11,7 @@ pub async fn create_user(
     name: &str,
     email: &str,
     password: &str,
-) -> Result<Option<User>, AppError> {
+) -> Result<User, AppError> {
     let (salt, password_hash) = password_hash(password);
 
     let result = client
@@ -25,7 +25,11 @@ pub async fn create_user(
         )
         .await?;
 
-    Ok(map_response_to_model(&result))
+    if let Some(row) = result.first() {
+        Ok(map_response_to_model(row))
+    } else {
+        Err(AppError::Db("Error creating user".to_string()))
+    }
 }
 
 pub async fn get_user_by_email(client: &Client, email: &str) -> Result<Option<User>, AppError> {
@@ -39,7 +43,11 @@ pub async fn get_user_by_email(client: &Client, email: &str) -> Result<Option<Us
         )
         .await?;
 
-    Ok(map_response_to_model(&result))
+    if let Some(row) = result.first() {
+        Ok(Some(map_response_to_model(row)))
+    } else {
+        Ok(None)
+    }
 }
 
 pub async fn verify_password(user: &User, password: &str) -> Result<(), AppError> {
@@ -51,15 +59,16 @@ pub async fn verify_password(user: &User, password: &str) -> Result<(), AppError
     Ok(())
 }
 
-fn map_response_to_model(result: &[Row]) -> Option<User> {
-    result.first().map(|user| User {
+fn map_response_to_model(user: &Row) -> User {
+    User {
         id: user.get("id"),
         name: user.get("name"),
         email: user.get("email"),
         password_hash: user.get("password_hash"),
         created_at: user.get("created_at"),
-        updated_at: user.get("updated_at"),
-    })
+        deleted: user.get("deleted"),
+        deleted_at: user.get("deleted_at"),
+    }
 }
 
 fn password_hash(password: &str) -> (String, String) {

@@ -1,8 +1,8 @@
-use rocket::serde::Serialize;
+use rocket::http::Status;
 
-#[derive(Serialize)]
-pub struct HealthResponse {
-    pub status: &'static str,
+#[rocket::get("/health")]
+pub async fn healthcheck() -> Status {
+    Status::Ok
 }
 
 #[cfg(test)]

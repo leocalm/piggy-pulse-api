@@ -9,7 +9,8 @@ pub struct User {
     pub email: String,
     pub password_hash: String,
     pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub deleted: bool,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize, Debug)]
@@ -20,7 +21,7 @@ pub struct UserResponse {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct CreateUserRequest {
+pub struct UserRequest {
     pub name: String,
     pub email: String,
     pub password: String,
@@ -30,4 +31,14 @@ pub struct CreateUserRequest {
 pub struct LoginRequest {
     pub email: String,
     pub password: String,
+}
+
+impl From<&User> for UserResponse {
+    fn from(user: &User) -> Self {
+        Self {
+            id: user.id,
+            name: user.name.clone(),
+            email: user.email.clone(),
+        }
+    }
 }
