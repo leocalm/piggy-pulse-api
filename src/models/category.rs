@@ -2,14 +2,14 @@ use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq)]
 pub enum CategoryType {
     Incoming,
     Outgoing,
     Transfer,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct Category {
     pub id: Uuid,
     pub name: String,
@@ -18,8 +18,6 @@ pub struct Category {
     pub parent_id: Option<Uuid>,
     pub category_type: CategoryType,
     pub created_at: DateTime<Utc>,
-    pub deleted: bool,
-    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Deserialize, Debug)]

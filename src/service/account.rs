@@ -1,0 +1,42 @@
+use crate::database::account::AccountRepository;
+use crate::database::transaction::TransactionRepository;
+use crate::error::app_error::AppError;
+use crate::models::account::AccountResponse;
+use crate::models::currency::CurrencyResponse;
+use crate::service::service_util::balance_on_date;
+use chrono::Utc;
+
+pub struct AccountService<'a, R>
+where
+    R: AccountRepository + TransactionRepository,
+{
+    repository: &'a R,
+}
+
+impl<'a, R> AccountService<'a, R>
+where
+    R: AccountRepository + TransactionRepository,
+{
+    pub fn new(repository: &'a R) -> Self {
+        AccountService { repository }
+    }
+
+    pub async fn list_accounts(&self) -> Result<Vec<AccountResponse>, AppError> {
+        let accounts = self.repository.list_accounts().await?;
+        let transactions = self.repository.list_transactions().await?;
+
+        Ok(accounts
+            .iter()
+            .map(|a| AccountResponse {
+                id: a.id,
+                name: a.name.clone(),
+                color: a.color.clone(),
+                icon: a.icon.clone(),
+                account_type: a.account_type,
+                currency: CurrencyResponse::from(&a.currency),
+                balance: balance_on_date(Some(&Utc::now().date_naive()), a, &transactions) as i64,
+                spend_limit: a.spend_limit,
+            })
+            .collect())
+    }
+}

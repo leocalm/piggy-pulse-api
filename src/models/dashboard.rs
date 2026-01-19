@@ -1,3 +1,5 @@
+use crate::models::transaction::TransactionResponse;
+use chrono::NaiveDate;
 use rocket::serde::Serialize;
 
 #[derive(Serialize, Debug)]
@@ -7,11 +9,12 @@ pub struct BudgetPerDayResponse {
     pub balance: i32,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct SpentPerCategoryResponse {
     pub category_name: String,
     pub budgeted_value: i32,
     pub amount_spent: i32,
+    pub percentage_spent: i32,
 }
 
 #[derive(Serialize, Debug)]
@@ -22,10 +25,20 @@ pub struct MonthlyBurnInResponse {
     pub days_in_period: i32,
 }
 
-#[allow(dead_code)]
+#[derive(Serialize, Debug)]
+pub struct MonthProgressResponse {
+    pub current_date: NaiveDate,
+    pub days_in_period: u32,
+    pub remaining_days: u32,
+    pub days_passed_percentage: u32,
+}
+
 #[derive(Serialize, Debug)]
 pub struct DashboardResponse {
     pub budget_per_day: Vec<BudgetPerDayResponse>,
     pub spent_per_category: Vec<SpentPerCategoryResponse>,
-    pub monthly_burn_in: Vec<MonthlyBurnInResponse>,
+    pub monthly_burn_in: MonthlyBurnInResponse,
+    pub month_progress: MonthProgressResponse,
+    pub recent_transactions: Vec<TransactionResponse>,
+    pub total_asset: i32,
 }

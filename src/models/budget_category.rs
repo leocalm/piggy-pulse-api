@@ -3,28 +3,26 @@ use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct BudgetCategory {
     pub id: Uuid,
     pub category_id: Uuid,
-    pub budgeted_value: u32,
+    pub budgeted_value: i32,
     pub created_at: DateTime<Utc>,
-    pub deleted: bool,
-    pub deleted_at: Option<DateTime<Utc>>,
     pub category: Category,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct BudgetCategoryRequest {
     pub category_id: Uuid,
-    pub budgeted_value: u32,
+    pub budgeted_value: i32,
 }
 
 #[derive(Serialize, Debug)]
 pub struct BudgetCategoryResponse {
     pub id: Uuid,
     pub category_id: Uuid,
-    pub budgeted_value: u32,
+    pub budgeted_value: i32,
     pub category: CategoryResponse,
 }
 

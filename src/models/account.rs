@@ -3,15 +3,16 @@ use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq)]
 pub enum AccountType {
     Checking,
     Savings,
     CreditCard,
     Wallet,
+    Allowance,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct Account {
     pub id: Uuid,
     pub name: String,
@@ -21,8 +22,7 @@ pub struct Account {
     pub currency: Currency,
     pub balance: i64,
     pub created_at: DateTime<Utc>,
-    pub deleted: bool,
-    pub deleted_at: Option<DateTime<Utc>>,
+    pub spend_limit: Option<i32>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -33,6 +33,7 @@ pub struct AccountRequest {
     pub account_type: AccountType,
     pub currency: String,
     pub balance: i64,
+    pub spend_limit: Option<i32>,
 }
 
 #[derive(Serialize, Debug)]
@@ -44,6 +45,7 @@ pub struct AccountResponse {
     pub account_type: AccountType,
     pub currency: CurrencyResponse,
     pub balance: i64,
+    pub spend_limit: Option<i32>,
 }
 
 impl From<&Account> for AccountResponse {
@@ -62,6 +64,7 @@ impl From<&Account> for AccountResponse {
                 decimal_places: account.currency.decimal_places,
             },
             balance: account.balance,
+            spend_limit: account.spend_limit,
         }
     }
 }

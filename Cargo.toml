@@ -18,3 +18,4 @@ argon2 = "0.5"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 log = "0.4.28"
+async-trait = "0.1.89"

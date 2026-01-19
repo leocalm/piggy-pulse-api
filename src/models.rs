@@ -1,6 +1,7 @@
 pub mod account;
 pub mod budget;
 pub mod budget_category;
+pub mod budget_period;
 pub mod category;
 pub mod currency;
 pub mod dashboard;
