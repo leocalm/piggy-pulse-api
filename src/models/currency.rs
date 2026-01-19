@@ -10,8 +10,6 @@ pub struct Currency {
     pub currency: String,
     pub decimal_places: i32,
     pub created_at: DateTime<Utc>,
-    pub deleted: bool,
-    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 impl From<&Currency> for CurrencyResponse {

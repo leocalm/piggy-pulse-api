@@ -1,14 +1,21 @@
+use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
-use crate::models::dashboard::{
-    BudgetPerDayResponse, MonthlyBurnInResponse, SpentPerCategoryResponse,
-};
-use deadpool_postgres::Client;
+use crate::models::dashboard::{BudgetPerDayResponse, MonthlyBurnInResponse, SpentPerCategoryResponse};
 use tracing::error;
 
-pub async fn balance_per_day(client: &Client) -> Result<Vec<BudgetPerDayResponse>, AppError> {
-    let rows = client
-        .query(
-            r#"
+#[async_trait::async_trait]
+pub trait DashboardRepository {
+    async fn balance_per_day(&self) -> Result<Vec<BudgetPerDayResponse>, AppError>;
+    async fn spent_per_category(&self) -> Result<Vec<SpentPerCategoryResponse>, AppError>;
+    async fn monthly_burn_in(&self) -> Result<MonthlyBurnInResponse, AppError>;
+}
+
+#[async_trait::async_trait]
+impl<'a> DashboardRepository for PostgresRepository<'a> {
+    async fn balance_per_day(&self) -> Result<Vec<BudgetPerDayResponse>, AppError> {
+        let rows = self.client
+            .query(
+                r#"
             SELECT
                 a.name as account_name,
                 to_char(t.occurred_at, 'YYYY-MM-DD') as date,
@@ -26,105 +33,144 @@ pub async fn balance_per_day(client: &Client) -> Result<Vec<BudgetPerDayResponse
             GROUP BY t.occurred_at, a.name, a.balance
             ORDER BY t.occurred_at
             "#,
-            &[],
-        )
-        .await?;
+                &[],
+            )
+            .await?;
 
-    Ok(rows
-        .iter()
-        .map(|row| {
-            let balance = row.try_get::<_, i32>("balance").unwrap_or_else(|err| {
-                error!("Error: {:?}", err);
-                0
-            });
+        Ok(rows
+            .iter()
+            .map(|row| {
+                let balance = row.try_get::<_, i32>("balance").unwrap_or_else(|err| {
+                    error!("Error: {:?}", err);
+                    0
+                });
 
-            BudgetPerDayResponse {
-                account_name: row.get("account_name"),
-                date: row.get("date"),
-                balance,
-            }
-        })
-        .collect())
-}
+                BudgetPerDayResponse {
+                    account_name: row.get("account_name"),
+                    date: row.get("date"),
+                    balance,
+                }
+            })
+            .collect())
+    }
 
-pub async fn spent_per_category(
-    client: &Client,
-) -> Result<Vec<SpentPerCategoryResponse>, AppError> {
-    let rows = client
-        .query(
-            r#"
-            SELECT
-                c.name as category_name,
-                bc.budgeted_value,
-                CAST(SUM(t.amount) AS INTEGER) as amount_spent
-            FROM category c
-            JOIN budget_category bc ON c.id = bc.category_id
-            JOIN transaction t ON c.id = t.category_id
-            JOIN budget b ON 1=1
-            WHERE CASE
-                WHEN EXTRACT(MONTH FROM now()) > 1
-                  THEN t.occurred_at > MAKE_DATE(CAST(EXTRACT(YEAR FROM now()) AS INTEGER), CAST(EXTRACT(MONTH FROM now()) - 1 AS INTEGER), b.start_day)
-                ELSE
-                  t.occurred_at > MAKE_DATE(CAST(EXTRACT(YEAR FROM now()) - 1 AS INTEGER), 12, b.start_day)
-                END
-            GROUP BY c.name, bc.budgeted_value
+    async fn spent_per_category(&self) -> Result<Vec<SpentPerCategoryResponse>, AppError> {
+        let rows = self
+            .client
+            .query(
+                r#"
+WITH budget_settings AS (
+    SELECT b.start_day
+    FROM budget b
+), cutoff AS (
+    SELECT CASE
+               WHEN EXTRACT(DAY from now())::int >= s.start_day THEN
+                   MAKE_DATE(EXTRACT(YEAR FROM now())::int,
+                             (EXTRACT(MONTH FROM now()))::int,
+                             s.start_day)
+               WHEN EXTRACT(MONTH FROM now()) > 1 THEN
+                   MAKE_DATE(EXTRACT(YEAR FROM now())::int,
+                             (EXTRACT(MONTH FROM now()) - 1)::int,
+                             s.start_day)
+               ELSE
+                   MAKE_DATE((EXTRACT(YEAR FROM now()) - 1)::int, 12, s.start_day)
+               END AS start_date
+    FROM budget_settings s
+), month_transactions AS (
+    SELECT t.category_id, t.amount
+    FROM transaction t
+             CROSS JOIN cutoff c
+    WHERE t.occurred_at > c.start_date
+)
+SELECT c.name AS category_name,
+       bc.budgeted_value,
+       COALESCE(SUM(mt.amount), 0)::int AS amount_spent
+FROM category c
+LEFT JOIN month_transactions mt
+    ON c.id = mt.category_id
+JOIN budget_category bc
+    ON bc.category_id = c.id
+GROUP BY category_name, budgeted_value
             "#,
-            &[],
-        )
-        .await?;
+                &[],
+            )
+            .await?;
 
-    Ok(rows
-        .iter()
-        .map(|row| SpentPerCategoryResponse {
-            category_name: row.get("category_name"),
-            budgeted_value: row.get("budgeted_value"),
-            amount_spent: row.get("amount_spent"),
-        })
-        .collect())
-}
+        Ok(rows
+            .iter()
+            .map(|row| SpentPerCategoryResponse {
+                category_name: row.get("category_name"),
+                budgeted_value: row.get("budgeted_value"),
+                amount_spent: row.get("amount_spent"),
+                percentage_spent: 0,
+            })
+            .collect())
+    }
 
-pub async fn monthly_burn_in(client: &Client) -> Result<Vec<MonthlyBurnInResponse>, AppError> {
-    let rows = client.query(
-        r#"
-        WITH total_budget AS (
-        SELECT
-            CAST(SUM(bc.budgeted_value) AS INTEGER) as value
-        FROM budget_category bc
-        ), spent_budget AS (
-        SELECT CAST(SUM(t.amount) AS INTEGER) as value
-        FROM budget_category bc
-            JOIN transaction t ON bc.category_id = t.category_id
-            JOIN budget b ON 1 = 1
-        WHERE CASE
-            WHEN EXTRACT(MONTH FROM now()) > 1
-                THEN t.occurred_at > MAKE_DATE(CAST(EXTRACT(YEAR FROM now()) AS INTEGER), CAST(EXTRACT(MONTH FROM now()) - 1 AS INTEGER), b.start_day)
-                ELSE t.occurred_at > MAKE_DATE(CAST(EXTRACT(YEAR FROM now()) - 1 AS INTEGER), 12, b.start_day)
-            END
-        )
-        SELECT
-            total_budget.value as total_budget,
-            spent_budget.value as spent_budget,
-            MAKE_DATE(CAST(EXTRACT(YEAR FROM now()) AS INTEGER), CAST(EXTRACT(MONTH FROM now()) AS INTEGER), CAST(EXTRACT(DAY FROM now()) AS INTEGER)) - CASE WHEN EXTRACT(MONTH FROM now()) > 1
-                THEN MAKE_DATE(CAST(EXTRACT(YEAR FROM now()) AS INTEGER), CAST(EXTRACT(MONTH FROM now()) - 1 AS INTEGER), b.start_day)
-                ELSE MAKE_DATE(CAST(EXTRACT(YEAR FROM now()) - 1 AS INTEGER), 12, b.start_day)
-                END as current_day,
-            MAKE_DATE(CAST(EXTRACT(YEAR FROM now()) AS INTEGER), CAST(EXTRACT(MONTH FROM now()) AS INTEGER), b.start_day) - CASE WHEN EXTRACT(MONTH FROM now()) > 1
-                THEN MAKE_DATE(CAST(EXTRACT(YEAR FROM now()) AS INTEGER), CAST(EXTRACT(MONTH FROM now()) - 1 AS INTEGER), b.start_day)
-                ELSE MAKE_DATE(CAST(EXTRACT(YEAR FROM now()) - 1 AS INTEGER), 12, b.start_day)
-            END as days_in_period
-        FROM total_budget
-        JOIN spent_budget ON 1=1
-        JOIN budget b ON 1=1
+    async fn monthly_burn_in(&self) -> Result<MonthlyBurnInResponse, AppError> {
+        let rows = self.client.query(
+            r#"
+WITH budget_settings AS (
+    SELECT b.start_day
+    FROM budget b
+), cutoff AS (
+    SELECT CASE
+        WHEN EXTRACT(DAY from now())::int >= s.start_day THEN
+            MAKE_DATE(EXTRACT(YEAR FROM now())::int,
+                      (EXTRACT(MONTH FROM now()))::int,
+                      s.start_day)
+        WHEN EXTRACT(MONTH FROM now()) > 1 THEN
+                   MAKE_DATE(EXTRACT(YEAR FROM now())::int,
+                             (EXTRACT(MONTH FROM now()) - 1)::int,
+                             s.start_day)
+               ELSE
+                   MAKE_DATE((EXTRACT(YEAR FROM now()) - 1)::int, 12, s.start_day)
+               END AS start_date,
+        CASE
+            WHEN EXTRACT(DAY from now())::int < s.start_day THEN
+                MAKE_DATE(EXTRACT(YEAR FROM now())::int,
+                          (EXTRACT(MONTH FROM now()))::int,
+                          s.start_day)
+            WHEN EXTRACT(MONTH FROM now())::int = 12 THEN
+                MAKE_DATE(EXTRACT(YEAR FROM now())::int + 1,
+                          1,
+                          s.start_day)
+            ELSE
+                MAKE_DATE(EXTRACT(YEAR FROM now())::int,
+                          (EXTRACT(MONTH FROM now()) + 1)::int,
+                          s.start_day)
+        END AS end_date
+    FROM budget_settings s
+), total_budget AS (
+    SELECT CAST(SUM(bc.budgeted_value) AS INTEGER) as value
+    FROM budget_category bc
+), spent_budget AS (
+    SELECT CAST(SUM(t.amount) AS INTEGER) as value
+    FROM budget_category bc
+             JOIN transaction t ON bc.category_id = t.category_id
+             CROSS JOIN cutoff
+    WHERE t.occurred_at > cutoff.start_date
+)
+SELECT
+    total_budget.value as total_budget,
+    COALESCE(spent_budget.value, 0)::int as spent_budget,
+    MAKE_DATE(CAST(EXTRACT(YEAR FROM now()) AS INTEGER), CAST(EXTRACT(MONTH FROM now()) AS INTEGER), CAST(EXTRACT(DAY FROM now()) AS INTEGER)) - cutoff.start_date as current_day,
+    cutoff.end_date - cutoff.start_date as days_in_period
+FROM total_budget
+CROSS JOIN spent_budget
+CROSS JOIN cutoff
         "#, &[]
-    ).await?;
+        ).await?;
 
-    Ok(rows
-        .iter()
-        .map(|row| MonthlyBurnInResponse {
-            total_budget: row.get("total_budget"),
-            spent_budget: row.get("spent_budget"),
-            current_day: row.get("current_day"),
-            days_in_period: row.get("days_in_period"),
-        })
-        .collect())
+        if let Some(row) = rows.first() {
+            Ok(MonthlyBurnInResponse {
+                total_budget: row.get("total_budget"),
+                spent_budget: row.get("spent_budget"),
+                current_day: row.get("current_day"),
+                days_in_period: row.get("days_in_period"),
+            })
+        } else {
+            Err(AppError::Db("No row returned for monthly burn-in".into()))
+        }
+    }
 }

@@ -8,8 +8,6 @@ pub struct Budget {
     pub name: String,
     pub start_day: i32,
     pub created_at: DateTime<Utc>,
-    pub deleted: bool,
-    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Deserialize, Debug)]

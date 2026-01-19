@@ -2,13 +2,11 @@ use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct Vendor {
     pub id: Uuid,
     pub name: String,
     pub created_at: DateTime<Utc>,
-    pub deleted: bool,
-    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Deserialize, Debug)]

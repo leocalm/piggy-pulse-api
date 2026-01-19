@@ -30,78 +30,51 @@ CREATE TABLE IF NOT EXISTS currency
     symbol         TEXT        NOT NULL,
     currency       TEXT        NOT NULL,
     decimal_places INTEGER     NOT NULL,
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-    deleted        BOOLEAN     NOT NULL DEFAULT false,
-    deleted_at     TIMESTAMPTZ NULL
-
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-CREATE UNIQUE INDEX currency_unique_name_not_deleted
-    ON currency (name)
-    WHERE deleted = false;
 
 -- 3) Account table
 CREATE TABLE IF NOT EXISTS account
 (
     id           UUID PRIMARY KEY      DEFAULT gen_random_uuid(),
-    name         TEXT         NOT NULL,
+    name         TEXT         NOT NULL UNIQUE,
     color        TEXT         NOT NULL,
     icon         TEXT         NOT NULL,
     account_type account_type NOT NULL,
-    currency_id  UUID         NOT NULL REFERENCES currency (id) ON DELETE RESTRICT,
+    currency_id  UUID         NOT NULL REFERENCES currency (id) ON DELETE CASCADE,
     balance      BIGINT       NOT NULL,
-    created_at   TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    deleted      BOOLEAN      NOT NULL DEFAULT false,
-    deleted_at   TIMESTAMPTZ  NULL
+    created_at   TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
-
-CREATE UNIQUE INDEX account_unique_name_not_deleted
-    ON account (name)
-    WHERE deleted = false;
 
 CREATE TABLE IF NOT EXISTS category
 (
     id            UUID PRIMARY KEY       DEFAULT gen_random_uuid(),
-    name          TEXT          NOT NULL,
+    name          TEXT          NOT NULL UNIQUE,
     color         TEXT          NULL,
     icon          TEXT          NULL,
-    parent_id     UUID          NULL REFERENCES category (id) ON DELETE RESTRICT,
+    parent_id     UUID          NULL REFERENCES category (id) ON DELETE CASCADE,
     category_type category_type NOT NULL,
-    created_at    TIMESTAMPTZ   NOT NULL DEFAULT now(),
-    deleted       BOOLEAN       NOT NULL DEFAULT false,
-    deleted_at    TIMESTAMPTZ   NULL
+    created_at    TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
-
-CREATE UNIQUE INDEX category_unique_name_not_deleted
-    ON category (name)
-    WHERE deleted = false;
 
 CREATE TABLE IF NOT EXISTS vendor
 (
     id         UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
-    name       TEXT        NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    deleted    BOOLEAN     NOT NULL DEFAULT false,
-    deleted_at TIMESTAMPTZ NULL
+    name       TEXT        NOT NULL UNIQUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-CREATE UNIQUE INDEX vendor_unique_name_not_deleted
-    ON vendor (name)
-    WHERE deleted = false;
 
 CREATE TABLE IF NOT EXISTS transaction
 (
-    id               UUID PRIMARY KEY          DEFAULT gen_random_uuid(),
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     amount           INTEGER          NOT NULL,
     description      TEXT             NOT NULL,
-    occurred_at      TIMESTAMPTZ      NOT NULL,
+    occurred_at      DATE             NOT NULL,
     transaction_type transaction_type NOT NULL,
-    category_id      UUID             NOT NULL REFERENCES category (id) ON DELETE RESTRICT,
-    from_account_id  UUID             NOT NULL REFERENCES account (id) ON DELETE RESTRICT,
-    to_account_id    UUID             NULL REFERENCES account (id) ON DELETE RESTRICT,
-    vendor_id        UUID             NOT NULL REFERENCES vendor (id) ON DELETE RESTRICT,
-    deleted          BOOLEAN          NOT NULL DEFAULT false,
-    deleted_at       TIMESTAMPTZ      NULL
+    category_id      UUID             NOT NULL REFERENCES category (id) ON DELETE CASCADE,
+    from_account_id  UUID             NOT NULL REFERENCES account (id) ON DELETE CASCADE,
+    to_account_id    UUID             NULL REFERENCES account (id) ON DELETE CASCADE,
+    vendor_id        UUID             NOT NULL REFERENCES vendor (id) ON DELETE CASCADE,
 );
 
 CREATE TABLE IF NOT EXISTS users
@@ -111,9 +84,7 @@ CREATE TABLE IF NOT EXISTS users
     email         TEXT        NOT NULL,
     salt          TEXT        NOT NULL,
     password_hash TEXT        NOT NULL,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-    deleted       BOOLEAN     NOT NULL DEFAULT false,
-    deleted_at    TIMESTAMPTZ NULL
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS budget
@@ -121,21 +92,22 @@ CREATE TABLE IF NOT EXISTS budget
     id         UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
     name       TEXT        NOT NULL,
     start_day  INTEGER     NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    deleted    BOOLEAN     NOT NULL DEFAULT false,
-    deleted_at TIMESTAMPTZ NULL
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-CREATE UNIQUE INDEX budget_unique_name_not_deleted
-    ON budget (name)
-    WHERE deleted = false;
 
 CREATE TABLE IF NOT EXISTS budget_category
 (
     id             UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
-    category_id    UUID        NOT NULL REFERENCES category (id) ON DELETE RESTRICT,
+    category_id    UUID        NOT NULL REFERENCES category (id) ON DELETE CASCADE,
     budgeted_value INTEGER     NOT NULL,
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-    deleted        BOOLEAN     NOT NULL DEFAULT false,
-    deleted_at     TIMESTAMPTZ NULL
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS budget_period
+(
+    id         UUID PRIMARY KEY     DEFAULT gen_random_uuid(),
+    name       TEXT        NOT NULL UNIQUE,
+    start_date DATE        NOT NULL,
+    end_date   DATE        NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+)

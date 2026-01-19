@@ -1,21 +1,30 @@
-use crate::database::currency::get_currency_by_code;
+use crate::database::currency::CurrencyRepository;
+use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::account::{Account, AccountRequest, AccountType};
 use crate::models::currency::Currency;
-use deadpool_postgres::Client;
 use tokio_postgres::Row;
 use uuid::Uuid;
 
-pub async fn create_account(
-    client: &Client,
-    request: &AccountRequest,
-) -> Result<Account, AppError> {
-    if let Some(currency) = get_currency_by_code(client, &request.currency).await? {
-        let rows = client
-            .query(
-                r#"
-        INSERT INTO account (name, color, icon, account_type, currency_id, balance)
-        VALUES ($1, $2, $3, $4::text::account_type, $5, $6)
+#[async_trait::async_trait]
+pub trait AccountRepository {
+    async fn create_account(&self, request: &AccountRequest) -> Result<Account, AppError>;
+    async fn get_account_by_id(&self, id: &Uuid) -> Result<Option<Account>, AppError>;
+    async fn list_accounts(&self) -> Result<Vec<Account>, AppError>;
+    async fn delete_account(&self, id: &Uuid) -> Result<(), AppError>;
+    async fn update_account(&self, id: &Uuid, request: &AccountRequest) -> Result<Account, AppError>;
+}
+
+#[async_trait::async_trait]
+impl<'a> AccountRepository for PostgresRepository<'a> {
+    async fn create_account(&self, request: &AccountRequest) -> Result<Account, AppError> {
+        if let Some(currency) = self.get_currency_by_code(&request.currency).await? {
+            let rows = self
+                .client
+                .query(
+                    r#"
+        INSERT INTO account (name, color, icon, account_type, currency_id, balance, spend_limit)
+        VALUES ($1, $2, $3, $4::text::account_type, $5, $6, $7)
         RETURNING
             id,
             name,
@@ -25,33 +34,34 @@ pub async fn create_account(
             balance,
             currency_id,
             created_at,
-            deleted,
-            deleted_at
+            spend_limit
         "#,
-                &[
-                    &request.name,
-                    &request.color,
-                    &request.icon,
-                    &request.account_type_to_db(),
-                    &currency.id,
-                    &request.balance,
-                ],
-            )
-            .await?;
-        if let Some(row) = rows.first() {
-            Ok(map_row_to_account(row, Some(currency)))
+                    &[
+                        &request.name,
+                        &request.color,
+                        &request.icon,
+                        &request.account_type_to_db(),
+                        &currency.id,
+                        &request.balance,
+                        &request.spend_limit,
+                    ],
+                )
+                .await?;
+            if let Some(row) = rows.first() {
+                Ok(map_row_to_account(row, Some(currency)))
+            } else {
+                Err(AppError::Db("Error mapping created account".to_string()))
+            }
         } else {
-            Err(AppError::Db("Error mapping created account".to_string()))
+            Err(AppError::CurrencyDoesNotExist(request.currency.clone()))
         }
-    } else {
-        Err(AppError::CurrencyDoesNotExist(request.currency.clone()))
     }
-}
 
-pub async fn get_account_by_id(client: &Client, id: &Uuid) -> Result<Option<Account>, AppError> {
-    let rows = client
-        .query(
-            r#"
+    async fn get_account_by_id(&self, id: &Uuid) -> Result<Option<Account>, AppError> {
+        let rows = self
+            .client
+            .query(
+                r#"
         SELECT
             a.id,
             a.name,
@@ -60,36 +70,33 @@ pub async fn get_account_by_id(client: &Client, id: &Uuid) -> Result<Option<Acco
             a.account_type::text as account_type,
             a.balance,
             a.created_at,
-            a.deleted,
-            a.deleted_at,
+            a.spend_limit as spend_limit,
             c.id as currency_id,
             c.name as currency_name,
             c.symbol as currency_symbol,
             c.currency as currency_code,
             c.decimal_places as currency_decimal_places,
-            c.created_at as currency_created_at,
-            c.deleted as currency_deleted,
-            c.deleted_at as currency_deleted_at
+            c.created_at as currency_created_at
         FROM account a
         JOIN currency c ON c.id = a.currency_id
         WHERE a.id = $1
-            AND a.deleted = false
         "#,
-            &[id],
-        )
-        .await?;
+                &[id],
+            )
+            .await?;
 
-    if let Some(row) = rows.first() {
-        Ok(Some(map_row_to_account(row, None)))
-    } else {
-        Ok(None)
+        if let Some(row) = rows.first() {
+            Ok(Some(map_row_to_account(row, None)))
+        } else {
+            Ok(None)
+        }
     }
-}
 
-pub async fn list_accounts(client: &Client) -> Result<Vec<Account>, AppError> {
-    let rows = client
-        .query(
-            r#"
+    async fn list_accounts(&self) -> Result<Vec<Account>, AppError> {
+        let rows = self
+            .client
+            .query(
+                r#"
             SELECT
                 a.id,
                 a.name,
@@ -98,45 +105,79 @@ pub async fn list_accounts(client: &Client) -> Result<Vec<Account>, AppError> {
                 a.account_type::text as account_type,
                 a.balance,
                 a.created_at,
-                a.deleted,
-                a.deleted_at,
+                a.spend_limit as spend_limit,
                 c.id as currency_id,
                 c.name as currency_name,
                 c.symbol as currency_symbol,
                 c.currency as currency_code,
                 c.decimal_places as currency_decimal_places,
-                c.created_at as currency_created_at,
-                c.deleted as currency_deleted,
-                c.deleted_at as currency_deleted_at
+                c.created_at as currency_created_at
             FROM account a
                      JOIN currency c ON c.id = a.currency_id
-            WHERE a.deleted = false
             ORDER BY a.created_at DESC
         "#,
-            &[],
-        )
-        .await?;
+                &[],
+            )
+            .await?;
 
-    Ok(rows
-        .into_iter()
-        .map(|row| map_row_to_account(&row, None))
-        .collect())
-}
+        Ok(rows.into_iter().map(|row| map_row_to_account(&row, None)).collect())
+    }
 
-pub async fn delete_account(client: &Client, id: &Uuid) -> Result<(), AppError> {
-    client
-        .execute(
-            r#"
-        UPDATE account
-        SET deleted = true,
-            deleted_at = now()
+    async fn delete_account(&self, id: &Uuid) -> Result<(), AppError> {
+        self.client
+            .execute(
+                r#"
+        DELETE FROM account
         WHERE id = $1
         "#,
-            &[&id],
-        )
-        .await?;
+                &[&id],
+            )
+            .await?;
 
-    Ok(())
+        Ok(())
+    }
+
+    async fn update_account(&self, id: &Uuid, request: &AccountRequest) -> Result<Account, AppError> {
+        if let Some(currency) = self.get_currency_by_code(&request.currency).await? {
+            let rows = self
+                .client
+                .query(
+                    r#"
+            UPDATE account
+            SET name = $1, color = $2, icon = $3, account_type = $4::text::account_type, currency_id = $5, balance = $6
+            WHERE id = $7
+            RETURNING
+                id,
+                name,
+                color,
+                icon,
+                account_type::text as account_type,
+                balance,
+                currency_id,
+                created_at,
+                spend_limit
+            "#,
+                    &[
+                        &request.name,
+                        &request.color,
+                        &request.icon,
+                        &request.account_type_to_db(),
+                        &currency.id,
+                        &request.balance,
+                        &id,
+                    ],
+                )
+                .await?;
+
+            if let Some(row) = rows.first() {
+                Ok(map_row_to_account(row, Some(currency)))
+            } else {
+                Err(AppError::NotFound("Account not found".to_string()))
+            }
+        } else {
+            Err(AppError::CurrencyDoesNotExist(request.currency.clone()))
+        }
+    }
 }
 
 fn map_row_to_account(row: &Row, currency_opt: Option<Currency>) -> Account {
@@ -150,8 +191,6 @@ fn map_row_to_account(row: &Row, currency_opt: Option<Currency>) -> Account {
             currency: row.get("currency_code"),
             decimal_places: row.get("currency_decimal_places"),
             created_at: row.get("currency_created_at"),
-            deleted: row.get("currency_deleted"),
-            deleted_at: row.get("currency_deleted_at"),
         }
     };
 
@@ -164,8 +203,7 @@ fn map_row_to_account(row: &Row, currency_opt: Option<Currency>) -> Account {
         currency,
         balance: row.get("balance"),
         created_at: row.get("created_at"),
-        deleted: row.get("deleted"),
-        deleted_at: row.get("deleted_at"),
+        spend_limit: row.get("spend_limit"),
     }
 }
 
@@ -175,11 +213,11 @@ pub fn account_type_from_db<T: AsRef<str>>(value: T) -> AccountType {
         "Savings" => AccountType::Savings,
         "CreditCard" => AccountType::CreditCard,
         "Wallet" => AccountType::Wallet,
+        "Allowance" => AccountType::Allowance,
         other => panic!("Unknown account type: {}", other),
     }
 }
 
-// Helper method for AccountRequest to map to DB enum/text value
 trait AccountRequestDbExt {
     fn account_type_to_db(&self) -> String;
 }
@@ -191,6 +229,7 @@ impl AccountRequestDbExt for AccountRequest {
             AccountType::Savings => "Savings".to_string(),
             AccountType::CreditCard => "CreditCard".to_string(),
             AccountType::Wallet => "Wallet".to_string(),
+            AccountType::Allowance => "Allowance".to_string(),
         }
     }
 }

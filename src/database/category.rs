@@ -1,16 +1,26 @@
+use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::category::{Category, CategoryRequest, CategoryType};
-use deadpool_postgres::Client;
 use tokio_postgres::Row;
 use uuid::Uuid;
 
-pub async fn create_category(
-    client: &Client,
-    request: &CategoryRequest,
-) -> Result<Category, AppError> {
-    let rows = client
-        .query(
-            r#"
+#[async_trait::async_trait]
+pub trait CategoryRepository {
+    async fn create_category(&self, request: &CategoryRequest) -> Result<Category, AppError>;
+    async fn get_category_by_id(&self, id: &Uuid) -> Result<Option<Category>, AppError>;
+    async fn list_categories(&self) -> Result<Vec<Category>, AppError>;
+    async fn delete_category(&self, id: &Uuid) -> Result<(), AppError>;
+    async fn update_category(&self, id: &Uuid, request: &CategoryRequest) -> Result<Category, AppError>;
+    async fn list_categories_not_in_budget(&self) -> Result<Vec<Category>, AppError>;
+}
+
+#[async_trait::async_trait]
+impl<'a> CategoryRepository for PostgresRepository<'a> {
+    async fn create_category(&self, request: &CategoryRequest) -> Result<Category, AppError> {
+        let rows = self
+            .client
+            .query(
+                r#"
             INSERT INTO category (name, color, icon, parent_id, category_type)
             VALUES ($1, $2, $3, $4, $5::text::category_type)
             RETURNING
@@ -20,31 +30,24 @@ pub async fn create_category(
                 COALESCE(icon, '') as icon,
                 parent_id,
                 category_type::text as category_type,
-                created_at,
-                deleted,
-                deleted_at
+                created_at
             "#,
-            &[
-                &request.name,
-                &request.color,
-                &request.icon,
-                &request.parent_id,
-                &request.category_type_to_db(),
-            ],
-        )
-        .await?;
+                &[&request.name, &request.color, &request.icon, &request.parent_id, &request.category_type_to_db()],
+            )
+            .await?;
 
-    if let Some(row) = rows.first() {
-        Ok(map_row_to_category(row))
-    } else {
-        Err(AppError::Db("Error mapping created category".to_string()))
+        if let Some(row) = rows.first() {
+            Ok(map_row_to_category(row))
+        } else {
+            Err(AppError::Db("Error mapping created category".to_string()))
+        }
     }
-}
 
-pub async fn get_category_by_id(client: &Client, id: &Uuid) -> Result<Option<Category>, AppError> {
-    let rows = client
-        .query(
-            r#"
+    async fn get_category_by_id(&self, id: &Uuid) -> Result<Option<Category>, AppError> {
+        let rows = self
+            .client
+            .query(
+                r#"
             SELECT
                 id,
                 name,
@@ -52,28 +55,26 @@ pub async fn get_category_by_id(client: &Client, id: &Uuid) -> Result<Option<Cat
                 COALESCE(icon, '') as icon,
                 parent_id,
                 category_type::text as category_type,
-                created_at,
-                deleted,
-                deleted_at
+                created_at
             FROM category
             WHERE id = $1
-                AND deleted = false
             "#,
-            &[id],
-        )
-        .await?;
+                &[id],
+            )
+            .await?;
 
-    if let Some(row) = rows.first() {
-        Ok(Some(map_row_to_category(row)))
-    } else {
-        Ok(None)
+        if let Some(row) = rows.first() {
+            Ok(Some(map_row_to_category(row)))
+        } else {
+            Ok(None)
+        }
     }
-}
 
-pub async fn list_categories(client: &Client) -> Result<Vec<Category>, AppError> {
-    let rows = client
-        .query(
-            r#"
+    async fn list_categories(&self) -> Result<Vec<Category>, AppError> {
+        let rows = self
+            .client
+            .query(
+                r#"
             SELECT
                 id,
                 name,
@@ -81,39 +82,70 @@ pub async fn list_categories(client: &Client) -> Result<Vec<Category>, AppError>
                 COALESCE(icon, '') as icon,
                 parent_id,
                 category_type::text as category_type,
-                created_at,
-                deleted,
-                deleted_at
+                created_at
             FROM category
-            WHERE deleted = false
             ORDER BY created_at DESC
             "#,
-            &[],
-        )
-        .await?;
+                &[],
+            )
+            .await?;
 
-    Ok(rows.into_iter().map(|r| map_row_to_category(&r)).collect())
-}
+        Ok(rows.into_iter().map(|r| map_row_to_category(&r)).collect())
+    }
 
-pub async fn delete_category(client: &Client, id: &Uuid) -> Result<(), AppError> {
-    client
-        .execute(
-            r#"
-            UPDATE category
-            SET deleted = true,
-                deleted_at = now()
+    async fn delete_category(&self, id: &Uuid) -> Result<(), AppError> {
+        self.client
+            .execute(
+                r#"
+            DELETE FROM category
             WHERE id = $1
             "#,
-            &[id],
-        )
-        .await?;
-    Ok(())
-}
+                &[id],
+            )
+            .await?;
+        Ok(())
+    }
 
-pub async fn list_categories_not_in_budget(client: &Client) -> Result<Vec<Category>, AppError> {
-    let rows = client
-        .query(
-            r#"
+    async fn update_category(&self, id: &Uuid, request: &CategoryRequest) -> Result<Category, AppError> {
+        let rows = self
+            .client
+            .query(
+                r#"
+            UPDATE category
+            SET name = $1, color = $2, icon = $3, parent_id = $4, category_type = $5::text::category_type
+            WHERE id = $6
+            RETURNING
+                id,
+                name,
+                COALESCE(color, '') as color,
+                COALESCE(icon, '') as icon,
+                parent_id,
+                category_type::text as category_type,
+                created_at
+            "#,
+                &[
+                    &request.name,
+                    &request.color,
+                    &request.icon,
+                    &request.parent_id,
+                    &request.category_type_to_db(),
+                    &id,
+                ],
+            )
+            .await?;
+
+        if let Some(row) = rows.first() {
+            Ok(map_row_to_category(row))
+        } else {
+            Err(AppError::NotFound("Category not found".to_string()))
+        }
+    }
+
+    async fn list_categories_not_in_budget(&self) -> Result<Vec<Category>, AppError> {
+        let rows = self
+            .client
+            .query(
+                r#"
             SELECT
                 c.id,
                 c.name,
@@ -121,21 +153,20 @@ pub async fn list_categories_not_in_budget(client: &Client) -> Result<Vec<Catego
                 COALESCE(c.icon, '') as icon,
                 c.parent_id,
                 c.category_type::text as category_type,
-                c.created_at,
-                c.deleted,
-                c.deleted_at
+                c.created_at
             FROM category c
             LEFT JOIN budget_category bc
                 ON c.id = bc.category_id
-            WHERE c.deleted = false
-              AND (bc.id is null OR bc.deleted = true)
+            WHERE bc.id is null
+                AND c.category_type = 'Outgoing'
             ORDER BY created_at DESC
             "#,
-            &[],
-        )
-        .await?;
+                &[],
+            )
+            .await?;
 
-    Ok(rows.into_iter().map(|r| map_row_to_category(&r)).collect())
+        Ok(rows.into_iter().map(|r| map_row_to_category(&r)).collect())
+    }
 }
 
 fn map_row_to_category(row: &Row) -> Category {
@@ -147,8 +178,6 @@ fn map_row_to_category(row: &Row) -> Category {
         parent_id: row.get("parent_id"),
         category_type: category_type_from_db(row.get::<_, &str>("category_type")),
         created_at: row.get("created_at"),
-        deleted: row.get("deleted"),
-        deleted_at: row.get("deleted_at"),
     }
 }
 

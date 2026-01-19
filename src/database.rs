@@ -1,9 +1,11 @@
 pub mod account;
 pub mod budget;
 pub mod budget_category;
+pub mod budget_period;
 pub mod category;
 pub mod currency;
 pub mod dashboard;
+pub mod postgres_repository;
 pub mod transaction;
 pub mod user;
 pub mod vendor;
