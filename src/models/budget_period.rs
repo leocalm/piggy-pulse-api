@@ -2,7 +2,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Default)]
 pub struct BudgetPeriod {
     pub id: Uuid,
     pub name: String,

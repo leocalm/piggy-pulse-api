@@ -9,12 +9,8 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 --     'CreditCard',
 --     'Wallet'
 --     );
---
--- CREATE TYPE transaction_type AS ENUM (
---     'Incoming',
---     'Outgoing',
---     'Transfer'
---     );
+
+
 
 -- CREATE TYPE category_type AS ENUM (
 --     'Incoming',
@@ -70,7 +66,6 @@ CREATE TABLE IF NOT EXISTS transaction
     amount           INTEGER          NOT NULL,
     description      TEXT             NOT NULL,
     occurred_at      DATE             NOT NULL,
-    transaction_type transaction_type NOT NULL,
     category_id      UUID             NOT NULL REFERENCES category (id) ON DELETE CASCADE,
     from_account_id  UUID             NOT NULL REFERENCES account (id) ON DELETE CASCADE,
     to_account_id    UUID             NULL REFERENCES account (id) ON DELETE CASCADE,

@@ -10,7 +10,7 @@ use crate::models::dashboard::{BudgetPerDayResponse, DashboardResponse, MonthPro
 use crate::models::transaction::{Transaction, TransactionResponse};
 use crate::service::service_util::{account_involved, add_transaction, balance_on_date};
 use chrono::prelude::*;
-use deadpool_postgres::Client;
+use std::sync::Arc;
 use tracing::debug;
 
 pub struct DashboardService<'a, R>
@@ -19,17 +19,17 @@ where
 {
     repository: &'a R,
     budget_period: &'a BudgetPeriod,
-    transactions: Option<Vec<Transaction>>,
-    budget_categories: Option<Vec<BudgetCategory>>,
-    accounts: Option<Vec<Account>>,
-    all_transactions: Option<Vec<Transaction>>,
+    transactions: Option<Arc<Vec<Transaction>>>,
+    budget_categories: Option<Arc<Vec<BudgetCategory>>>,
+    accounts: Option<Arc<Vec<Account>>>,
+    all_transactions: Option<Arc<Vec<Transaction>>>,
 }
 
 impl<'a, R> DashboardService<'a, R>
 where
     R: TransactionRepository + BudgetCategoryRepository + AccountRepository,
 {
-    pub fn new(_client: &'a Client, repository: &'a R, budget_period: &'a BudgetPeriod) -> Self {
+    pub fn new(repository: &'a R, budget_period: &'a BudgetPeriod) -> Self {
         Self {
             repository,
             budget_period,
@@ -40,36 +40,40 @@ where
         }
     }
 
-    async fn get_transactions(&mut self) -> Result<Vec<Transaction>, AppError> {
+    async fn get_transactions(&mut self) -> Result<Arc<Vec<Transaction>>, AppError> {
         if self.transactions.is_none() {
-            self.transactions = Some(self.repository.get_transactions_for_period(&self.budget_period.id).await?);
+            let data = self.repository.get_transactions_for_period(&self.budget_period.id).await?;
+            self.transactions = Some(Arc::new(data));
         }
 
-        Ok(self.transactions.clone().unwrap())
+        Ok(Arc::clone(self.transactions.as_ref().unwrap()))
     }
 
-    async fn get_budget_categories(&mut self) -> Result<Vec<BudgetCategory>, AppError> {
+    async fn get_budget_categories(&mut self) -> Result<Arc<Vec<BudgetCategory>>, AppError> {
         if self.budget_categories.is_none() {
-            self.budget_categories = Some(self.repository.list_budget_categories().await?);
+            let data = self.repository.list_budget_categories().await?;
+            self.budget_categories = Some(Arc::new(data));
         }
 
-        Ok(self.budget_categories.clone().unwrap())
+        Ok(Arc::clone(self.budget_categories.as_ref().unwrap()))
     }
 
-    async fn get_accounts(&mut self) -> Result<Vec<Account>, AppError> {
+    async fn get_accounts(&mut self) -> Result<Arc<Vec<Account>>, AppError> {
         if self.accounts.is_none() {
-            self.accounts = Some(self.repository.list_accounts().await?);
+            let data = self.repository.list_accounts().await?;
+            self.accounts = Some(Arc::new(data));
         }
 
-        Ok(self.accounts.clone().unwrap())
+        Ok(Arc::clone(self.accounts.as_ref().unwrap()))
     }
 
-    async fn get_all_transactions(&mut self) -> Result<Vec<Transaction>, AppError> {
+    async fn get_all_transactions(&mut self) -> Result<Arc<Vec<Transaction>>, AppError> {
         if self.all_transactions.is_none() {
-            self.all_transactions = Some(self.repository.list_transactions().await?);
+            let data = self.repository.list_transactions().await?;
+            self.all_transactions = Some(Arc::new(data));
         }
 
-        Ok(self.all_transactions.clone().unwrap())
+        Ok(Arc::clone(self.all_transactions.as_ref().unwrap()))
     }
 
     pub async fn month_progress(&self) -> Result<MonthProgressResponse, AppError> {
@@ -100,16 +104,20 @@ where
     pub async fn budget_per_day(&mut self) -> Result<Vec<BudgetPerDayResponse>, AppError> {
         let mut data = Vec::new();
         let transactions = self.get_transactions().await?;
+        let accounts = self.get_accounts().await?;
+        let all_transactions = self.get_all_transactions().await?;
+        let start_date = self.budget_period.start_date;
+        let end_date = self.budget_period.end_date;
 
-        for account in self.get_accounts().await? {
-            let mut current_date = self.budget_period.start_date;
-            let mut balance = balance_on_date(Some(&self.budget_period.start_date), &account, &self.get_all_transactions().await?);
+        for account in accounts.iter() {
+            let mut current_date = start_date;
+            let mut balance = balance_on_date(Some(&start_date), account, &all_transactions);
 
             while current_date <= Utc::now().date_naive() {
                 balance = transactions
                     .iter()
-                    .filter(|tx| account_involved(&account, tx) && tx.occurred_at == current_date)
-                    .fold(balance, |acc, tx| add_transaction(acc, tx, &account));
+                    .filter(|tx| account_involved(account, tx) && tx.occurred_at == current_date)
+                    .fold(balance, |acc, tx| acc + add_transaction(tx, account));
 
                 data.push(BudgetPerDayResponse {
                     account_name: account.name.clone(),
@@ -117,7 +125,7 @@ where
                     balance,
                 });
 
-                current_date = current_date.succ_opt().unwrap_or(self.budget_period.end_date);
+                current_date = current_date.succ_opt().unwrap_or(end_date);
             }
         }
 
@@ -126,18 +134,17 @@ where
 
     pub async fn spent_per_category(&mut self) -> Result<Vec<SpentPerCategoryResponse>, AppError> {
         let transactions = self.get_transactions().await?;
+        let budget_categories = self.get_budget_categories().await?;
 
-        let mut data = self
-            .get_budget_categories()
-            .await?
-            .into_iter()
+        let mut data = budget_categories
+            .iter()
             .map(|budget_category| {
                 let amount_spent = transactions
                     .iter()
                     .filter(|tx| tx.category.id == budget_category.category.id)
                     .fold(0, |acc, tx| acc + tx.amount);
                 SpentPerCategoryResponse {
-                    category_name: budget_category.category.name,
+                    category_name: budget_category.category.name.clone(),
                     budgeted_value: budget_category.budgeted_value,
                     amount_spent,
                     percentage_spent: amount_spent * 10000 / budget_category.budgeted_value,
@@ -187,5 +194,49 @@ where
             recent_transactions,
             total_asset,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::category::Category;
+    use crate::test_utils::MockRepository;
+    use uuid::Uuid;
+
+    #[test]
+    fn test_total_asset() -> Result<(), AppError> {
+        let budget_period = BudgetPeriod::default();
+        let repository = MockRepository {};
+
+        let first_account = Account {
+            id: Uuid::new_v4(),
+            balance: 10000,
+            ..Account::default()
+        };
+
+        let mut dashboard_service = DashboardService::new(&repository, &budget_period);
+        dashboard_service.accounts = Some(Arc::new(vec![
+            first_account.clone(),
+            Account {
+                id: Uuid::new_v4(),
+                balance: 20000,
+                ..Account::default()
+            },
+        ]));
+        dashboard_service.all_transactions = Some(Arc::new(vec![Transaction {
+            amount: 3000,
+            from_account: first_account,
+            category: Category {
+                category_type: CategoryType::Outgoing,
+                ..Category::default()
+            },
+            ..Transaction::default()
+        }]));
+
+        let result = tokio::runtime::Runtime::new().unwrap().block_on(dashboard_service.total_asset())?;
+        assert_eq!(27000, result);
+
+        Ok(())
     }
 }

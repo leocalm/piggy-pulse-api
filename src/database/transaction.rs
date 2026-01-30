@@ -4,7 +4,7 @@ use crate::error::app_error::AppError;
 use crate::models::account::Account;
 use crate::models::category::Category;
 use crate::models::currency::Currency;
-use crate::models::transaction::{Transaction, TransactionRequest, TransactionRequestDbExt, TransactionType};
+use crate::models::transaction::{Transaction, TransactionRequest};
 use crate::models::vendor::Vendor;
 use tokio_postgres::Row;
 use uuid::Uuid;
@@ -31,20 +31,18 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
                 amount,
                 description,
                 occurred_at,
-                transaction_type,
                 category_id,
                 from_account_id,
                 to_account_id,
                 vendor_id
             )
-            VALUES ($1, $2, $3, $4::text::transaction_type, $5, $6, $7, $8)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id
             "#,
                 &[
                     &transaction.amount,
                     &transaction.description,
                     &transaction.occurred_at,
-                    &transaction.transaction_type_to_db(),
                     &transaction.category_id,
                     &transaction.from_account_id,
                     &transaction.to_account_id,
@@ -76,7 +74,6 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
                 t.amount,
                 t.description,
                 t.occurred_at,
-                t.transaction_type::text as transaction_type,
                 c.id as category_id,
                 c.name as category_name,
                 COALESCE(c.color, '') as category_color,
@@ -145,7 +142,6 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
                 t.amount,
                 t.description,
                 t.occurred_at,
-                t.transaction_type::text as transaction_type,
                 c.id as category_id,
                 c.name as category_name,
                 COALESCE(c.color, '') as category_color,
@@ -210,7 +206,6 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
                 t.amount,
                 t.description,
                 t.occurred_at,
-                t.transaction_type::text as transaction_type,
                 c.id as category_id,
                 c.name as category_name,
                 COALESCE(c.color, '') as category_color,
@@ -293,19 +288,17 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
                 amount = $1,
                 description = $2,
                 occurred_at = $3,
-                transaction_type = $4::text::transaction_type,
-                category_id = $5,
-                from_account_id = $6,
-                to_account_id = $7,
-                vendor_id = $8
-            WHERE id = $9
+                category_id = $4,
+                from_account_id = $5,
+                to_account_id = $6,
+                vendor_id = $7
+            WHERE id = $8
             RETURNING id
             "#,
                 &[
                     &transaction.amount,
                     &transaction.description,
                     &transaction.occurred_at,
-                    &transaction.transaction_type_to_db(),
                     &transaction.category_id,
                     &transaction.from_account_id,
                     &transaction.to_account_id,
@@ -368,7 +361,6 @@ fn map_row_to_transaction(row: &Row) -> Transaction {
         amount: row.get("amount"),
         description: row.get("description"),
         occurred_at: row.get("occurred_at"),
-        transaction_type: transaction_type_from_db(row.get::<_, &str>("transaction_type")),
         category: Category {
             id: row.get("category_id"),
             name: row.get("category_name"),
@@ -398,14 +390,5 @@ fn map_row_to_transaction(row: &Row) -> Transaction {
         },
         to_account,
         vendor,
-    }
-}
-
-fn transaction_type_from_db<T: AsRef<str>>(value: T) -> TransactionType {
-    match value.as_ref() {
-        "Incoming" => TransactionType::Incoming,
-        "Outgoing" => TransactionType::Outgoing,
-        "Transfer" => TransactionType::Transfer,
-        other => panic!("Unknown transaction type: {}", other),
     }
 }

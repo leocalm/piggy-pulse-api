@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, Default)]
 pub struct BudgetCategory {
     pub id: Uuid,
     pub category_id: Uuid,

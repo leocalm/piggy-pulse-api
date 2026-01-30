@@ -1,9 +1,9 @@
 use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
-use crate::database::vendor::VendorRepository;
+use crate::database::vendor::{VendorOrderBy, VendorRepository};
 use crate::db::get_client;
 use crate::error::app_error::AppError;
-use crate::models::vendor::{VendorRequest, VendorResponse};
+use crate::models::vendor::{VendorRequest, VendorResponse, VendorWithStatsResponse};
 use deadpool_postgres::Pool;
 use rocket::http::Status;
 use rocket::serde::json::Json;
@@ -56,6 +56,19 @@ pub async fn put_vendor(pool: &State<Pool>, _current_user: CurrentUser, id: &str
     Ok(Json(VendorResponse::from(&vendor)))
 }
 
+#[rocket::get("/with_status?<order_by>")]
+pub async fn get_vendors_with_status(pool: &State<Pool>, order_by: VendorOrderBy) -> Result<Json<Vec<VendorWithStatsResponse>>, AppError> {
+    let client = get_client(pool).await?;
+    let repo = PostgresRepository { client: &client };
+    Ok(Json(
+        repo.list_vendors_with_status(order_by)
+            .await?
+            .iter()
+            .map(VendorWithStatsResponse::from)
+            .collect(),
+    ))
+}
+
 pub fn routes() -> Vec<rocket::Route> {
-    routes![create_vendor, list_all_vendors, get_vendor, delete_vendor, put_vendor]
+    routes![create_vendor, list_all_vendors, get_vendor, delete_vendor, put_vendor, get_vendors_with_status]
 }

@@ -3,8 +3,9 @@ use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq, Default)]
 pub enum AccountType {
+    #[default]
     Checking,
     Savings,
     CreditCard,
@@ -12,7 +13,7 @@ pub enum AccountType {
     Allowance,
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, Default)]
 pub struct Account {
     pub id: Uuid,
     pub name: String,

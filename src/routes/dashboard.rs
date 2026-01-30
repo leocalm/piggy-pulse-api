@@ -25,7 +25,6 @@ pub async fn get_spent_per_category(pool: &State<Pool>, _current_user: CurrentUs
     let repo = PostgresRepository { client: &client };
     Ok(Json(repo.spent_per_category().await?))
 }
-
 #[rocket::get("/monthly-burn-in")]
 pub async fn get_monthly_burn_in(pool: &State<Pool>, _current_user: CurrentUser) -> Result<Json<MonthlyBurnInResponse>, AppError> {
     let client = get_client(pool).await?;
@@ -39,7 +38,7 @@ pub async fn get_month_progress(pool: &State<Pool>, _current_user: CurrentUser, 
     let repo = PostgresRepository { client: &client };
     let budget_period_uuid = Uuid::parse_str(&period_id)?;
     let budget_period = repo.get_budget_period(&budget_period_uuid).await?;
-    let dashboard_service = DashboardService::new(&client, &repo, &budget_period);
+    let dashboard_service = DashboardService::new(&repo, &budget_period);
     Ok(Json(dashboard_service.month_progress().await?))
 }
 
@@ -49,7 +48,7 @@ pub async fn get_recent_transactions(pool: &State<Pool>, _current_user: CurrentU
     let repo = PostgresRepository { client: &client };
     let budget_period_uuid = Uuid::parse_str(&period_id)?;
     let budget_period = repo.get_budget_period(&budget_period_uuid).await?;
-    let mut dashboard_service = DashboardService::new(&client, &repo, &budget_period);
+    let mut dashboard_service = DashboardService::new(&repo, &budget_period);
     Ok(Json(dashboard_service.recent_transactions().await?))
 }
 
@@ -59,7 +58,7 @@ pub async fn get_dashboard(pool: &State<Pool>, _current_user: CurrentUser, perio
     let repo = PostgresRepository { client: &client };
     let budget_period_uuid = Uuid::parse_str(&period_id)?;
     let budget_period = repo.get_budget_period(&budget_period_uuid).await?;
-    let mut dashboard_service = DashboardService::new(&client, &repo, &budget_period);
+    let mut dashboard_service = DashboardService::new(&repo, &budget_period);
     Ok(Json(dashboard_service.dashboard_response().await?))
 }
 

@@ -5,20 +5,12 @@ use chrono::NaiveDate;
 use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
-pub enum TransactionType {
-    Incoming,
-    Outgoing,
-    Transfer,
-}
-
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, Default)]
 pub struct Transaction {
     pub id: Uuid,
     pub amount: i32,
     pub description: String,
     pub occurred_at: NaiveDate,
-    pub transaction_type: TransactionType,
     pub category: Category,
     pub from_account: Account,
     pub to_account: Option<Account>,
@@ -30,7 +22,6 @@ pub struct TransactionRequest {
     pub amount: i32,
     pub description: String,
     pub occurred_at: NaiveDate,
-    pub transaction_type: TransactionType,
     pub category_id: Uuid,
     pub from_account_id: Uuid,
     pub to_account_id: Option<Uuid>,
@@ -43,7 +34,6 @@ pub struct TransactionResponse {
     pub amount: i32,
     pub description: String,
     pub occurred_at: NaiveDate,
-    pub transaction_type: TransactionType,
     pub category: CategoryResponse,
     pub from_account: AccountResponse,
     pub to_account: Option<AccountResponse>,
@@ -57,26 +47,10 @@ impl From<&Transaction> for TransactionResponse {
             amount: transaction.amount,
             description: transaction.description.clone(),
             occurred_at: transaction.occurred_at,
-            transaction_type: transaction.transaction_type,
             category: CategoryResponse::from(&transaction.category),
             from_account: AccountResponse::from(&transaction.from_account),
             to_account: transaction.to_account.as_ref().map(AccountResponse::from),
             vendor: transaction.vendor.as_ref().map(VendorResponse::from),
-        }
-    }
-}
-
-// Helper method for TransactionRequest to map to DB enum/text value
-pub trait TransactionRequestDbExt {
-    fn transaction_type_to_db(&self) -> String;
-}
-
-impl TransactionRequestDbExt for TransactionRequest {
-    fn transaction_type_to_db(&self) -> String {
-        match self.transaction_type {
-            TransactionType::Incoming => "Incoming".to_string(),
-            TransactionType::Outgoing => "Outgoing".to_string(),
-            TransactionType::Transfer => "Transfer".to_string(),
         }
     }
 }

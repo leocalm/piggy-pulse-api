@@ -6,6 +6,9 @@ mod models;
 mod routes;
 mod service;
 
+#[cfg(test)]
+pub mod test_utils;
+
 use crate::db::stage_db;
 use crate::routes as app_routes;
 use rocket::{catchers, Build, Rocket};

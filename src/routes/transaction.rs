@@ -3,6 +3,7 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::database::transaction::TransactionRepository;
 use crate::db::get_client;
 use crate::error::app_error::AppError;
+use crate::error::json::JsonBody;
 use crate::models::transaction::{TransactionRequest, TransactionResponse};
 use deadpool_postgres::Pool;
 use rocket::http::Status;
@@ -14,7 +15,7 @@ use uuid::Uuid;
 pub async fn create_transaction(
     pool: &State<Pool>,
     _current_user: CurrentUser,
-    payload: Json<TransactionRequest>,
+    payload: JsonBody<TransactionRequest>,
 ) -> Result<(Status, Json<TransactionResponse>), AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
@@ -65,7 +66,7 @@ pub async fn put_transaction(
     pool: &State<Pool>,
     _current_user: CurrentUser,
     id: &str,
-    payload: Json<TransactionRequest>,
+    payload: JsonBody<TransactionRequest>,
 ) -> Result<Json<TransactionResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
