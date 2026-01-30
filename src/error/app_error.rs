@@ -1,11 +1,12 @@
 use rocket::http::Status;
 use rocket::response::Responder;
 use rocket::{Request, Response};
+use serde::Deserialize;
 use std::io::Cursor;
 use tracing::error;
 use validator::ValidationErrors;
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub enum AppError {
     Db(String),
     UserNotFound,
@@ -18,6 +19,7 @@ pub enum AppError {
     CurrencyDoesNotExist(String),
     UuidError(String),
     ValidationError(String),
+    ConfigurationError(),
 }
 
 impl std::fmt::Display for AppError {
@@ -34,6 +36,7 @@ impl std::fmt::Display for AppError {
             Self::CurrencyDoesNotExist(s) => write!(f, "Currency not found: {}", s),
             Self::UuidError(_) => write!(f, "Internal server error"),
             Self::ValidationError(e) => write!(f, "Validation error: {}", e),
+            Self::ConfigurationError() => write!(f, "Internal server error"),
         }
     }
 }
@@ -75,6 +78,7 @@ impl From<&AppError> for Status {
             AppError::CurrencyDoesNotExist(_) => Status::BadRequest,
             AppError::UuidError(_) => Status::BadRequest,
             AppError::ValidationError(_) => Status::BadRequest,
+            AppError::ConfigurationError() => Status::InternalServerError,
         }
     }
 }
@@ -93,5 +97,12 @@ impl<'r> Responder<'r, 'static> for AppError {
 impl From<ValidationErrors> for AppError {
     fn from(e: ValidationErrors) -> Self {
         AppError::ValidationError(e.to_string())
+    }
+}
+
+impl From<figment::Error> for AppError {
+    fn from(e: figment::Error) -> Self {
+        log::error!("Error reading configuration: {}", e);
+        AppError::ConfigurationError()
     }
 }

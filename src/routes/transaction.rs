@@ -9,7 +9,7 @@ use crate::models::transaction::{TransactionRequest, TransactionResponse};
 use deadpool_postgres::Pool;
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket::{routes, State};
+use rocket::{State, routes};
 use uuid::Uuid;
 use validator::Validate;
 

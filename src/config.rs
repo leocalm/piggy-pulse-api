@@ -1,7 +1,11 @@
-use rocket::figment::{Figment, providers::{Env, Format, Toml}};
+use figment::providers::Env;
+use rocket::figment::{
+    Figment,
+    providers::{Format, Toml},
+};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct Config {
     pub database: DatabaseConfig,
     pub server: ServerConfig,
@@ -59,32 +63,20 @@ impl Default for LoggingConfig {
     }
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            database: DatabaseConfig::default(),
-            server: ServerConfig::default(),
-            logging: LoggingConfig::default(),
-        }
-    }
-}
-
 impl Config {
     /// Load configuration from multiple sources in priority order:
     /// 1. Budget.toml (base configuration file)
     /// 2. Environment variables (prefixed with BUDGET_)
-    /// 3. DATABASE_URL environment variable (for backwards compatibility)
-    pub fn load() -> Result<Self, figment::Error> {
+    pub fn load() -> Result<Self, Box<figment::Error>> {
         let figment = Figment::new()
             // Start with defaults
-            .merge(Toml::string(&toml::to_string(&Config::default()).unwrap()).nested())
+            .merge(Toml::string(&toml::to_string(&Config::default()).unwrap()))
             // Layer on Budget.toml if it exists
-            .merge(Toml::file("Budget.toml").nested())
+            .merge(Toml::file("Budget.toml"))
             // Layer on environment variables (e.g., BUDGET_DATABASE_URL)
-            .merge(Env::prefixed("BUDGET_").split("_"))
-            // Special case: DATABASE_URL for backwards compatibility
-            .merge(Env::raw().only(&["DATABASE_URL"]).map(|_| "database.url".into()));
+            .merge(Env::prefixed("BUDGET_").split("__"))
+            .extract()?;
 
-        figment.extract()
+        Ok(figment)
     }
 }
