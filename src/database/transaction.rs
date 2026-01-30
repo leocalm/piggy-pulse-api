@@ -27,17 +27,69 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
             .client
             .query(
                 r#"
-            INSERT INTO transaction (
-                amount,
-                description,
-                occurred_at,
-                category_id,
-                from_account_id,
-                to_account_id,
-                vendor_id
+            WITH inserted AS (
+                INSERT INTO transaction (
+                    amount,
+                    description,
+                    occurred_at,
+                    category_id,
+                    from_account_id,
+                    to_account_id,
+                    vendor_id
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING id, amount, description, occurred_at, category_id, from_account_id, to_account_id, vendor_id
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING id
+            SELECT
+                inserted.id,
+                inserted.amount,
+                inserted.description,
+                inserted.occurred_at,
+                c.id as category_id,
+                c.name as category_name,
+                COALESCE(c.color, '') as category_color,
+                COALESCE(c.icon, '') as category_icon,
+                c.parent_id as category_parent_id,
+                c.category_type::text as category_category_type,
+                c.created_at as category_created_at,
+                fa.id as from_account_id,
+                fa.name as from_account_name,
+                fa.color as from_account_color,
+                fa.icon as from_account_icon,
+                fa.account_type::text as from_account_account_type,
+                fa.balance as from_account_balance,
+                fa.created_at as from_account_created_at,
+                fa.spend_limit as from_account_spend_limit,
+                cfa.id as from_account_currency_id,
+                cfa.name as from_account_currency_name,
+                cfa.symbol as from_account_currency_symbol,
+                cfa.currency as from_account_currency_code,
+                cfa.decimal_places as from_account_currency_decimal_places,
+                cfa.created_at as from_account_currency_created_at,
+                ta.id as to_account_id,
+                ta.name as to_account_name,
+                ta.color as to_account_color,
+                ta.icon as to_account_icon,
+                ta.account_type::text as to_account_account_type,
+                ta.balance as to_account_balance,
+                ta.created_at as to_account_created_at,
+                ta.spend_limit as to_account_spend_limit,
+                cta.id as to_account_currency_id,
+                cta.name as to_account_currency_name,
+                cta.symbol as to_account_currency_symbol,
+                cta.currency as to_account_currency_code,
+                cta.decimal_places as to_account_currency_decimal_places,
+                cta.created_at as to_account_currency_created_at,
+                v.id as vendor_id,
+                v.name as vendor_name,
+                v.created_at as vendor_created_at
+            FROM inserted
+            JOIN category c ON inserted.category_id = c.id
+            JOIN account fa ON inserted.from_account_id = fa.id
+            JOIN currency cfa ON fa.currency_id = cfa.id
+            LEFT JOIN account ta ON inserted.to_account_id = ta.id
+            LEFT JOIN currency cta ON ta.currency_id = cta.id
+            LEFT JOIN vendor v ON inserted.vendor_id = v.id
             "#,
                 &[
                     &transaction.amount,
@@ -52,15 +104,9 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
             .await?;
 
         if let Some(row) = rows.first() {
-            let id: Uuid = row.get("id");
-
-            if let Some(new_transaction) = self.get_transaction_by_id(&id).await? {
-                Ok(new_transaction)
-            } else {
-                Err(AppError::Db("New transaction was not found".to_string()))
-            }
+            Ok(map_row_to_transaction(row))
         } else {
-            Err(AppError::Db("Didn't find the recently created transaction id".to_string()))
+            Err(AppError::Db("Failed to create transaction".to_string()))
         }
     }
 
@@ -283,17 +329,69 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
             .client
             .query(
                 r#"
-            UPDATE transaction
-            SET
-                amount = $1,
-                description = $2,
-                occurred_at = $3,
-                category_id = $4,
-                from_account_id = $5,
-                to_account_id = $6,
-                vendor_id = $7
-            WHERE id = $8
-            RETURNING id
+            WITH updated AS (
+                UPDATE transaction
+                SET
+                    amount = $1,
+                    description = $2,
+                    occurred_at = $3,
+                    category_id = $4,
+                    from_account_id = $5,
+                    to_account_id = $6,
+                    vendor_id = $7
+                WHERE id = $8
+                RETURNING id, amount, description, occurred_at, category_id, from_account_id, to_account_id, vendor_id
+            )
+            SELECT
+                updated.id,
+                updated.amount,
+                updated.description,
+                updated.occurred_at,
+                c.id as category_id,
+                c.name as category_name,
+                COALESCE(c.color, '') as category_color,
+                COALESCE(c.icon, '') as category_icon,
+                c.parent_id as category_parent_id,
+                c.category_type::text as category_category_type,
+                c.created_at as category_created_at,
+                fa.id as from_account_id,
+                fa.name as from_account_name,
+                fa.color as from_account_color,
+                fa.icon as from_account_icon,
+                fa.account_type::text as from_account_account_type,
+                fa.balance as from_account_balance,
+                fa.created_at as from_account_created_at,
+                fa.spend_limit as from_account_spend_limit,
+                cfa.id as from_account_currency_id,
+                cfa.name as from_account_currency_name,
+                cfa.symbol as from_account_currency_symbol,
+                cfa.currency as from_account_currency_code,
+                cfa.decimal_places as from_account_currency_decimal_places,
+                cfa.created_at as from_account_currency_created_at,
+                ta.id as to_account_id,
+                ta.name as to_account_name,
+                ta.color as to_account_color,
+                ta.icon as to_account_icon,
+                ta.account_type::text as to_account_account_type,
+                ta.balance as to_account_balance,
+                ta.created_at as to_account_created_at,
+                ta.spend_limit as to_account_spend_limit,
+                cta.id as to_account_currency_id,
+                cta.name as to_account_currency_name,
+                cta.symbol as to_account_currency_symbol,
+                cta.currency as to_account_currency_code,
+                cta.decimal_places as to_account_currency_decimal_places,
+                cta.created_at as to_account_currency_created_at,
+                v.id as vendor_id,
+                v.name as vendor_name,
+                v.created_at as vendor_created_at
+            FROM updated
+            JOIN category c ON updated.category_id = c.id
+            JOIN account fa ON updated.from_account_id = fa.id
+            JOIN currency cfa ON fa.currency_id = cfa.id
+            LEFT JOIN account ta ON updated.to_account_id = ta.id
+            LEFT JOIN currency cta ON ta.currency_id = cta.id
+            LEFT JOIN vendor v ON updated.vendor_id = v.id
             "#,
                 &[
                     &transaction.amount,
@@ -308,12 +406,8 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
             )
             .await?;
 
-        if !rows.is_empty() {
-            if let Some(updated_transaction) = self.get_transaction_by_id(id).await? {
-                Ok(updated_transaction)
-            } else {
-                Err(AppError::NotFound("Transaction not found".to_string()))
-            }
+        if let Some(row) = rows.first() {
+            Ok(map_row_to_transaction(row))
         } else {
             Err(AppError::NotFound("Transaction not found".to_string()))
         }
