@@ -7,7 +7,7 @@ use crate::models::user::{LoginRequest, UserRequest, UserResponse};
 use deadpool_postgres::Pool;
 use rocket::http::{Cookie, CookieJar, Status};
 use rocket::serde::json::Json;
-use rocket::{routes, State};
+use rocket::{State, routes};
 use uuid::Uuid;
 use validator::Validate;
 

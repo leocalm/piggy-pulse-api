@@ -1,4 +1,4 @@
-use budget::{build_rocket, Config};
+use budget::{Config, build_rocket};
 use rocket::{Build, Rocket};
 
 #[rocket::launch]
