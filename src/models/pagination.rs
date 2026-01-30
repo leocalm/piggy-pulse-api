@@ -19,11 +19,13 @@ impl PaginationParams {
     pub const MAX_LIMIT: i64 = 200;
 
     /// Calculate the SQL OFFSET value based on page and limit
+    /// Uses the effective (capped) limit to ensure consistent page boundaries
     pub fn offset(&self) -> Option<i64> {
-        match (self.page, self.limit) {
-            (Some(page), Some(limit)) => Some((page - 1) * limit),
-            (Some(page), None) => Some((page - 1) * Self::DEFAULT_LIMIT),
-            _ => None,
+        if let Some(effective_limit) = self.effective_limit() {
+            let page = self.page.unwrap_or(1); // Default to page 1 if not specified
+            Some((page - 1) * effective_limit)
+        } else {
+            None
         }
     }
 
