@@ -4,9 +4,9 @@ use rocket::fairing::AdHoc;
 use std::str::FromStr;
 use tokio_postgres::{Config, NoTls};
 
-async fn init_pool() -> Pool {
+async fn init_pool(database_url: &str) -> Pool {
     let mgr = Manager::from_config(
-        Config::from_str(&std::env::var("DATABASE_URL").expect("DATABASE_URL must be set")).expect("Error parsing DATABASE_URL"),
+        Config::from_str(database_url).expect("Error parsing DATABASE_URL"),
         NoTls,
         ManagerConfig {
             recycling_method: RecyclingMethod::Fast,
@@ -23,9 +23,9 @@ async fn init_pool() -> Pool {
         .expect("failed to build Postgres pool")
 }
 
-pub fn stage_db() -> AdHoc {
-    AdHoc::try_on_ignite("Postgres", |rocket| async {
-        let client = init_pool().await;
+pub fn stage_db(database_url: String) -> AdHoc {
+    AdHoc::try_on_ignite("Postgres", |rocket| async move {
+        let client = init_pool(&database_url).await;
         Ok(rocket.manage(client))
     })
 }
