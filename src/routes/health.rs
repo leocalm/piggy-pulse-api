@@ -17,8 +17,10 @@ mod tests {
 
     #[rocket::async_test]
     async fn health_check_works() {
-        let client = Client::tracked(build_rocket()).await.expect("valid rocket instance");
-        let response = client.get("/health").dispatch().await;
+        let client = Client::tracked(build_rocket("postgresql://test:test@localhost/test".to_string()))
+            .await
+            .expect("valid rocket instance");
+        let response = client.get("/api/health").dispatch().await;
         assert_eq!(response.status(), Status::Ok);
     }
 }

@@ -12,6 +12,16 @@ use uuid::Uuid;
 
 impl From<&TransactionRequest> for Transaction {
     fn from(transaction_request: &TransactionRequest) -> Self {
+        let to_account = transaction_request.to_account_id.as_ref().map(|acc_id| Account {
+            id: acc_id.clone(),
+            ..Account::default()
+        });
+
+        let vendor = transaction_request.vendor_id.as_ref().map(|v_id| Vendor {
+            id: v_id.clone(),
+            ..Vendor::default()
+        });
+
         Self {
             id: Uuid::new_v4(),
             amount: transaction_request.amount,
@@ -25,8 +35,8 @@ impl From<&TransactionRequest> for Transaction {
                 id: transaction_request.from_account_id,
                 ..Account::default()
             },
-            to_account: transaction_request.to_account_id.map(|id| Account { id, ..Account::default() }),
-            vendor: transaction_request.vendor_id.map(|id| Vendor { id, ..Vendor::default() }),
+            to_account,
+            vendor,
         }
     }
 }

@@ -9,9 +9,12 @@ use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{routes, State};
 use uuid::Uuid;
+use validator::Validate;
 
 #[rocket::post("/", data = "<payload>")]
 pub async fn create_budget_period(pool: &State<Pool>, _current_user: CurrentUser, payload: Json<BudgetPeriodRequest>) -> Result<(Status, String), AppError> {
+    payload.validate()?;
+
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
     let budget_period_id = repo.create_budget_period(&payload).await?;

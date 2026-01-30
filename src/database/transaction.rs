@@ -23,6 +23,10 @@ pub trait TransactionRepository {
 #[async_trait::async_trait]
 impl<'a> TransactionRepository for PostgresRepository<'a> {
     async fn create_transaction(&self, transaction: &TransactionRequest) -> Result<Transaction, AppError> {
+        let to_account_id = if let Some(acc_id) = &transaction.to_account_id { Some(acc_id) } else { None };
+
+        let vendor_id = if let Some(v_id) = &transaction.vendor_id { Some(v_id) } else { None };
+
         let rows = self
             .client
             .query(
@@ -97,8 +101,8 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
                     &transaction.occurred_at,
                     &transaction.category_id,
                     &transaction.from_account_id,
-                    &transaction.to_account_id,
-                    &transaction.vendor_id,
+                    &to_account_id,
+                    &vendor_id,
                 ],
             )
             .await?;

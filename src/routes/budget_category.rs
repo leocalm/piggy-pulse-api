@@ -9,6 +9,7 @@ use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{routes, State};
 use uuid::Uuid;
+use validator::Validate;
 
 #[rocket::post("/", data = "<payload>")]
 pub async fn create_budget_category(
@@ -16,6 +17,8 @@ pub async fn create_budget_category(
     _current_user: CurrentUser,
     payload: Json<BudgetCategoryRequest>,
 ) -> Result<(Status, Json<BudgetCategoryResponse>), AppError> {
+    payload.validate()?;
+
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
     let bc = repo.create_budget_category(&payload).await?;

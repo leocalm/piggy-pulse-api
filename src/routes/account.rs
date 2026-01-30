@@ -9,6 +9,7 @@ use deadpool_postgres::Pool;
 use rocket::serde::json::Json;
 use rocket::{http::Status, routes, State};
 use uuid::Uuid;
+use validator::Validate;
 
 #[rocket::post("/", data = "<payload>")]
 pub async fn create_account(
@@ -16,6 +17,8 @@ pub async fn create_account(
     _current_user: CurrentUser,
     payload: Json<AccountRequest>,
 ) -> Result<(Status, Json<AccountResponse>), AppError> {
+    payload.validate()?;
+
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
     let account = repo.create_account(&payload).await?;

@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use validator::Validate;
 
 #[derive(Serialize, Debug, Clone, Default)]
 pub struct Currency {
@@ -33,10 +34,14 @@ pub struct CurrencyResponse {
     pub decimal_places: i32,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Validate)]
 pub struct CurrencyRequest {
+    #[validate(length(min = 3))]
     pub name: String,
+    #[validate(length(max = 3))]
     pub symbol: String,
+    #[validate(length(equal = 3))]
     pub currency: String,
+    #[validate(range(min = 0))]
     pub decimal_places: i32,
 }
