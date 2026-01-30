@@ -128,3 +128,69 @@ fn map_row_to_budget(row: &Row) -> Budget {
         created_at: row.get("created_at"),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::MockRepository;
+
+    #[tokio::test]
+    async fn test_mock_create_budget() {
+        let repo = MockRepository {};
+        let request = BudgetRequest {
+            name: "Monthly Budget".to_string(),
+            start_day: 1,
+        };
+
+        let result = repo.create_budget(&request).await;
+        assert!(result.is_ok());
+        let budget = result.unwrap();
+        assert_eq!(budget.name, "Monthly Budget");
+        assert_eq!(budget.start_day, 1);
+    }
+
+    #[tokio::test]
+    async fn test_mock_get_budget_by_id() {
+        let repo = MockRepository {};
+        let id = Uuid::new_v4();
+
+        let result = repo.get_budget_by_id(&id).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_mock_list_budgets() {
+        let repo = MockRepository {};
+        let result = repo.list_budgets(None).await;
+        assert!(result.is_ok());
+        let (budgets, total) = result.unwrap();
+        assert_eq!(total, 1);
+        assert_eq!(budgets.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_mock_delete_budget() {
+        let repo = MockRepository {};
+        let id = Uuid::new_v4();
+        let result = repo.delete_budget(&id).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_mock_update_budget() {
+        let repo = MockRepository {};
+        let id = Uuid::new_v4();
+        let request = BudgetRequest {
+            name: "Updated Budget".to_string(),
+            start_day: 15,
+        };
+
+        let result = repo.update_budget(&id, &request).await;
+        assert!(result.is_ok());
+        let budget = result.unwrap();
+        assert_eq!(budget.id, id);
+        assert_eq!(budget.name, "Updated Budget");
+        assert_eq!(budget.start_day, 15);
+    }
+}
