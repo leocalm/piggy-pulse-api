@@ -147,7 +147,11 @@ impl TransactionRepository for MockRepository {
         Ok((vec![Transaction::default()], 1))
     }
 
-    async fn get_transactions_for_period(&self, _period_id: &Uuid, _pagination: Option<&crate::models::pagination::PaginationParams>) -> Result<(Vec<Transaction>, i64), AppError> {
+    async fn get_transactions_for_period(
+        &self,
+        _period_id: &Uuid,
+        _pagination: Option<&crate::models::pagination::PaginationParams>,
+    ) -> Result<(Vec<Transaction>, i64), AppError> {
         Ok((vec![Transaction::default()], 1))
     }
 

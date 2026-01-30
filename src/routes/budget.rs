@@ -8,7 +8,7 @@ use crate::models::pagination::{PaginatedResponse, PaginationParams};
 use deadpool_postgres::Pool;
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket::{routes, State};
+use rocket::{State, routes};
 use uuid::Uuid;
 use validator::Validate;
 
@@ -23,7 +23,12 @@ pub async fn create_budget(pool: &State<Pool>, _current_user: CurrentUser, paylo
 }
 
 #[rocket::get("/?<page>&<limit>")]
-pub async fn list_all_budgets(pool: &State<Pool>, _current_user: CurrentUser, page: Option<i64>, limit: Option<i64>) -> Result<Json<PaginatedResponse<BudgetResponse>>, AppError> {
+pub async fn list_all_budgets(
+    pool: &State<Pool>,
+    _current_user: CurrentUser,
+    page: Option<i64>,
+    limit: Option<i64>,
+) -> Result<Json<PaginatedResponse<BudgetResponse>>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
 

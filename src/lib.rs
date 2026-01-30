@@ -14,12 +14,11 @@ pub use config::Config;
 
 use crate::db::stage_db;
 use crate::routes as app_routes;
-use rocket::{catchers, Build, Rocket};
+use rocket::{Build, Rocket, catchers};
 use tracing_subscriber::EnvFilter;
 
 fn init_tracing(log_level: &str, json_format: bool) {
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(log_level));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
 
     let subscriber = tracing_subscriber::fmt()
         .with_env_filter(filter)
