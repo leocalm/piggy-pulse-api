@@ -1,18 +1,12 @@
 use crate::error::app_error::AppError;
 use deadpool_postgres::{Client, Manager, ManagerConfig, Pool, RecyclingMethod, Runtime};
 use rocket::fairing::AdHoc;
+use std::str::FromStr;
 use tokio_postgres::{Config, NoTls};
 
 async fn init_pool() -> Pool {
-    // Build tokio-postgres config (you can also parse from DATABASE_URL)
-    let mut cfg = Config::new();
-    cfg.host("localhost");
-    cfg.user("postgres");
-    cfg.password("example");
-    cfg.dbname("budget_db");
-
     let mgr = Manager::from_config(
-        cfg,
+        Config::from_str(&std::env::var("DATABASE_URL").expect("DATABASE_URL must be set")).expect("Error parsing DATABASE_URL"),
         NoTls,
         ManagerConfig {
             recycling_method: RecyclingMethod::Fast,
