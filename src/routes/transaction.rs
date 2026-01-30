@@ -8,7 +8,7 @@ use crate::models::transaction::{TransactionRequest, TransactionResponse};
 use deadpool_postgres::Pool;
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket::{State, routes};
+use rocket::{routes, State};
 use uuid::Uuid;
 
 #[rocket::post("/", data = "<payload>")]
@@ -17,9 +17,19 @@ pub async fn create_transaction(
     _current_user: CurrentUser,
     payload: JsonBody<TransactionRequest>,
 ) -> Result<(Status, Json<TransactionResponse>), AppError> {
+    let start = std::time::Instant::now();
+
+    let client_start = std::time::Instant::now();
     let client = get_client(pool).await?;
+    tracing::trace!("Got DB client in {:?}", client_start.elapsed());
+
     let repo = PostgresRepository { client: &client };
+
+    let query_start = std::time::Instant::now();
     let tx = repo.create_transaction(&payload).await?;
+    tracing::trace!("Created transaction in {:?}", query_start.elapsed());
+
+    tracing::trace!("Total create_transaction time: {:?}", start.elapsed());
     Ok((Status::Created, Json(TransactionResponse::from(&tx))))
 }
 

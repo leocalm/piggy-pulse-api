@@ -1,5 +1,5 @@
 use crate::error::app_error::AppError;
-use deadpool_postgres::{Client, Manager, ManagerConfig, Pool, RecyclingMethod};
+use deadpool_postgres::{Client, Manager, ManagerConfig, Pool, RecyclingMethod, Runtime};
 use rocket::fairing::AdHoc;
 use tokio_postgres::{Config, NoTls};
 
@@ -21,6 +21,10 @@ async fn init_pool() -> Pool {
 
     Pool::builder(mgr)
         .max_size(16)
+        .wait_timeout(Some(std::time::Duration::from_secs(5)))
+        .create_timeout(Some(std::time::Duration::from_secs(5)))
+        .recycle_timeout(Some(std::time::Duration::from_secs(5)))
+        .runtime(Runtime::Tokio1)
         .build()
         .expect("failed to build Postgres pool")
 }
