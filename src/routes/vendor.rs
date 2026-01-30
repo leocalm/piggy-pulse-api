@@ -8,7 +8,7 @@ use crate::models::vendor::{VendorRequest, VendorResponse, VendorWithStatsRespon
 use deadpool_postgres::Pool;
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket::{routes, State};
+use rocket::{State, routes};
 use uuid::Uuid;
 use validator::Validate;
 
@@ -23,7 +23,12 @@ pub async fn create_vendor(pool: &State<Pool>, _current_user: CurrentUser, paylo
 }
 
 #[rocket::get("/?<page>&<limit>")]
-pub async fn list_all_vendors(pool: &State<Pool>, _current_user: CurrentUser, page: Option<i64>, limit: Option<i64>) -> Result<Json<PaginatedResponse<VendorResponse>>, AppError> {
+pub async fn list_all_vendors(
+    pool: &State<Pool>,
+    _current_user: CurrentUser,
+    page: Option<i64>,
+    limit: Option<i64>,
+) -> Result<Json<PaginatedResponse<VendorResponse>>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
 
