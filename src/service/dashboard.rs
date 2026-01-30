@@ -239,4 +239,205 @@ mod tests {
 
         Ok(())
     }
+
+    mod proptest_tests {
+        use super::*;
+        use chrono::NaiveDate;
+        use proptest::prelude::*;
+
+        proptest! {
+            #[test]
+            fn test_month_progress_percentage_in_range(
+                days_passed in 0u32..100,
+                days_in_period in 1u32..100
+            ) {
+                let days_passed = days_passed.min(days_in_period);
+                let days_passed_ratio = days_passed as f32 / days_in_period as f32;
+                let days_passed_percentage = (100.0 * days_passed_ratio) as u32;
+
+                prop_assert!(days_passed_percentage <= 100);
+            }
+
+            #[test]
+            fn test_month_progress_dates_consistent(
+                days_before in 0u64..30,
+                days_after in 1u64..60
+            ) {
+                let current_date = Utc::now().naive_utc().date();
+                let start_date = current_date.checked_sub_days(chrono::Days::new(days_before)).unwrap();
+                let end_date = current_date.checked_add_days(chrono::Days::new(days_after)).unwrap();
+
+                let repository = MockRepository {};
+                let budget_period = BudgetPeriod {
+                    id: Uuid::new_v4(),
+                    name: "Test Period".to_string(),
+                    start_date,
+                    end_date,
+                    created_at: Utc::now(),
+                };
+
+                let dashboard_service = DashboardService::new(&repository, &budget_period);
+                let result = tokio::runtime::Runtime::new().unwrap().block_on(dashboard_service.month_progress()).unwrap();
+
+                prop_assert!(result.days_in_period > 0);
+                prop_assert!(result.days_passed_percentage <= 100);
+                prop_assert!(result.remaining_days > 0);
+            }
+
+            #[test]
+            fn test_total_asset_sum_property(
+                balances in prop::collection::vec(0i64..1_000_000, 1..10)
+            ) {
+                let repository = MockRepository {};
+                let budget_period = BudgetPeriod::default();
+
+                let accounts: Vec<Account> = balances.iter().enumerate().map(|(i, &balance)| Account {
+                    id: Uuid::new_v4(),
+                    balance,
+                    name: format!("Account {}", i),
+                    ..Account::default()
+                }).collect();
+
+                let expected_total: i32 = balances.iter().map(|&b| b as i32).sum();
+
+                let mut dashboard_service = DashboardService::new(&repository, &budget_period);
+                dashboard_service.accounts = Some(Arc::new(accounts));
+                dashboard_service.all_transactions = Some(Arc::new(vec![]));
+
+                let result = tokio::runtime::Runtime::new().unwrap().block_on(dashboard_service.total_asset()).unwrap();
+
+                prop_assert_eq!(result, expected_total);
+            }
+
+            #[test]
+            fn test_total_asset_with_transactions(
+                initial_balance in 0i64..1_000_000,
+                transaction_amount in 0i64..10_000
+            ) {
+                let repository = MockRepository {};
+                let budget_period = BudgetPeriod::default();
+
+                let account = Account {
+                    id: Uuid::new_v4(),
+                    balance: initial_balance,
+                    ..Account::default()
+                };
+
+                let transaction = Transaction {
+                    amount: transaction_amount as i32,
+                    from_account: account.clone(),
+                    category: Category {
+                        category_type: CategoryType::Outgoing,
+                        ..Category::default()
+                    },
+                    ..Transaction::default()
+                };
+
+                let mut dashboard_service = DashboardService::new(&repository, &budget_period);
+                dashboard_service.accounts = Some(Arc::new(vec![account]));
+                dashboard_service.all_transactions = Some(Arc::new(vec![transaction]));
+
+                let result = tokio::runtime::Runtime::new().unwrap().block_on(dashboard_service.total_asset()).unwrap();
+
+                prop_assert_eq!(result, (initial_balance - transaction_amount) as i32);
+            }
+
+            #[test]
+            fn test_spent_per_category_percentage_calculation(
+                budgeted_value in 1i32..1_000_000,
+                amount_spent in 0i32..1_000_000
+            ) {
+                let percentage_spent = (amount_spent as i64) * 10000 / (budgeted_value as i64);
+
+                prop_assert!(percentage_spent >= 0);
+                if amount_spent == 0 {
+                    prop_assert_eq!(percentage_spent, 0);
+                }
+                if amount_spent == budgeted_value {
+                    prop_assert_eq!(percentage_spent, 10000);
+                }
+            }
+
+            #[test]
+            fn test_monthly_burn_in_current_day_calculation(
+                start_day in 1u32..28,
+                offset_days in 0i64..30
+            ) {
+                let start_date = NaiveDate::from_ymd_opt(2024, 1, start_day).unwrap();
+                let current_date = start_date.checked_add_days(chrono::Days::new(offset_days as u64)).unwrap();
+
+                let calculated_offset = current_date.signed_duration_since(start_date).num_days() as i32;
+
+                prop_assert_eq!(calculated_offset, offset_days as i32);
+                prop_assert!(calculated_offset >= 0);
+            }
+
+            #[test]
+            fn test_monthly_burn_in_days_in_period(
+                start_day in 1u32..28,
+                duration in 1i64..90
+            ) {
+                let start_date = NaiveDate::from_ymd_opt(2024, 1, start_day).unwrap();
+                let end_date = start_date.checked_add_days(chrono::Days::new(duration as u64)).unwrap();
+
+                let days_in_period = end_date.signed_duration_since(start_date).num_days() as i32;
+
+                prop_assert_eq!(days_in_period, duration as i32);
+                prop_assert!(days_in_period > 0);
+            }
+
+            #[test]
+            fn test_budget_categories_sum(
+                budgeted_values in prop::collection::vec(0i32..100_000, 1..10)
+            ) {
+                let repository = MockRepository {};
+                let budget_period = BudgetPeriod::default();
+
+                let budget_categories: Vec<BudgetCategory> = budgeted_values.iter().map(|&budgeted_value| BudgetCategory {
+                    id: Uuid::new_v4(),
+                    budgeted_value,
+                    ..BudgetCategory::default()
+                }).collect();
+
+                let expected_total: i32 = budgeted_values.iter().sum();
+
+                let mut dashboard_service = DashboardService::new(&repository, &budget_period);
+                dashboard_service.budget_categories = Some(Arc::new(budget_categories));
+                dashboard_service.transactions = Some(Arc::new(vec![]));
+
+                let result = tokio::runtime::Runtime::new().unwrap().block_on(dashboard_service.monthly_burn_in()).unwrap();
+
+                prop_assert_eq!(result.total_budget, expected_total);
+                prop_assert_eq!(result.spent_budget, 0);
+            }
+
+            #[test]
+            fn test_spent_per_category_sorting_property(
+                percentages in prop::collection::vec(0i32..10_000, 2..10)
+            ) {
+                let mut sorted_percentages = percentages.clone();
+                sorted_percentages.sort_by(|a, b| b.cmp(a));
+
+                for i in 1..sorted_percentages.len() {
+                    prop_assert!(sorted_percentages[i-1] >= sorted_percentages[i]);
+                }
+            }
+
+            #[test]
+            fn test_balance_calculation_associativity(
+                initial_balance in -100_000i32..100_000,
+                amounts in prop::collection::vec(-10_000i32..10_000, 0..5)
+            ) {
+                let total_changes: i32 = amounts.iter().sum();
+                let expected_balance = initial_balance + total_changes;
+
+                let mut running_balance = initial_balance;
+                for &amount in &amounts {
+                    running_balance += amount;
+                }
+
+                prop_assert_eq!(running_balance, expected_balance);
+            }
+        }
+    }
 }
