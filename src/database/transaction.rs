@@ -103,7 +103,7 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
         let to_account_id = if let Some(acc_id) = &transaction.to_account_id { Some(acc_id) } else { None };
         let vendor_id = if let Some(v_id) = &transaction.vendor_id { Some(v_id) } else { None };
 
-        let select_query = build_transaction_query("inserted", "", "");
+        let select_query = build_transaction_query("inserted t", "", "");
         let query = format!(
             r#"
             WITH inserted AS (
@@ -214,7 +214,7 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
     }
 
     async fn update_transaction(&self, id: &Uuid, transaction: &TransactionRequest) -> Result<Transaction, AppError> {
-        let select_query = build_transaction_query("updated", "", "");
+        let select_query = build_transaction_query("updated t", "", "");
         let query = format!(
             r#"
             WITH updated AS (
