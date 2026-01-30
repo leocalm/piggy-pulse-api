@@ -1,12 +1,14 @@
+use crate::config::DatabaseConfig;
 use crate::error::app_error::AppError;
 use deadpool_postgres::{Client, Manager, ManagerConfig, Pool, RecyclingMethod, Runtime};
 use rocket::fairing::AdHoc;
 use std::str::FromStr;
+use std::time::Duration;
 use tokio_postgres::{Config, NoTls};
 
-async fn init_pool(database_url: &str) -> Pool {
+async fn init_pool(db_config: &DatabaseConfig) -> Pool {
     let mgr = Manager::from_config(
-        Config::from_str(database_url).expect("Error parsing DATABASE_URL"),
+        Config::from_str(&db_config.url).expect("Error parsing DATABASE_URL"),
         NoTls,
         ManagerConfig {
             recycling_method: RecyclingMethod::Fast,
@@ -14,18 +16,18 @@ async fn init_pool(database_url: &str) -> Pool {
     );
 
     Pool::builder(mgr)
-        .max_size(16)
-        .wait_timeout(Some(std::time::Duration::from_secs(5)))
-        .create_timeout(Some(std::time::Duration::from_secs(5)))
-        .recycle_timeout(Some(std::time::Duration::from_secs(5)))
+        .max_size(db_config.max_connections as usize)
+        .wait_timeout(Some(Duration::from_secs(db_config.connection_timeout)))
+        .create_timeout(Some(Duration::from_secs(db_config.connection_timeout)))
+        .recycle_timeout(Some(Duration::from_secs(db_config.acquire_timeout)))
         .runtime(Runtime::Tokio1)
         .build()
         .expect("failed to build Postgres pool")
 }
 
-pub fn stage_db(database_url: String) -> AdHoc {
+pub fn stage_db(db_config: DatabaseConfig) -> AdHoc {
     AdHoc::try_on_ignite("Postgres", |rocket| async move {
-        let client = init_pool(&database_url).await;
+        let client = init_pool(&db_config).await;
         Ok(rocket.manage(client))
     })
 }
