@@ -11,11 +11,18 @@ pub fn routes() -> Vec<rocket::Route> {
 
 #[cfg(test)]
 mod tests {
+    //! Integration tests for routes require a running PostgreSQL database
+    //! configured at the DATABASE_URL specified in the test Config.
+    //! These tests verify the full request/response cycle including database connections.
+    //!
+    //! To run integration tests, ensure PostgreSQL is running with appropriate test credentials.
+
     use crate::{Config, build_rocket};
     use rocket::http::Status;
     use rocket::local::asynchronous::Client;
 
     #[rocket::async_test]
+    #[ignore = "requires database"]
     async fn health_check_works() {
         let mut config = Config::default();
         config.database.url = "postgresql://test:test@localhost/test".to_string();

@@ -243,3 +243,51 @@ impl CategoryRequestDbExt for CategoryRequest {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_category_type_from_db_all_types() {
+        assert!(matches!(category_type_from_db("Incoming"), CategoryType::Incoming));
+        assert!(matches!(category_type_from_db("Outgoing"), CategoryType::Outgoing));
+        assert!(matches!(category_type_from_db("Transfer"), CategoryType::Transfer));
+    }
+
+    #[test]
+    #[should_panic(expected = "Unknown category type")]
+    fn test_category_type_from_db_invalid() {
+        category_type_from_db("InvalidType");
+    }
+
+    #[test]
+    fn test_category_type_to_db() {
+        let request = CategoryRequest {
+            name: "Test".to_string(),
+            color: "#000000".to_string(),
+            icon: "icon".to_string(),
+            parent_id: None,
+            category_type: CategoryType::Incoming,
+        };
+        assert_eq!(request.category_type_to_db(), "Incoming");
+
+        let request_outgoing = CategoryRequest {
+            name: "Test".to_string(),
+            color: "#000000".to_string(),
+            icon: "icon".to_string(),
+            parent_id: None,
+            category_type: CategoryType::Outgoing,
+        };
+        assert_eq!(request_outgoing.category_type_to_db(), "Outgoing");
+
+        let request_transfer = CategoryRequest {
+            name: "Test".to_string(),
+            color: "#000000".to_string(),
+            icon: "icon".to_string(),
+            parent_id: None,
+            category_type: CategoryType::Transfer,
+        };
+        assert_eq!(request_transfer.category_type_to_db(), "Transfer");
+    }
+}

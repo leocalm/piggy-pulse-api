@@ -247,3 +247,59 @@ impl AccountRequestDbExt for AccountRequest {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_account_type_from_db_all_types() {
+        assert!(matches!(account_type_from_db("Checking"), AccountType::Checking));
+        assert!(matches!(account_type_from_db("Savings"), AccountType::Savings));
+        assert!(matches!(account_type_from_db("CreditCard"), AccountType::CreditCard));
+        assert!(matches!(account_type_from_db("Wallet"), AccountType::Wallet));
+        assert!(matches!(account_type_from_db("Allowance"), AccountType::Allowance));
+    }
+
+    #[test]
+    #[should_panic(expected = "Unknown account type")]
+    fn test_account_type_from_db_invalid() {
+        account_type_from_db("InvalidType");
+    }
+
+    #[test]
+    fn test_account_type_to_db() {
+        let request = AccountRequest {
+            name: "Test".to_string(),
+            color: "#000000".to_string(),
+            icon: "icon".to_string(),
+            account_type: AccountType::Checking,
+            currency: "USD".to_string(),
+            balance: 0,
+            spend_limit: None,
+        };
+        assert_eq!(request.account_type_to_db(), "Checking");
+
+        let request_savings = AccountRequest {
+            name: "Test".to_string(),
+            color: "#000000".to_string(),
+            icon: "icon".to_string(),
+            account_type: AccountType::Savings,
+            currency: "USD".to_string(),
+            balance: 0,
+            spend_limit: None,
+        };
+        assert_eq!(request_savings.account_type_to_db(), "Savings");
+
+        let request_credit = AccountRequest {
+            name: "Test".to_string(),
+            color: "#000000".to_string(),
+            icon: "icon".to_string(),
+            account_type: AccountType::CreditCard,
+            currency: "USD".to_string(),
+            balance: 0,
+            spend_limit: None,
+        };
+        assert_eq!(request_credit.account_type_to_db(), "CreditCard");
+    }
+}
