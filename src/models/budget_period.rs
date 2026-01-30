@@ -1,6 +1,7 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use validator::{Validate, ValidationError};
 
 #[derive(Serialize, Debug, Default)]
 pub struct BudgetPeriod {
@@ -11,11 +12,20 @@ pub struct BudgetPeriod {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Validate)]
+#[validate(schema(function = "validate_date_range"))]
 pub struct BudgetPeriodRequest {
+    #[validate(length(min = 3))]
     pub name: String,
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
+}
+
+fn validate_date_range(request: &BudgetPeriodRequest) -> Result<(), ValidationError> {
+    if request.start_date >= request.end_date {
+        return Err(ValidationError::new("start_date_must_be_before_end_date"));
+    }
+    Ok(())
 }
 
 #[derive(Serialize, Debug)]

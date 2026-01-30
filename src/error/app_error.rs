@@ -3,6 +3,7 @@ use rocket::response::Responder;
 use rocket::{Request, Response};
 use std::io::Cursor;
 use tracing::error;
+use validator::ValidationErrors;
 
 #[derive(Debug)]
 pub enum AppError {
@@ -16,6 +17,7 @@ pub enum AppError {
     NotFound(String),
     CurrencyDoesNotExist(String),
     UuidError(String),
+    ValidationError(String),
 }
 
 impl std::fmt::Display for AppError {
@@ -24,13 +26,14 @@ impl std::fmt::Display for AppError {
             Self::UserNotFound => write!(f, "User not found"),
             Self::InvalidCredentials => write!(f, "Invalid credentials"),
             Self::Unauthorized => write!(f, "Unauthorized"),
-            Self::Db(s) => write!(f, "Database error: {}", s),
-            Self::PasswordHash(s) => write!(f, "Password hash error: {}", s),
+            Self::Db(_) => write!(f, "Internal server error"),
+            Self::PasswordHash(_) => write!(f, "Internal server error"),
             Self::UserAlreadyExists(s) => write!(f, "User {} already exists", s),
             Self::BadRequest(s) => write!(f, "Bad request: {}", s),
             Self::NotFound(s) => write!(f, "Not found: {}", s),
             Self::CurrencyDoesNotExist(s) => write!(f, "Currency not found: {}", s),
-            Self::UuidError(s) => write!(f, "Uuid error: {}", s),
+            Self::UuidError(_) => write!(f, "Internal server error"),
+            Self::ValidationError(e) => write!(f, "Validation error: {}", e),
         }
     }
 }
@@ -39,24 +42,27 @@ impl std::error::Error for AppError {}
 
 impl From<tokio_postgres::error::Error> for AppError {
     fn from(e: tokio_postgres::error::Error) -> Self {
+        log::error!("{}", e);
         AppError::Db(e.to_string())
     }
 }
 
 impl From<password_hash::Error> for AppError {
     fn from(e: password_hash::Error) -> Self {
+        log::error!("{}", e);
         AppError::PasswordHash(e.to_string())
     }
 }
 
 impl From<uuid::Error> for AppError {
     fn from(e: uuid::Error) -> Self {
-        AppError::UserAlreadyExists(e.to_string())
+        log::error!("{}", e);
+        AppError::UuidError(e.to_string())
     }
 }
 
-impl From<AppError> for Status {
-    fn from(e: AppError) -> Self {
+impl From<&AppError> for Status {
+    fn from(e: &AppError) -> Self {
         match e {
             AppError::UserNotFound => Status::NotFound,
             AppError::InvalidCredentials => Status::Forbidden,
@@ -68,6 +74,7 @@ impl From<AppError> for Status {
             AppError::NotFound(_) => Status::NotFound,
             AppError::CurrencyDoesNotExist(_) => Status::BadRequest,
             AppError::UuidError(_) => Status::BadRequest,
+            AppError::ValidationError(_) => Status::BadRequest,
         }
     }
 }
@@ -76,12 +83,15 @@ impl<'r> Responder<'r, 'static> for AppError {
     fn respond_to(self, _req: &Request<'_>) -> rocket::response::Result<'static> {
         error!("{}", self);
 
-        let status = Status::from(self);
-        let body = status.to_string();
+        let status = Status::from(&self);
+        let body = self.to_string();
 
-        Response::build()
-            .status(status)
-            .sized_body(body.len(), Cursor::new(body))
-            .ok()
+        Response::build().status(status).sized_body(body.len(), Cursor::new(body)).ok()
+    }
+}
+
+impl From<ValidationErrors> for AppError {
+    fn from(e: ValidationErrors) -> Self {
+        AppError::ValidationError(e.to_string())
     }
 }

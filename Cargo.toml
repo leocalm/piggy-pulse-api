@@ -19,3 +19,4 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 log = "0.4.28"
 async-trait = "0.1.89"
+validator = { version = "0.20", features = ["derive"] }

@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use validator::Validate;
 
 #[derive(Serialize, Debug)]
 pub struct Budget {
@@ -10,9 +11,11 @@ pub struct Budget {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Validate)]
 pub struct BudgetRequest {
+    #[validate(length(min = 3))]
     pub name: String,
+    #[validate(range(min = 0, max = 31))]
     pub start_day: i32,
 }
 

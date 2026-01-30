@@ -9,6 +9,7 @@ use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{routes, State};
 use uuid::Uuid;
+use validator::Validate;
 
 #[rocket::post("/", data = "<payload>")]
 pub async fn create_currency(
@@ -16,6 +17,8 @@ pub async fn create_currency(
     _current_user: CurrentUser,
     payload: Json<CurrencyRequest>,
 ) -> Result<(Status, Json<CurrencyResponse>), AppError> {
+    payload.validate()?;
+
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
     let currency = repo.create_currency(&payload).await?;

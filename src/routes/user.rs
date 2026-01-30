@@ -9,9 +9,12 @@ use rocket::http::{Cookie, CookieJar, Status};
 use rocket::serde::json::Json;
 use rocket::{routes, State};
 use uuid::Uuid;
+use validator::Validate;
 
 #[rocket::post("/", data = "<payload>")]
 pub async fn post_user(pool: &State<Pool>, payload: Json<UserRequest>) -> Result<(Status, Json<UserResponse>), AppError> {
+    payload.validate()?;
+
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
     let user = repo.get_user_by_email(&payload.email).await?;

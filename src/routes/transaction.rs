@@ -10,6 +10,7 @@ use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{routes, State};
 use uuid::Uuid;
+use validator::Validate;
 
 #[rocket::post("/", data = "<payload>")]
 pub async fn create_transaction(
@@ -17,6 +18,8 @@ pub async fn create_transaction(
     _current_user: CurrentUser,
     payload: JsonBody<TransactionRequest>,
 ) -> Result<(Status, Json<TransactionResponse>), AppError> {
+    payload.validate()?;
+
     let start = std::time::Instant::now();
 
     let client_start = std::time::Instant::now();

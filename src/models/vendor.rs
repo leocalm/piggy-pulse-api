@@ -1,6 +1,7 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use validator::Validate;
 
 #[derive(Serialize, Debug, Clone, Default)]
 pub struct Vendor {
@@ -16,8 +17,9 @@ pub struct VendorStats {
     pub last_used_at: Option<NaiveDate>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Validate)]
 pub struct VendorRequest {
+    #[validate(length(min = 3))]
     pub name: String,
 }
 

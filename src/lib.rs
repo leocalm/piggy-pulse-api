@@ -24,12 +24,12 @@ fn init_tracing() {
         .init();
 }
 
-pub fn build_rocket() -> Rocket<Build> {
+pub fn build_rocket(database_url: String) -> Rocket<Build> {
     dotenvy::dotenv().ok();
     init_tracing();
 
     rocket::build()
-        .attach(stage_db())
+        .attach(stage_db(database_url))
         .mount("/api/accounts", app_routes::account::routes())
         .mount("/api/users", app_routes::user::routes())
         .mount("/api/currency", app_routes::currency::routes())

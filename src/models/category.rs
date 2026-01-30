@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use validator::Validate;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq, Default)]
 pub enum CategoryType {
@@ -21,10 +22,13 @@ pub struct Category {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Validate)]
 pub struct CategoryRequest {
+    #[validate(length(min = 3))]
     pub name: String,
+    #[validate(length(min = 3))]
     pub color: String,
+    #[validate(length(min = 3))]
     pub icon: String,
     pub parent_id: Option<Uuid>,
     pub category_type: CategoryType,

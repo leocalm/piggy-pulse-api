@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use validator::Validate;
 
 #[derive(Serialize, Debug)]
 pub struct User {
@@ -18,10 +19,13 @@ pub struct UserResponse {
     pub email: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Validate)]
 pub struct UserRequest {
+    #[validate(length(min = 8))]
     pub name: String,
+    #[validate(email)]
     pub email: String,
+    #[validate(length(min = 8))]
     pub password: String,
 }
 

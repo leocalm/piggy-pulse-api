@@ -2,6 +2,7 @@ use crate::models::category::{Category, CategoryResponse};
 use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use validator::Validate;
 
 #[derive(Serialize, Debug, Clone, Default)]
 pub struct BudgetCategory {
@@ -12,9 +13,10 @@ pub struct BudgetCategory {
     pub category: Category,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Validate)]
 pub struct BudgetCategoryRequest {
     pub category_id: Uuid,
+    #[validate(range(min = 0))]
     pub budgeted_value: i32,
 }
 

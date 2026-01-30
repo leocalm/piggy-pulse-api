@@ -4,6 +4,7 @@ use crate::models::vendor::{Vendor, VendorResponse};
 use chrono::NaiveDate;
 use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use validator::Validate;
 
 #[derive(Serialize, Debug, Clone, Default)]
 pub struct Transaction {
@@ -17,9 +18,11 @@ pub struct Transaction {
     pub vendor: Option<Vendor>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Validate)]
 pub struct TransactionRequest {
+    #[validate(range(min = 0))]
     pub amount: i32,
+    #[validate(length(min = 3))]
     pub description: String,
     pub occurred_at: NaiveDate,
     pub category_id: Uuid,

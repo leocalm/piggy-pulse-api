@@ -3,5 +3,6 @@ use rocket::{Build, Rocket};
 
 #[rocket::launch]
 fn rocket() -> Rocket<Build> {
-    build_rocket()
+    let database_url = &std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    build_rocket(database_url.to_owned())
 }
