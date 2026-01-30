@@ -1,5 +1,6 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
+use crate::models::pagination::PaginationParams;
 use crate::models::vendor::{Vendor, VendorRequest, VendorStats, VendorWithStats};
 use rocket::FromFormField;
 use tokio_postgres::Row;
@@ -19,7 +20,7 @@ pub enum VendorOrderBy {
 pub trait VendorRepository {
     async fn create_vendor(&self, request: &VendorRequest) -> Result<Vendor, AppError>;
     async fn get_vendor_by_id(&self, id: &Uuid) -> Result<Option<Vendor>, AppError>;
-    async fn list_vendors(&self) -> Result<Vec<Vendor>, AppError>;
+    async fn list_vendors(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Vendor>, i64), AppError>;
     async fn list_vendors_with_status(&self, order_by: VendorOrderBy) -> Result<Vec<VendorWithStats>, AppError>;
     async fn delete_vendor(&self, id: &Uuid) -> Result<(), AppError>;
     async fn update_vendor(&self, id: &Uuid, request: &VendorRequest) -> Result<Vendor, AppError>;
@@ -67,20 +68,33 @@ impl<'a> VendorRepository for PostgresRepository<'a> {
         }
     }
 
-    async fn list_vendors(&self) -> Result<Vec<Vendor>, AppError> {
-        let rows = self
-            .client
-            .query(
-                r#"
+    async fn list_vendors(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Vendor>, i64), AppError> {
+        // Get total count
+        let count_row = self.client.query_one("SELECT COUNT(*) as total FROM vendor", &[]).await?;
+        let total: i64 = count_row.get("total");
+
+        // Build query with optional pagination
+        let mut query = String::from(
+            r#"
             SELECT id, name, created_at
             FROM vendor
             ORDER BY created_at DESC
             "#,
-                &[],
-            )
-            .await?;
+        );
 
-        Ok(rows.into_iter().map(|r| map_row_to_vendor(&r)).collect())
+        // Add pagination if requested
+        let rows = if let Some(params) = pagination {
+            if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
+                query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
+                self.client.query(&query, &[]).await?
+            } else {
+                self.client.query(&query, &[]).await?
+            }
+        } else {
+            self.client.query(&query, &[]).await?
+        };
+
+        Ok((rows.into_iter().map(|r| map_row_to_vendor(&r)).collect(), total))
     }
 
     async fn list_vendors_with_status(&self, order_by: VendorOrderBy) -> Result<Vec<VendorWithStats>, AppError> {

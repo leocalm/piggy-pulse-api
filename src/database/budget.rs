@@ -1,6 +1,7 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::budget::{Budget, BudgetRequest};
+use crate::models::pagination::PaginationParams;
 use tokio_postgres::Row;
 use uuid::Uuid;
 
@@ -8,7 +9,7 @@ use uuid::Uuid;
 pub trait BudgetRepository {
     async fn create_budget(&self, request: &BudgetRequest) -> Result<Budget, AppError>;
     async fn get_budget_by_id(&self, id: &Uuid) -> Result<Option<Budget>, AppError>;
-    async fn list_budgets(&self) -> Result<Vec<Budget>, AppError>;
+    async fn list_budgets(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Budget>, i64), AppError>;
     async fn delete_budget(&self, id: &Uuid) -> Result<(), AppError>;
     async fn update_budget(&self, id: &Uuid, budget: &BudgetRequest) -> Result<Budget, AppError>;
 }
@@ -55,20 +56,33 @@ impl<'a> BudgetRepository for PostgresRepository<'a> {
         }
     }
 
-    async fn list_budgets(&self) -> Result<Vec<Budget>, AppError> {
-        let rows = self
-            .client
-            .query(
-                r#"
+    async fn list_budgets(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Budget>, i64), AppError> {
+        // Get total count
+        let count_row = self.client.query_one("SELECT COUNT(*) as total FROM budget", &[]).await?;
+        let total: i64 = count_row.get("total");
+
+        // Build query with optional pagination
+        let mut query = String::from(
+            r#"
             SELECT id, name, start_day, created_at
             FROM budget
             ORDER BY created_at DESC
             "#,
-                &[],
-            )
-            .await?;
+        );
 
-        Ok(rows.into_iter().map(|r| map_row_to_budget(&r)).collect())
+        // Add pagination if requested
+        let rows = if let Some(params) = pagination {
+            if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
+                query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
+                self.client.query(&query, &[]).await?
+            } else {
+                self.client.query(&query, &[]).await?
+            }
+        } else {
+            self.client.query(&query, &[]).await?
+        };
+
+        Ok((rows.into_iter().map(|r| map_row_to_budget(&r)).collect(), total))
     }
 
     async fn delete_budget(&self, id: &Uuid) -> Result<(), AppError> {

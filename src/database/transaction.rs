@@ -4,6 +4,7 @@ use crate::error::app_error::AppError;
 use crate::models::account::Account;
 use crate::models::category::Category;
 use crate::models::currency::Currency;
+use crate::models::pagination::PaginationParams;
 use crate::models::transaction::{Transaction, TransactionRequest};
 use crate::models::vendor::Vendor;
 use tokio_postgres::Row;
@@ -14,8 +15,8 @@ pub trait TransactionRepository {
     async fn create_transaction(&self, transaction: &TransactionRequest) -> Result<Transaction, AppError>;
 
     async fn get_transaction_by_id(&self, id: &Uuid) -> Result<Option<Transaction>, AppError>;
-    async fn list_transactions(&self) -> Result<Vec<Transaction>, AppError>;
-    async fn get_transactions_for_period(&self, period_id: &Uuid) -> Result<Vec<Transaction>, AppError>;
+    async fn list_transactions(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Transaction>, i64), AppError>;
+    async fn get_transactions_for_period(&self, period_id: &Uuid, pagination: Option<&PaginationParams>) -> Result<(Vec<Transaction>, i64), AppError>;
     async fn delete_transaction(&self, id: &Uuid) -> Result<(), AppError>;
     async fn update_transaction(&self, id: &Uuid, transaction: &TransactionRequest) -> Result<Transaction, AppError>;
 }
@@ -182,11 +183,14 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
         }
     }
 
-    async fn list_transactions(&self) -> Result<Vec<Transaction>, AppError> {
-        let rows = self
-            .client
-            .query(
-                r#"
+    async fn list_transactions(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Transaction>, i64), AppError> {
+        // Get total count
+        let count_row = self.client.query_one("SELECT COUNT(*) as total FROM transaction", &[]).await?;
+        let total: i64 = count_row.get("total");
+
+        // Build query with optional pagination
+        let mut query = String::from(
+            r#"
             SELECT
                 t.id,
                 t.amount,
@@ -237,20 +241,46 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
             LEFT JOIN account ta ON t.to_account_id = ta.id
             LEFT JOIN currency cta ON ta.currency_id = cta.id
             LEFT JOIN vendor v ON t.vendor_id = v.id
-            ORDER BY occurred_at, t.created_at
+            ORDER BY occurred_at DESC, t.created_at DESC
             "#,
-                &[],
-            )
-            .await?;
+        );
 
-        Ok(rows.into_iter().map(|row| map_row_to_transaction(&row)).collect())
+        // Add pagination if requested
+        let rows = if let Some(params) = pagination {
+            if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
+                query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
+                self.client.query(&query, &[]).await?
+            } else {
+                self.client.query(&query, &[]).await?
+            }
+        } else {
+            self.client.query(&query, &[]).await?
+        };
+
+        Ok((rows.into_iter().map(|row| map_row_to_transaction(&row)).collect(), total))
     }
 
-    async fn get_transactions_for_period(&self, period_id: &Uuid) -> Result<Vec<Transaction>, AppError> {
-        let rows = self
+    async fn get_transactions_for_period(&self, period_id: &Uuid, pagination: Option<&PaginationParams>) -> Result<(Vec<Transaction>, i64), AppError> {
+        // Get total count for this period
+        let count_row = self
             .client
-            .query(
+            .query_one(
                 r#"
+            SELECT COUNT(*) as total
+            FROM transaction t
+            CROSS JOIN budget_period bp
+            WHERE bp.id = $1
+                AND t.occurred_at >= bp.start_date
+                AND t.occurred_at <= bp.end_date
+            "#,
+                &[period_id],
+            )
+            .await?;
+        let total: i64 = count_row.get("total");
+
+        // Build query with optional pagination
+        let mut query = String::from(
+            r#"
         SELECT
                 t.id,
                 t.amount,
@@ -307,11 +337,21 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
                 AND t.occurred_at <= bp.end_date
             ORDER BY occurred_at DESC, t.created_at DESC
         "#,
-                &[period_id],
-            )
-            .await?;
+        );
 
-        Ok(rows.into_iter().map(|row| map_row_to_transaction(&row)).collect())
+        // Add pagination if requested
+        let rows = if let Some(params) = pagination {
+            if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
+                query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
+                self.client.query(&query, &[period_id]).await?
+            } else {
+                self.client.query(&query, &[period_id]).await?
+            }
+        } else {
+            self.client.query(&query, &[period_id]).await?
+        };
+
+        Ok((rows.into_iter().map(|row| map_row_to_transaction(&row)).collect(), total))
     }
 
     async fn delete_transaction(&self, id: &Uuid) -> Result<(), AppError> {
