@@ -1,6 +1,5 @@
 use crate::models::account::{Account, AccountResponse};
 use crate::models::category::{Category, CategoryResponse};
-use crate::models::validate_uuid_v4;
 use crate::models::vendor::{Vendor, VendorResponse};
 use chrono::NaiveDate;
 use rocket::serde::{Deserialize, Serialize};
@@ -26,14 +25,10 @@ pub struct TransactionRequest {
     #[validate(length(min = 3))]
     pub description: String,
     pub occurred_at: NaiveDate,
-    #[validate(length(equal = 36), custom(function = "validate_uuid_v4"))]
-    pub category_id: String,
-    #[validate(length(equal = 36), custom(function = "validate_uuid_v4"))]
-    pub from_account_id: String,
-    #[validate(length(equal = 36), custom(function = "validate_uuid_v4"))]
-    pub to_account_id: Option<String>,
-    #[validate(length(equal = 36), custom(function = "validate_uuid_v4"))]
-    pub vendor_id: Option<String>,
+    pub category_id: Uuid,
+    pub from_account_id: Uuid,
+    pub to_account_id: Option<Uuid>,
+    pub vendor_id: Option<Uuid>,
 }
 
 #[derive(Serialize, Debug)]

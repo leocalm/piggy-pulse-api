@@ -8,18 +8,17 @@ use crate::models::category::Category;
 use crate::models::currency::Currency;
 use crate::models::transaction::{Transaction, TransactionRequest};
 use crate::models::vendor::Vendor;
-use std::str::FromStr;
 use uuid::Uuid;
 
 impl From<&TransactionRequest> for Transaction {
     fn from(transaction_request: &TransactionRequest) -> Self {
         let to_account = transaction_request.to_account_id.as_ref().map(|acc_id| Account {
-            id: Uuid::from_str(acc_id).unwrap(),
+            id: acc_id.clone(),
             ..Account::default()
         });
 
         let vendor = transaction_request.vendor_id.as_ref().map(|v_id| Vendor {
-            id: Uuid::from_str(v_id).unwrap(),
+            id: v_id.clone(),
             ..Vendor::default()
         });
 
@@ -29,11 +28,11 @@ impl From<&TransactionRequest> for Transaction {
             description: transaction_request.description.clone(),
             occurred_at: transaction_request.occurred_at,
             category: Category {
-                id: transaction_request.category_id.parse().unwrap(),
+                id: transaction_request.category_id,
                 ..Category::default()
             },
             from_account: Account {
-                id: transaction_request.from_account_id.parse().unwrap(),
+                id: transaction_request.from_account_id,
                 ..Account::default()
             },
             to_account,
@@ -66,7 +65,7 @@ impl From<&BudgetCategoryRequest> for BudgetCategory {
         Self {
             id: Uuid::new_v4(),
             category: Category {
-                id: Uuid::from_str(&request.category_id).expect("Uuid"),
+                id: request.category_id,
                 ..Category::default()
             },
             budgeted_value: request.budgeted_value,
