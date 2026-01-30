@@ -1,4 +1,5 @@
 mod auth;
+mod config;
 mod database;
 mod db;
 mod error;
@@ -9,27 +10,35 @@ mod service;
 #[cfg(test)]
 pub mod test_utils;
 
+pub use config::Config;
+
 use crate::db::stage_db;
 use crate::routes as app_routes;
 use rocket::{catchers, Build, Rocket};
 use tracing_subscriber::EnvFilter;
 
-fn init_tracing() {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+fn init_tracing(log_level: &str, json_format: bool) {
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(log_level));
 
-    tracing_subscriber::fmt()
+    let subscriber = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(true)
-        .with_line_number(true)
-        .init();
+        .with_line_number(true);
+
+    if json_format {
+        subscriber.json().init();
+    } else {
+        subscriber.init();
+    }
 }
 
-pub fn build_rocket(database_url: String) -> Rocket<Build> {
+pub fn build_rocket(config: Config) -> Rocket<Build> {
     dotenvy::dotenv().ok();
-    init_tracing();
+    init_tracing(&config.logging.level, config.logging.json_format);
 
     rocket::build()
-        .attach(stage_db(database_url))
+        .attach(stage_db(config.database))
         .mount("/api/accounts", app_routes::account::routes())
         .mount("/api/users", app_routes::user::routes())
         .mount("/api/currency", app_routes::currency::routes())
