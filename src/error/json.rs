@@ -36,10 +36,7 @@ impl<'r, T: DeserializeOwned> FromData<'r> for JsonBody<T> {
                     uri = %req.uri(),
                     "JSON payload exceeded size limit"
                 );
-                return Outcome::Error((
-                    Status::PayloadTooLarge,
-                    serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::Other, "payload too large")),
-                ));
+                return Outcome::Error((Status::PayloadTooLarge, serde_json::Error::io(std::io::Error::other("payload too large"))));
             }
             Err(e) => {
                 warn!(

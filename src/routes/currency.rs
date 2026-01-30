@@ -7,7 +7,7 @@ use crate::models::currency::{CurrencyRequest, CurrencyResponse};
 use deadpool_postgres::Pool;
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket::{routes, State};
+use rocket::{State, routes};
 use uuid::Uuid;
 use validator::Validate;
 

@@ -8,7 +8,7 @@ use crate::models::pagination::{PaginatedResponse, PaginationParams};
 use crate::service::account::AccountService;
 use deadpool_postgres::Pool;
 use rocket::serde::json::Json;
-use rocket::{http::Status, routes, State};
+use rocket::{State, http::Status, routes};
 use uuid::Uuid;
 use validator::Validate;
 
@@ -27,7 +27,12 @@ pub async fn create_account(
 }
 
 #[rocket::get("/?<page>&<limit>")]
-pub async fn list_all_accounts(pool: &State<Pool>, _current_user: CurrentUser, page: Option<i64>, limit: Option<i64>) -> Result<Json<PaginatedResponse<AccountResponse>>, AppError> {
+pub async fn list_all_accounts(
+    pool: &State<Pool>,
+    _current_user: CurrentUser,
+    page: Option<i64>,
+    limit: Option<i64>,
+) -> Result<Json<PaginatedResponse<AccountResponse>>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
     let account_service = AccountService::new(&repo);

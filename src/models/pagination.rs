@@ -37,11 +37,6 @@ impl PaginationParams {
             None => None, // No pagination when both are None
         }
     }
-
-    /// Check if pagination is requested
-    pub fn is_paginated(&self) -> bool {
-        self.page.is_some() || self.limit.is_some()
-    }
 }
 
 /// Paginated response wrapper with metadata
@@ -64,6 +59,12 @@ impl<T> PaginatedResponse<T> {
     pub fn new(data: Vec<T>, page: i64, limit: i64, total_items: i64) -> Self {
         let total_pages = if limit > 0 { (total_items + limit - 1) / limit } else { 1 };
 
-        Self { data, page, limit, total_items, total_pages }
+        Self {
+            data,
+            page,
+            limit,
+            total_items,
+            total_pages,
+        }
     }
 }

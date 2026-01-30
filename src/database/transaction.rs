@@ -68,10 +68,7 @@ const TRANSACTION_JOINS: &str = r#"
 
 /// Builds a complete SELECT query for transactions with the specified table/CTE name and WHERE clause
 fn build_transaction_query(from_clause: &str, where_clause: &str, order_by: &str) -> String {
-    let mut query = format!(
-        "SELECT {} FROM {} {}",
-        TRANSACTION_SELECT_FIELDS, from_clause, TRANSACTION_JOINS
-    );
+    let mut query = format!("SELECT {} FROM {} {}", TRANSACTION_SELECT_FIELDS, from_clause, TRANSACTION_JOINS);
 
     if !where_clause.is_empty() {
         query.push_str("WHERE ");
@@ -124,7 +121,21 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
             select_query
         );
 
-        let rows = self.client.query(&query, &[&transaction.amount, &transaction.description, &transaction.occurred_at, &transaction.category_id, &transaction.from_account_id, &to_account_id, &vendor_id]).await?;
+        let rows = self
+            .client
+            .query(
+                &query,
+                &[
+                    &transaction.amount,
+                    &transaction.description,
+                    &transaction.occurred_at,
+                    &transaction.category_id,
+                    &transaction.from_account_id,
+                    &to_account_id,
+                    &vendor_id,
+                ],
+            )
+            .await?;
 
         if let Some(row) = rows.first() {
             Ok(map_row_to_transaction(row))
@@ -153,10 +164,10 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
         let mut query = build_transaction_query("transaction t", "", "occurred_at DESC, t.created_at DESC");
 
         // Add pagination if requested
-        if let Some(params) = pagination {
-            if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
-                query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-            }
+        if let Some(params) = pagination
+            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
+        {
+            query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
         }
 
         let rows = self.client.query(&query, &[]).await?;
@@ -184,15 +195,14 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
         // Build query with budget_period cross join and WHERE clause
         let mut query = format!(
             "SELECT {} FROM transaction t CROSS JOIN budget_period bp {} WHERE bp.id = $1 AND t.occurred_at >= bp.start_date AND t.occurred_at <= bp.end_date ORDER BY occurred_at DESC, t.created_at DESC",
-            TRANSACTION_SELECT_FIELDS,
-            TRANSACTION_JOINS
+            TRANSACTION_SELECT_FIELDS, TRANSACTION_JOINS
         );
 
         // Add pagination if requested
-        if let Some(params) = pagination {
-            if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
-                query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-            }
+        if let Some(params) = pagination
+            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
+        {
+            query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
         }
 
         let rows = self.client.query(&query, &[period_id]).await?;
@@ -235,7 +245,22 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
             select_query
         );
 
-        let rows = self.client.query(&query, &[&transaction.amount, &transaction.description, &transaction.occurred_at, &transaction.category_id, &transaction.from_account_id, &transaction.to_account_id, &transaction.vendor_id, &id]).await?;
+        let rows = self
+            .client
+            .query(
+                &query,
+                &[
+                    &transaction.amount,
+                    &transaction.description,
+                    &transaction.occurred_at,
+                    &transaction.category_id,
+                    &transaction.from_account_id,
+                    &transaction.to_account_id,
+                    &transaction.vendor_id,
+                    &id,
+                ],
+            )
+            .await?;
 
         if let Some(row) = rows.first() {
             Ok(map_row_to_transaction(row))
