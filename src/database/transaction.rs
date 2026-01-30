@@ -10,6 +10,82 @@ use crate::models::vendor::Vendor;
 use tokio_postgres::Row;
 use uuid::Uuid;
 
+// Common SELECT clause for transaction queries with all joined data
+const TRANSACTION_SELECT_FIELDS: &str = r#"
+    t.id,
+    t.amount,
+    t.description,
+    t.occurred_at,
+    c.id as category_id,
+    c.name as category_name,
+    COALESCE(c.color, '') as category_color,
+    COALESCE(c.icon, '') as category_icon,
+    c.parent_id as category_parent_id,
+    c.category_type::text as category_category_type,
+    c.created_at as category_created_at,
+    fa.id as from_account_id,
+    fa.name as from_account_name,
+    fa.color as from_account_color,
+    fa.icon as from_account_icon,
+    fa.account_type::text as from_account_account_type,
+    fa.balance as from_account_balance,
+    fa.created_at as from_account_created_at,
+    fa.spend_limit as from_account_spend_limit,
+    cfa.id as from_account_currency_id,
+    cfa.name as from_account_currency_name,
+    cfa.symbol as from_account_currency_symbol,
+    cfa.currency as from_account_currency_code,
+    cfa.decimal_places as from_account_currency_decimal_places,
+    cfa.created_at as from_account_currency_created_at,
+    ta.id as to_account_id,
+    ta.name as to_account_name,
+    ta.color as to_account_color,
+    ta.icon as to_account_icon,
+    ta.account_type::text as to_account_account_type,
+    ta.balance as to_account_balance,
+    ta.created_at as to_account_created_at,
+    ta.spend_limit as to_account_spend_limit,
+    cta.id as to_account_currency_id,
+    cta.name as to_account_currency_name,
+    cta.symbol as to_account_currency_symbol,
+    cta.currency as to_account_currency_code,
+    cta.decimal_places as to_account_currency_decimal_places,
+    cta.created_at as to_account_currency_created_at,
+    v.id as vendor_id,
+    v.name as vendor_name,
+    v.created_at as vendor_created_at
+"#;
+
+// Common JOIN clauses for transaction queries
+const TRANSACTION_JOINS: &str = r#"
+    JOIN category c ON t.category_id = c.id
+    JOIN account fa ON t.from_account_id = fa.id
+    JOIN currency cfa ON fa.currency_id = cfa.id
+    LEFT JOIN account ta ON t.to_account_id = ta.id
+    LEFT JOIN currency cta ON ta.currency_id = cta.id
+    LEFT JOIN vendor v ON t.vendor_id = v.id
+"#;
+
+/// Builds a complete SELECT query for transactions with the specified table/CTE name and WHERE clause
+fn build_transaction_query(from_clause: &str, where_clause: &str, order_by: &str) -> String {
+    let mut query = format!(
+        "SELECT {} FROM {} {}",
+        TRANSACTION_SELECT_FIELDS, from_clause, TRANSACTION_JOINS
+    );
+
+    if !where_clause.is_empty() {
+        query.push_str("WHERE ");
+        query.push_str(where_clause);
+    }
+
+    if !order_by.is_empty() {
+        query.push_str(" ORDER BY ");
+        query.push_str(order_by);
+    }
+
+    query
+}
+
 #[async_trait::async_trait]
 pub trait TransactionRepository {
     async fn create_transaction(&self, transaction: &TransactionRequest) -> Result<Transaction, AppError>;
@@ -25,13 +101,11 @@ pub trait TransactionRepository {
 impl<'a> TransactionRepository for PostgresRepository<'a> {
     async fn create_transaction(&self, transaction: &TransactionRequest) -> Result<Transaction, AppError> {
         let to_account_id = if let Some(acc_id) = &transaction.to_account_id { Some(acc_id) } else { None };
-
         let vendor_id = if let Some(v_id) = &transaction.vendor_id { Some(v_id) } else { None };
 
-        let rows = self
-            .client
-            .query(
-                r#"
+        let select_query = build_transaction_query("inserted t", "", "");
+        let query = format!(
+            r#"
             WITH inserted AS (
                 INSERT INTO transaction (
                     amount,
@@ -45,68 +119,12 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING id, amount, description, occurred_at, category_id, from_account_id, to_account_id, vendor_id
             )
-            SELECT
-                inserted.id,
-                inserted.amount,
-                inserted.description,
-                inserted.occurred_at,
-                c.id as category_id,
-                c.name as category_name,
-                COALESCE(c.color, '') as category_color,
-                COALESCE(c.icon, '') as category_icon,
-                c.parent_id as category_parent_id,
-                c.category_type::text as category_category_type,
-                c.created_at as category_created_at,
-                fa.id as from_account_id,
-                fa.name as from_account_name,
-                fa.color as from_account_color,
-                fa.icon as from_account_icon,
-                fa.account_type::text as from_account_account_type,
-                fa.balance as from_account_balance,
-                fa.created_at as from_account_created_at,
-                fa.spend_limit as from_account_spend_limit,
-                cfa.id as from_account_currency_id,
-                cfa.name as from_account_currency_name,
-                cfa.symbol as from_account_currency_symbol,
-                cfa.currency as from_account_currency_code,
-                cfa.decimal_places as from_account_currency_decimal_places,
-                cfa.created_at as from_account_currency_created_at,
-                ta.id as to_account_id,
-                ta.name as to_account_name,
-                ta.color as to_account_color,
-                ta.icon as to_account_icon,
-                ta.account_type::text as to_account_account_type,
-                ta.balance as to_account_balance,
-                ta.created_at as to_account_created_at,
-                ta.spend_limit as to_account_spend_limit,
-                cta.id as to_account_currency_id,
-                cta.name as to_account_currency_name,
-                cta.symbol as to_account_currency_symbol,
-                cta.currency as to_account_currency_code,
-                cta.decimal_places as to_account_currency_decimal_places,
-                cta.created_at as to_account_currency_created_at,
-                v.id as vendor_id,
-                v.name as vendor_name,
-                v.created_at as vendor_created_at
-            FROM inserted
-            JOIN category c ON inserted.category_id = c.id
-            JOIN account fa ON inserted.from_account_id = fa.id
-            JOIN currency cfa ON fa.currency_id = cfa.id
-            LEFT JOIN account ta ON inserted.to_account_id = ta.id
-            LEFT JOIN currency cta ON ta.currency_id = cta.id
-            LEFT JOIN vendor v ON inserted.vendor_id = v.id
+            {}
             "#,
-                &[
-                    &transaction.amount,
-                    &transaction.description,
-                    &transaction.occurred_at,
-                    &transaction.category_id,
-                    &transaction.from_account_id,
-                    &to_account_id,
-                    &vendor_id,
-                ],
-            )
-            .await?;
+            select_query
+        );
+
+        let rows = self.client.query(&query, &[&transaction.amount, &transaction.description, &transaction.occurred_at, &transaction.category_id, &transaction.from_account_id, &to_account_id, &vendor_id]).await?;
 
         if let Some(row) = rows.first() {
             Ok(map_row_to_transaction(row))
@@ -116,65 +134,8 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
     }
 
     async fn get_transaction_by_id(&self, id: &Uuid) -> Result<Option<Transaction>, AppError> {
-        let rows = self
-            .client
-            .query(
-                r#"
-            SELECT
-                t.id,
-                t.amount,
-                t.description,
-                t.occurred_at,
-                c.id as category_id,
-                c.name as category_name,
-                COALESCE(c.color, '') as category_color,
-                COALESCE(c.icon, '') as category_icon,
-                c.parent_id as category_parent_id,
-                c.category_type::text as category_category_type,
-                c.created_at as category_created_at,
-                fa.id as from_account_id,
-                fa.name as from_account_name,
-                fa.color as from_account_color,
-                fa.icon as from_account_icon,
-                fa.account_type::text as from_account_account_type,
-                fa.balance as from_account_balance,
-                fa.created_at as from_account_created_at,
-                fa.spend_limit as from_account_spend_limit,
-                cfa.id as from_account_currency_id,
-                cfa.name as from_account_currency_name,
-                cfa.symbol as from_account_currency_symbol,
-                cfa.currency as from_account_currency_code,
-                cfa.decimal_places as from_account_currency_decimal_places,
-                cfa.created_at as from_account_currency_created_at,
-                ta.id as to_account_id,
-                ta.name as to_account_name,
-                ta.color as to_account_color,
-                ta.icon as to_account_icon,
-                ta.account_type::text as to_account_account_type,
-                ta.balance as to_account_balance,
-                ta.created_at as to_account_created_at,
-                ta.spend_limit as to_account_spend_limit,
-                cta.id as to_account_currency_id,
-                cta.name as to_account_currency_name,
-                cta.symbol as to_account_currency_symbol,
-                cta.currency as to_account_currency_code,
-                cta.decimal_places as to_account_currency_decimal_places,
-                cta.created_at as to_account_currency_created_at,
-                v.id as vendor_id,
-                v.name as vendor_name,
-                v.created_at as vendor_created_at
-            FROM transaction t
-            JOIN category c ON t.category_id = c.id
-            JOIN account fa ON t.from_account_id = fa.id
-            JOIN currency cfa ON fa.currency_id = cfa.id
-            LEFT JOIN account ta ON t.to_account_id = ta.id
-            LEFT JOIN currency cta ON ta.currency_id = cta.id
-            LEFT JOIN vendor v ON t.vendor_id = v.id
-            WHERE t.id = $1
-            "#,
-                &[id],
-            )
-            .await?;
+        let query = build_transaction_query("transaction t", "t.id = $1", "");
+        let rows = self.client.query(&query, &[id]).await?;
 
         if let Some(row) = rows.first() {
             Ok(Some(map_row_to_transaction(row)))
@@ -189,74 +150,16 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
         let total: i64 = count_row.get("total");
 
         // Build query with optional pagination
-        let mut query = String::from(
-            r#"
-            SELECT
-                t.id,
-                t.amount,
-                t.description,
-                t.occurred_at,
-                c.id as category_id,
-                c.name as category_name,
-                COALESCE(c.color, '') as category_color,
-                COALESCE(c.icon, '') as category_icon,
-                c.parent_id as category_parent_id,
-                c.category_type::text as category_category_type,
-                c.created_at as category_created_at,
-                fa.id as from_account_id,
-                fa.name as from_account_name,
-                fa.color as from_account_color,
-                fa.icon as from_account_icon,
-                fa.account_type::text as from_account_account_type,
-                fa.balance as from_account_balance,
-                fa.created_at as from_account_created_at,
-                fa.spend_limit as from_account_spend_limit,
-                cfa.id as from_account_currency_id,
-                cfa.name as from_account_currency_name,
-                cfa.symbol as from_account_currency_symbol,
-                cfa.currency as from_account_currency_code,
-                cfa.decimal_places as from_account_currency_decimal_places,
-                cfa.created_at as from_account_currency_created_at,
-                ta.id as to_account_id,
-                ta.name as to_account_name,
-                ta.color as to_account_color,
-                ta.icon as to_account_icon,
-                ta.account_type::text as to_account_account_type,
-                ta.balance as to_account_balance,
-                ta.created_at as to_account_created_at,
-                ta.spend_limit as to_account_spend_limit,
-                cta.id as to_account_currency_id,
-                cta.name as to_account_currency_name,
-                cta.symbol as to_account_currency_symbol,
-                cta.currency as to_account_currency_code,
-                cta.decimal_places as to_account_currency_decimal_places,
-                cta.created_at as to_account_currency_created_at,
-                v.id as vendor_id,
-                v.name as vendor_name,
-                v.created_at as vendor_created_at
-            FROM transaction t
-            JOIN category c ON t.category_id = c.id
-            JOIN account fa ON t.from_account_id = fa.id
-            JOIN currency cfa ON fa.currency_id = cfa.id
-            LEFT JOIN account ta ON t.to_account_id = ta.id
-            LEFT JOIN currency cta ON ta.currency_id = cta.id
-            LEFT JOIN vendor v ON t.vendor_id = v.id
-            ORDER BY occurred_at DESC, t.created_at DESC
-            "#,
-        );
+        let mut query = build_transaction_query("transaction t", "", "occurred_at DESC, t.created_at DESC");
 
         // Add pagination if requested
-        let rows = if let Some(params) = pagination {
+        if let Some(params) = pagination {
             if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
                 query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-                self.client.query(&query, &[]).await?
-            } else {
-                self.client.query(&query, &[]).await?
             }
-        } else {
-            self.client.query(&query, &[]).await?
-        };
+        }
 
+        let rows = self.client.query(&query, &[]).await?;
         Ok((rows.into_iter().map(|row| map_row_to_transaction(&row)).collect(), total))
     }
 
@@ -278,79 +181,21 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
             .await?;
         let total: i64 = count_row.get("total");
 
-        // Build query with optional pagination
-        let mut query = String::from(
-            r#"
-        SELECT
-                t.id,
-                t.amount,
-                t.description,
-                t.occurred_at,
-                c.id as category_id,
-                c.name as category_name,
-                COALESCE(c.color, '') as category_color,
-                COALESCE(c.icon, '') as category_icon,
-                c.parent_id as category_parent_id,
-                c.category_type::text as category_category_type,
-                c.created_at as category_created_at,
-                fa.id as from_account_id,
-                fa.name as from_account_name,
-                fa.color as from_account_color,
-                fa.icon as from_account_icon,
-                fa.account_type::text as from_account_account_type,
-                fa.balance as from_account_balance,
-                fa.created_at as from_account_created_at,
-                fa.spend_limit as from_account_spend_limit,
-                cfa.id as from_account_currency_id,
-                cfa.name as from_account_currency_name,
-                cfa.symbol as from_account_currency_symbol,
-                cfa.currency as from_account_currency_code,
-                cfa.decimal_places as from_account_currency_decimal_places,
-                cfa.created_at as from_account_currency_created_at,
-                ta.id as to_account_id,
-                ta.name as to_account_name,
-                ta.color as to_account_color,
-                ta.icon as to_account_icon,
-                ta.account_type::text as to_account_account_type,
-                ta.balance as to_account_balance,
-                ta.created_at as to_account_created_at,
-                ta.spend_limit as to_account_spend_limit,
-                cta.id as to_account_currency_id,
-                cta.name as to_account_currency_name,
-                cta.symbol as to_account_currency_symbol,
-                cta.currency as to_account_currency_code,
-                cta.decimal_places as to_account_currency_decimal_places,
-                cta.created_at as to_account_currency_created_at,
-                v.id as vendor_id,
-                v.name as vendor_name,
-                v.created_at as vendor_created_at
-            FROM transaction t
-            JOIN category c ON t.category_id = c.id
-            JOIN account fa ON t.from_account_id = fa.id
-            JOIN currency cfa ON fa.currency_id = cfa.id
-            LEFT JOIN account ta ON t.to_account_id = ta.id
-            LEFT JOIN currency cta ON ta.currency_id = cta.id
-            CROSS JOIN budget_period bp
-            LEFT JOIN vendor v ON t.vendor_id = v.id
-            WHERE bp.id = $1
-                AND t.occurred_at >= bp.start_date
-                AND t.occurred_at <= bp.end_date
-            ORDER BY occurred_at DESC, t.created_at DESC
-        "#,
+        // Build query with budget_period cross join and WHERE clause
+        let mut query = format!(
+            "SELECT {} FROM transaction t CROSS JOIN budget_period bp {} WHERE bp.id = $1 AND t.occurred_at >= bp.start_date AND t.occurred_at <= bp.end_date ORDER BY occurred_at DESC, t.created_at DESC",
+            TRANSACTION_SELECT_FIELDS,
+            TRANSACTION_JOINS
         );
 
         // Add pagination if requested
-        let rows = if let Some(params) = pagination {
+        if let Some(params) = pagination {
             if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
                 query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-                self.client.query(&query, &[period_id]).await?
-            } else {
-                self.client.query(&query, &[period_id]).await?
             }
-        } else {
-            self.client.query(&query, &[period_id]).await?
-        };
+        }
 
+        let rows = self.client.query(&query, &[period_id]).await?;
         Ok((rows.into_iter().map(|row| map_row_to_transaction(&row)).collect(), total))
     }
 
@@ -369,10 +214,9 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
     }
 
     async fn update_transaction(&self, id: &Uuid, transaction: &TransactionRequest) -> Result<Transaction, AppError> {
-        let rows = self
-            .client
-            .query(
-                r#"
+        let select_query = build_transaction_query("updated t", "", "");
+        let query = format!(
+            r#"
             WITH updated AS (
                 UPDATE transaction
                 SET
@@ -386,69 +230,12 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
                 WHERE id = $8
                 RETURNING id, amount, description, occurred_at, category_id, from_account_id, to_account_id, vendor_id
             )
-            SELECT
-                updated.id,
-                updated.amount,
-                updated.description,
-                updated.occurred_at,
-                c.id as category_id,
-                c.name as category_name,
-                COALESCE(c.color, '') as category_color,
-                COALESCE(c.icon, '') as category_icon,
-                c.parent_id as category_parent_id,
-                c.category_type::text as category_category_type,
-                c.created_at as category_created_at,
-                fa.id as from_account_id,
-                fa.name as from_account_name,
-                fa.color as from_account_color,
-                fa.icon as from_account_icon,
-                fa.account_type::text as from_account_account_type,
-                fa.balance as from_account_balance,
-                fa.created_at as from_account_created_at,
-                fa.spend_limit as from_account_spend_limit,
-                cfa.id as from_account_currency_id,
-                cfa.name as from_account_currency_name,
-                cfa.symbol as from_account_currency_symbol,
-                cfa.currency as from_account_currency_code,
-                cfa.decimal_places as from_account_currency_decimal_places,
-                cfa.created_at as from_account_currency_created_at,
-                ta.id as to_account_id,
-                ta.name as to_account_name,
-                ta.color as to_account_color,
-                ta.icon as to_account_icon,
-                ta.account_type::text as to_account_account_type,
-                ta.balance as to_account_balance,
-                ta.created_at as to_account_created_at,
-                ta.spend_limit as to_account_spend_limit,
-                cta.id as to_account_currency_id,
-                cta.name as to_account_currency_name,
-                cta.symbol as to_account_currency_symbol,
-                cta.currency as to_account_currency_code,
-                cta.decimal_places as to_account_currency_decimal_places,
-                cta.created_at as to_account_currency_created_at,
-                v.id as vendor_id,
-                v.name as vendor_name,
-                v.created_at as vendor_created_at
-            FROM updated
-            JOIN category c ON updated.category_id = c.id
-            JOIN account fa ON updated.from_account_id = fa.id
-            JOIN currency cfa ON fa.currency_id = cfa.id
-            LEFT JOIN account ta ON updated.to_account_id = ta.id
-            LEFT JOIN currency cta ON ta.currency_id = cta.id
-            LEFT JOIN vendor v ON updated.vendor_id = v.id
+            {}
             "#,
-                &[
-                    &transaction.amount,
-                    &transaction.description,
-                    &transaction.occurred_at,
-                    &transaction.category_id,
-                    &transaction.from_account_id,
-                    &transaction.to_account_id,
-                    &transaction.vendor_id,
-                    &id,
-                ],
-            )
-            .await?;
+            select_query
+        );
+
+        let rows = self.client.query(&query, &[&transaction.amount, &transaction.description, &transaction.occurred_at, &transaction.category_id, &transaction.from_account_id, &transaction.to_account_id, &transaction.vendor_id, &id]).await?;
 
         if let Some(row) = rows.first() {
             Ok(map_row_to_transaction(row))
