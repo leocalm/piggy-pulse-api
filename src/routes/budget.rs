@@ -89,3 +89,78 @@ pub async fn delete_budget(pool: &State<Pool>, _current_user: CurrentUser, id: &
 pub fn routes() -> Vec<rocket::Route> {
     routes![create_budget, list_all_budgets, get_budget, put_budget, delete_budget]
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{Config, build_rocket};
+    use rocket::http::{ContentType, Status};
+    use rocket::local::asynchronous::Client;
+
+    #[rocket::async_test]
+    async fn test_create_budget_validation_short_name() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let invalid_payload = serde_json::json!({
+            "name": "AB",  // Too short (min 3)
+            "start_day": 1
+        });
+
+        let response = client
+            .post("/api/budgets/")
+            .header(ContentType::JSON)
+            .body(invalid_payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::BadRequest);
+    }
+
+    #[rocket::async_test]
+    async fn test_create_budget_validation_invalid_start_day() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let invalid_payload = serde_json::json!({
+            "name": "Test Budget",
+            "start_day": 32  // Invalid (max 31)
+        });
+
+        let response = client
+            .post("/api/budgets/")
+            .header(ContentType::JSON)
+            .body(invalid_payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::BadRequest);
+    }
+
+    #[rocket::async_test]
+    async fn test_get_budget_invalid_uuid() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let response = client.get("/api/budgets/not-a-uuid").dispatch().await;
+
+        assert_eq!(response.status(), Status::BadRequest);
+    }
+
+    #[rocket::async_test]
+    async fn test_delete_budget_invalid_uuid() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let response = client.delete("/api/budgets/invalid").dispatch().await;
+
+        assert_eq!(response.status(), Status::BadRequest);
+    }
+}

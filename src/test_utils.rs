@@ -1,8 +1,10 @@
 use crate::database::account::AccountRepository;
+use crate::database::budget::BudgetRepository;
 use crate::database::budget_category::BudgetCategoryRepository;
 use crate::database::transaction::TransactionRepository;
 use crate::error::app_error::AppError;
 use crate::models::account::{Account, AccountRequest};
+use crate::models::budget::{Budget, BudgetRequest};
 use crate::models::budget_category::{BudgetCategory, BudgetCategoryRequest};
 use crate::models::category::Category;
 use crate::models::currency::Currency;
@@ -70,6 +72,17 @@ impl From<&BudgetCategoryRequest> for BudgetCategory {
             },
             budgeted_value: request.budgeted_value,
             ..BudgetCategory::default()
+        }
+    }
+}
+
+impl From<&BudgetRequest> for Budget {
+    fn from(request: &BudgetRequest) -> Self {
+        Budget {
+            id: Uuid::new_v4(),
+            name: request.name.clone(),
+            start_day: request.start_day,
+            ..Budget::default()
         }
     }
 }
@@ -164,5 +177,30 @@ impl TransactionRepository for MockRepository {
             id: *id,
             ..transaction_request.into()
         })
+    }
+}
+
+#[async_trait::async_trait]
+impl BudgetRepository for MockRepository {
+    async fn create_budget(&self, request: &BudgetRequest) -> Result<Budget, AppError> {
+        Ok(request.into())
+    }
+
+    async fn get_budget_by_id(&self, id: &Uuid) -> Result<Option<Budget>, AppError> {
+        Ok(Some(Budget { id: *id, ..Budget::default() }))
+    }
+
+    async fn list_budgets(&self, _pagination: Option<&crate::models::pagination::PaginationParams>) -> Result<(Vec<Budget>, i64), AppError> {
+        Ok((vec![Budget::default()], 1))
+    }
+
+    async fn delete_budget(&self, _id: &Uuid) -> Result<(), AppError> {
+        Ok(())
+    }
+
+    async fn update_budget(&self, id: &Uuid, request: &BudgetRequest) -> Result<Budget, AppError> {
+        let mut budget: Budget = request.into();
+        budget.id = *id;
+        Ok(budget)
     }
 }

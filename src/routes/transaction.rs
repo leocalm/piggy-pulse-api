@@ -113,3 +113,46 @@ pub async fn put_transaction(
 pub fn routes() -> Vec<rocket::Route> {
     routes![create_transaction, list_all_transactions, get_transaction, delete_transaction, put_transaction]
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{Config, build_rocket};
+    use rocket::http::Status;
+    use rocket::local::asynchronous::Client;
+
+    #[rocket::async_test]
+    async fn test_get_transaction_invalid_uuid() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let response = client.get("/api/transactions/invalid-uuid").dispatch().await;
+
+        assert_eq!(response.status(), Status::BadRequest);
+    }
+
+    #[rocket::async_test]
+    async fn test_delete_transaction_invalid_uuid() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let response = client.delete("/api/transactions/bad-id").dispatch().await;
+
+        assert_eq!(response.status(), Status::BadRequest);
+    }
+
+    #[rocket::async_test]
+    async fn test_list_transactions_invalid_period_id() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let response = client.get("/api/transactions/?period_id=invalid-uuid").dispatch().await;
+
+        assert_eq!(response.status(), Status::BadRequest);
+    }
+}

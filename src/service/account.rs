@@ -41,3 +41,34 @@ where
             .collect())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::MockRepository;
+
+    #[tokio::test]
+    async fn test_list_accounts() {
+        let repo = MockRepository {};
+        let service = AccountService::new(&repo);
+
+        let result = service.list_accounts(None).await;
+        assert!(result.is_ok());
+
+        let accounts = result.unwrap();
+        assert_eq!(accounts.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_list_accounts_with_pagination() {
+        let repo = MockRepository {};
+        let service = AccountService::new(&repo);
+        let pagination = PaginationParams {
+            page: Some(1),
+            limit: Some(10),
+        };
+
+        let result = service.list_accounts(Some(&pagination)).await;
+        assert!(result.is_ok());
+    }
+}

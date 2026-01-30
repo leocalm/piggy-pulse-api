@@ -3,11 +3,15 @@ use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Default)]
 pub struct Budget {
+    #[serde(default)]
     pub id: Uuid,
+    #[serde(default)]
     pub name: String,
+    #[serde(default)]
     pub start_day: i32,
+    #[serde(default = "Utc::now")]
     pub created_at: DateTime<Utc>,
 }
 
