@@ -139,6 +139,7 @@ mod tests {
     use rocket::local::asynchronous::Client;
 
     #[rocket::async_test]
+    #[ignore = "requires database"]
     async fn test_create_category_validation_error() {
         let mut config = Config::default();
         config.database.url = "postgresql://test:test@localhost/test".to_string();
@@ -163,6 +164,7 @@ mod tests {
     }
 
     #[rocket::async_test]
+    #[ignore = "requires database"]
     async fn test_get_category_invalid_uuid() {
         let mut config = Config::default();
         config.database.url = "postgresql://test:test@localhost/test".to_string();
@@ -175,6 +177,7 @@ mod tests {
     }
 
     #[rocket::async_test]
+    #[ignore = "requires database"]
     async fn test_delete_category_invalid_uuid() {
         let mut config = Config::default();
         config.database.url = "postgresql://test:test@localhost/test".to_string();

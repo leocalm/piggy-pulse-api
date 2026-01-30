@@ -121,6 +121,7 @@ mod tests {
     use rocket::local::asynchronous::Client;
 
     #[rocket::async_test]
+    #[ignore = "requires database"]
     async fn test_get_transaction_invalid_uuid() {
         let mut config = Config::default();
         config.database.url = "postgresql://test:test@localhost/test".to_string();
@@ -133,6 +134,7 @@ mod tests {
     }
 
     #[rocket::async_test]
+    #[ignore = "requires database"]
     async fn test_delete_transaction_invalid_uuid() {
         let mut config = Config::default();
         config.database.url = "postgresql://test:test@localhost/test".to_string();
@@ -145,6 +147,7 @@ mod tests {
     }
 
     #[rocket::async_test]
+    #[ignore = "requires database"]
     async fn test_list_transactions_invalid_period_id() {
         let mut config = Config::default();
         config.database.url = "postgresql://test:test@localhost/test".to_string();

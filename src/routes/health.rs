@@ -22,6 +22,7 @@ mod tests {
     use rocket::local::asynchronous::Client;
 
     #[rocket::async_test]
+    #[ignore = "requires database"]
     async fn health_check_works() {
         let mut config = Config::default();
         config.database.url = "postgresql://test:test@localhost/test".to_string();

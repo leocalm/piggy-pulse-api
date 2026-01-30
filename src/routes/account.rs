@@ -98,6 +98,7 @@ mod tests {
     use rocket::local::asynchronous::Client;
 
     #[rocket::async_test]
+    #[ignore = "requires database"]
     async fn test_create_account_validation_error() {
         let mut config = Config::default();
         config.database.url = "postgresql://test:test@localhost/test".to_string();
@@ -124,6 +125,7 @@ mod tests {
     }
 
     #[rocket::async_test]
+    #[ignore = "requires database"]
     async fn test_get_account_invalid_uuid() {
         let mut config = Config::default();
         config.database.url = "postgresql://test:test@localhost/test".to_string();
