@@ -2,6 +2,7 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::budget_category::{BudgetCategory, BudgetCategoryRequest};
 use crate::models::category::Category;
+use crate::models::pagination::PaginationParams;
 use tokio_postgres::Row;
 use uuid::Uuid;
 
@@ -9,7 +10,7 @@ use uuid::Uuid;
 pub trait BudgetCategoryRepository {
     async fn create_budget_category(&self, request: &BudgetCategoryRequest) -> Result<BudgetCategory, AppError>;
     async fn get_budget_category_by_id(&self, id: &Uuid) -> Result<Option<BudgetCategory>, AppError>;
-    async fn list_budget_categories(&self) -> Result<Vec<BudgetCategory>, AppError>;
+    async fn list_budget_categories(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<BudgetCategory>, i64), AppError>;
     async fn delete_budget_category(&self, id: &Uuid) -> Result<(), AppError>;
     async fn update_budget_category_value(&self, id: &Uuid, new_budget_value: &i32) -> Result<(), AppError>;
 }
@@ -72,11 +73,14 @@ impl<'a> BudgetCategoryRepository for PostgresRepository<'a> {
         }
     }
 
-    async fn list_budget_categories(&self) -> Result<Vec<BudgetCategory>, AppError> {
-        Ok(self
-            .client
-            .query(
-                r#"
+    async fn list_budget_categories(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<BudgetCategory>, i64), AppError> {
+        // Get total count
+        let count_row = self.client.query_one("SELECT COUNT(*) as total FROM budget_category", &[]).await?;
+        let total: i64 = count_row.get("total");
+
+        // Build query with optional pagination
+        let mut query = String::from(
+            r#"
             SELECT
                 bc.id,
                 bc.category_id,
@@ -94,12 +98,21 @@ impl<'a> BudgetCategoryRepository for PostgresRepository<'a> {
                 ON c.id = bc.category_id
             ORDER BY bc.created_at DESC
             "#,
-                &[],
-            )
-            .await?
-            .into_iter()
-            .map(|r| map_row_to_budget_category(&r))
-            .collect())
+        );
+
+        // Add pagination if requested
+        let rows = if let Some(params) = pagination {
+            if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
+                query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
+                self.client.query(&query, &[]).await?
+            } else {
+                self.client.query(&query, &[]).await?
+            }
+        } else {
+            self.client.query(&query, &[]).await?
+        };
+
+        Ok((rows.into_iter().map(|r| map_row_to_budget_category(&r)).collect(), total))
     }
 
     async fn delete_budget_category(&self, id: &Uuid) -> Result<(), AppError> {

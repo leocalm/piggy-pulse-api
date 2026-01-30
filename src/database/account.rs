@@ -3,6 +3,7 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::account::{Account, AccountRequest, AccountType};
 use crate::models::currency::Currency;
+use crate::models::pagination::PaginationParams;
 use tokio_postgres::Row;
 use uuid::Uuid;
 
@@ -10,7 +11,7 @@ use uuid::Uuid;
 pub trait AccountRepository {
     async fn create_account(&self, request: &AccountRequest) -> Result<Account, AppError>;
     async fn get_account_by_id(&self, id: &Uuid) -> Result<Option<Account>, AppError>;
-    async fn list_accounts(&self) -> Result<Vec<Account>, AppError>;
+    async fn list_accounts(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Account>, i64), AppError>;
     async fn delete_account(&self, id: &Uuid) -> Result<(), AppError>;
     async fn update_account(&self, id: &Uuid, request: &AccountRequest) -> Result<Account, AppError>;
 }
@@ -92,11 +93,14 @@ impl<'a> AccountRepository for PostgresRepository<'a> {
         }
     }
 
-    async fn list_accounts(&self) -> Result<Vec<Account>, AppError> {
-        let rows = self
-            .client
-            .query(
-                r#"
+    async fn list_accounts(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Account>, i64), AppError> {
+        // Get total count
+        let count_row = self.client.query_one("SELECT COUNT(*) as total FROM account", &[]).await?;
+        let total: i64 = count_row.get("total");
+
+        // Build query with optional pagination
+        let mut query = String::from(
+            r#"
             SELECT
                 a.id,
                 a.name,
@@ -116,11 +120,21 @@ impl<'a> AccountRepository for PostgresRepository<'a> {
                      JOIN currency c ON c.id = a.currency_id
             ORDER BY a.created_at DESC
         "#,
-                &[],
-            )
-            .await?;
+        );
 
-        Ok(rows.into_iter().map(|row| map_row_to_account(&row, None)).collect())
+        // Add pagination if requested
+        let rows = if let Some(params) = pagination {
+            if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
+                query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
+                self.client.query(&query, &[]).await?
+            } else {
+                self.client.query(&query, &[]).await?
+            }
+        } else {
+            self.client.query(&query, &[]).await?
+        };
+
+        Ok((rows.into_iter().map(|row| map_row_to_account(&row, None)).collect(), total))
     }
 
     async fn delete_account(&self, id: &Uuid) -> Result<(), AppError> {

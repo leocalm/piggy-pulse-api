@@ -4,6 +4,7 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::db::get_client;
 use crate::error::app_error::AppError;
 use crate::models::account::{AccountRequest, AccountResponse};
+use crate::models::pagination::{PaginatedResponse, PaginationParams};
 use crate::service::account::AccountService;
 use deadpool_postgres::Pool;
 use rocket::serde::json::Json;
@@ -25,13 +26,30 @@ pub async fn create_account(
     Ok((Status::Created, Json(AccountResponse::from(&account))))
 }
 
-#[rocket::get("/")]
-pub async fn list_all_accounts(pool: &State<Pool>, _current_user: CurrentUser) -> Result<Json<Vec<AccountResponse>>, AppError> {
+#[rocket::get("/?<page>&<limit>")]
+pub async fn list_all_accounts(pool: &State<Pool>, _current_user: CurrentUser, page: Option<i64>, limit: Option<i64>) -> Result<Json<PaginatedResponse<AccountResponse>>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
     let account_service = AccountService::new(&repo);
 
-    Ok(Json(account_service.list_accounts().await?))
+    let pagination = if page.is_some() || limit.is_some() {
+        Some(PaginationParams { page, limit })
+    } else {
+        None
+    };
+
+    let responses = account_service.list_accounts(pagination.as_ref()).await?;
+    let total = responses.len() as i64;
+
+    let paginated = if let Some(params) = pagination {
+        let effective_page = params.page.unwrap_or(1);
+        let effective_limit = params.effective_limit().unwrap_or(PaginationParams::DEFAULT_LIMIT);
+        PaginatedResponse::new(responses, effective_page, effective_limit, total)
+    } else {
+        PaginatedResponse::new(responses, 1, total, total)
+    };
+
+    Ok(Json(paginated))
 }
 
 #[rocket::get("/<id>")]

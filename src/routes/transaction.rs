@@ -4,6 +4,7 @@ use crate::database::transaction::TransactionRepository;
 use crate::db::get_client;
 use crate::error::app_error::AppError;
 use crate::error::json::JsonBody;
+use crate::models::pagination::{PaginatedResponse, PaginationParams};
 use crate::models::transaction::{TransactionRequest, TransactionResponse};
 use deadpool_postgres::Pool;
 use rocket::http::Status;
@@ -36,21 +37,42 @@ pub async fn create_transaction(
     Ok((Status::Created, Json(TransactionResponse::from(&tx))))
 }
 
-#[rocket::get("/?<period_id>")]
+#[rocket::get("/?<period_id>&<page>&<limit>")]
 pub async fn list_all_transactions(
     pool: &State<Pool>,
     _current_user: CurrentUser,
     period_id: Option<String>,
-) -> Result<Json<Vec<TransactionResponse>>, AppError> {
+    page: Option<i64>,
+    limit: Option<i64>,
+) -> Result<Json<PaginatedResponse<TransactionResponse>>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let txs = if let Some(period_id) = period_id {
-        let uuid = Uuid::parse_str(&period_id)?;
-        repo.get_transactions_for_period(&uuid).await?
+
+    let pagination = if page.is_some() || limit.is_some() {
+        Some(PaginationParams { page, limit })
     } else {
-        repo.list_transactions().await?
+        None
     };
-    Ok(Json(txs.iter().map(TransactionResponse::from).collect()))
+
+    let (txs, total) = if let Some(period_id) = period_id {
+        let uuid = Uuid::parse_str(&period_id)?;
+        repo.get_transactions_for_period(&uuid, pagination.as_ref()).await?
+    } else {
+        repo.list_transactions(pagination.as_ref()).await?
+    };
+
+    let responses: Vec<TransactionResponse> = txs.iter().map(TransactionResponse::from).collect();
+
+    let paginated = if let Some(params) = pagination {
+        let effective_page = params.page.unwrap_or(1);
+        let effective_limit = params.effective_limit().unwrap_or(PaginationParams::DEFAULT_LIMIT);
+        PaginatedResponse::new(responses, effective_page, effective_limit, total)
+    } else {
+        // No pagination requested - return all with metadata showing all on page 1
+        PaginatedResponse::new(responses, 1, total, total)
+    };
+
+    Ok(Json(paginated))
 }
 
 #[rocket::get("/<id>")]

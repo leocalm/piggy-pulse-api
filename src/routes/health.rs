@@ -11,13 +11,16 @@ pub fn routes() -> Vec<rocket::Route> {
 
 #[cfg(test)]
 mod tests {
-    use crate::build_rocket;
+    use crate::{build_rocket, Config};
     use rocket::http::Status;
     use rocket::local::asynchronous::Client;
 
     #[rocket::async_test]
     async fn health_check_works() {
-        let client = Client::tracked(build_rocket("postgresql://test:test@localhost/test".to_string()))
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config))
             .await
             .expect("valid rocket instance");
         let response = client.get("/api/health").dispatch().await;

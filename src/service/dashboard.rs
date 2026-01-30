@@ -42,7 +42,7 @@ where
 
     async fn get_transactions(&mut self) -> Result<Arc<Vec<Transaction>>, AppError> {
         if self.transactions.is_none() {
-            let data = self.repository.get_transactions_for_period(&self.budget_period.id).await?;
+            let (data, _total) = self.repository.get_transactions_for_period(&self.budget_period.id, None).await?;
             self.transactions = Some(Arc::new(data));
         }
 
@@ -51,7 +51,7 @@ where
 
     async fn get_budget_categories(&mut self) -> Result<Arc<Vec<BudgetCategory>>, AppError> {
         if self.budget_categories.is_none() {
-            let data = self.repository.list_budget_categories().await?;
+            let (data, _total) = self.repository.list_budget_categories(None).await?;
             self.budget_categories = Some(Arc::new(data));
         }
 
@@ -60,7 +60,7 @@ where
 
     async fn get_accounts(&mut self) -> Result<Arc<Vec<Account>>, AppError> {
         if self.accounts.is_none() {
-            let data = self.repository.list_accounts().await?;
+            let (data, _total) = self.repository.list_accounts(None).await?;
             self.accounts = Some(Arc::new(data));
         }
 
@@ -69,7 +69,7 @@ where
 
     async fn get_all_transactions(&mut self) -> Result<Arc<Vec<Transaction>>, AppError> {
         if self.all_transactions.is_none() {
-            let data = self.repository.list_transactions().await?;
+            let (data, _total) = self.repository.list_transactions(None).await?;
             self.all_transactions = Some(Arc::new(data));
         }
 

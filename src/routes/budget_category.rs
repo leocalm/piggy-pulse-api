@@ -4,6 +4,7 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::db::get_client;
 use crate::error::app_error::AppError;
 use crate::models::budget_category::{BudgetCategoryRequest, BudgetCategoryResponse};
+use crate::models::pagination::{PaginatedResponse, PaginationParams};
 use deadpool_postgres::Pool;
 use rocket::http::Status;
 use rocket::serde::json::Json;
@@ -25,12 +26,29 @@ pub async fn create_budget_category(
     Ok((Status::Created, Json(BudgetCategoryResponse::from(&bc))))
 }
 
-#[rocket::get("/")]
-pub async fn list_all_budget_categories(pool: &State<Pool>, _current_user: CurrentUser) -> Result<Json<Vec<BudgetCategoryResponse>>, AppError> {
+#[rocket::get("/?<page>&<limit>")]
+pub async fn list_all_budget_categories(pool: &State<Pool>, _current_user: CurrentUser, page: Option<i64>, limit: Option<i64>) -> Result<Json<PaginatedResponse<BudgetCategoryResponse>>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let list = repo.list_budget_categories().await?;
-    Ok(Json(list.iter().map(BudgetCategoryResponse::from).collect()))
+
+    let pagination = if page.is_some() || limit.is_some() {
+        Some(PaginationParams { page, limit })
+    } else {
+        None
+    };
+
+    let (list, total) = repo.list_budget_categories(pagination.as_ref()).await?;
+    let responses: Vec<BudgetCategoryResponse> = list.iter().map(BudgetCategoryResponse::from).collect();
+
+    let paginated = if let Some(params) = pagination {
+        let effective_page = params.page.unwrap_or(1);
+        let effective_limit = params.effective_limit().unwrap_or(PaginationParams::DEFAULT_LIMIT);
+        PaginatedResponse::new(responses, effective_page, effective_limit, total)
+    } else {
+        PaginatedResponse::new(responses, 1, total, total)
+    };
+
+    Ok(Json(paginated))
 }
 
 #[rocket::get("/<id>")]

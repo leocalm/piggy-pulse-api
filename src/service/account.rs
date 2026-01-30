@@ -3,6 +3,7 @@ use crate::database::transaction::TransactionRepository;
 use crate::error::app_error::AppError;
 use crate::models::account::AccountResponse;
 use crate::models::currency::CurrencyResponse;
+use crate::models::pagination::PaginationParams;
 use crate::service::service_util::balance_on_date;
 use chrono::Utc;
 
@@ -21,9 +22,9 @@ where
         AccountService { repository }
     }
 
-    pub async fn list_accounts(&self) -> Result<Vec<AccountResponse>, AppError> {
-        let accounts = self.repository.list_accounts().await?;
-        let transactions = self.repository.list_transactions().await?;
+    pub async fn list_accounts(&self, pagination: Option<&PaginationParams>) -> Result<Vec<AccountResponse>, AppError> {
+        let (accounts, _total) = self.repository.list_accounts(pagination).await?;
+        let (transactions, _tx_total) = self.repository.list_transactions(None).await?;
 
         Ok(accounts
             .iter()
