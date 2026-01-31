@@ -39,10 +39,18 @@ fn build_cors(cors_config: &config::CorsConfig) -> CorsOptions {
 
     CorsOptions {
         allowed_origins,
-        allowed_methods: vec![Method::Get, Method::Post, Method::Put, Method::Delete, Method::Patch, Method::Options, Method::Head]
-            .into_iter()
-            .map(From::from)
-            .collect(),
+        allowed_methods: vec![
+            Method::Get,
+            Method::Post,
+            Method::Put,
+            Method::Delete,
+            Method::Patch,
+            Method::Options,
+            Method::Head,
+        ]
+        .into_iter()
+        .map(From::from)
+        .collect(),
         allowed_headers: rocket_cors::AllowedHeaders::some(&["Content-Type", "Authorization", "Accept"]),
         allow_credentials: cors_config.allow_credentials,
         ..Default::default()
@@ -52,9 +60,7 @@ fn build_cors(cors_config: &config::CorsConfig) -> CorsOptions {
 pub fn build_rocket(config: Config) -> Rocket<Build> {
     init_tracing(&config.logging.level, config.logging.json_format);
 
-    let cors = build_cors(&config.cors)
-        .to_cors()
-        .expect("Failed to create CORS fairing");
+    let cors = build_cors(&config.cors).to_cors().expect("Failed to create CORS fairing");
 
     rocket::build()
         .attach(cors)
