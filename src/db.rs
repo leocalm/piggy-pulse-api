@@ -33,5 +33,5 @@ pub fn stage_db(db_config: DatabaseConfig) -> AdHoc {
 }
 
 pub async fn get_client(pool: &Pool) -> Result<Client, AppError> {
-    pool.get().await.map_err(|e| AppError::Db(e.to_string()))
+    pool.get().await.map_err(|e| AppError::pool("Failed to acquire database connection", e))
 }

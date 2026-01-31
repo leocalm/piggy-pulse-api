@@ -39,12 +39,13 @@ impl<'a> VendorRepository for PostgresRepository<'a> {
             "#,
                 &[&request.name],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to create vendor", e))?;
 
         if let Some(row) = rows.first() {
             Ok(map_row_to_vendor(row))
         } else {
-            Err(AppError::Db("Error mapping created vendor".to_string()))
+            Err(AppError::db_message("Error mapping created vendor"))
         }
     }
 
@@ -59,7 +60,8 @@ impl<'a> VendorRepository for PostgresRepository<'a> {
             "#,
                 &[id],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to fetch vendor", e))?;
 
         if let Some(row) = rows.first() {
             Ok(Some(map_row_to_vendor(row)))
@@ -70,7 +72,11 @@ impl<'a> VendorRepository for PostgresRepository<'a> {
 
     async fn list_vendors(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Vendor>, i64), AppError> {
         // Get total count
-        let count_row = self.client.query_one("SELECT COUNT(*) as total FROM vendor", &[]).await?;
+        let count_row = self
+            .client
+            .query_one("SELECT COUNT(*) as total FROM vendor", &[])
+            .await
+            .map_err(|e| AppError::db("Failed to count vendors", e))?;
         let total: i64 = count_row.get("total");
 
         // Build query with optional pagination
@@ -86,12 +92,12 @@ impl<'a> VendorRepository for PostgresRepository<'a> {
         let rows = if let Some(params) = pagination {
             if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
                 query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-                self.client.query(&query, &[]).await?
+                self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list vendors", e))?
             } else {
-                self.client.query(&query, &[]).await?
+                self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list vendors", e))?
             }
         } else {
-            self.client.query(&query, &[]).await?
+            self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list vendors", e))?
         };
 
         Ok((rows.into_iter().map(|r| map_row_to_vendor(&r)).collect(), total))
@@ -120,7 +126,11 @@ impl<'a> VendorRepository for PostgresRepository<'a> {
             order_by_clause
         );
 
-        let rows = self.client.query(&query, &[]).await?;
+        let rows = self
+            .client
+            .query(&query, &[])
+            .await
+            .map_err(|e| AppError::db("Failed to list vendors with status", e))?;
 
         Ok(rows.into_iter().map(|r| map_row_to_vendor_with_status(&r)).collect())
     }
@@ -134,7 +144,8 @@ impl<'a> VendorRepository for PostgresRepository<'a> {
             "#,
                 &[id],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to delete vendor", e))?;
         Ok(())
     }
 
@@ -150,7 +161,8 @@ impl<'a> VendorRepository for PostgresRepository<'a> {
             "#,
                 &[&request.name, &id],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to update vendor", e))?;
 
         if let Some(row) = rows.first() {
             Ok(map_row_to_vendor(row))

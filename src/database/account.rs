@@ -47,11 +47,12 @@ impl<'a> AccountRepository for PostgresRepository<'a> {
                         &request.spend_limit,
                     ],
                 )
-                .await?;
+                .await
+                .map_err(|e| AppError::db("Failed to create account", e))?;
             if let Some(row) = rows.first() {
                 Ok(map_row_to_account(row, Some(currency)))
             } else {
-                Err(AppError::Db("Error mapping created account".to_string()))
+                Err(AppError::db_message("Error mapping created account"))
             }
         } else {
             Err(AppError::CurrencyDoesNotExist(request.currency.clone()))
@@ -84,7 +85,8 @@ impl<'a> AccountRepository for PostgresRepository<'a> {
         "#,
                 &[id],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to fetch account", e))?;
 
         if let Some(row) = rows.first() {
             Ok(Some(map_row_to_account(row, None)))
@@ -95,7 +97,11 @@ impl<'a> AccountRepository for PostgresRepository<'a> {
 
     async fn list_accounts(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Account>, i64), AppError> {
         // Get total count
-        let count_row = self.client.query_one("SELECT COUNT(*) as total FROM account", &[]).await?;
+        let count_row = self
+            .client
+            .query_one("SELECT COUNT(*) as total FROM account", &[])
+            .await
+            .map_err(|e| AppError::db("Failed to count accounts", e))?;
         let total: i64 = count_row.get("total");
 
         // Build query with optional pagination
@@ -126,12 +132,12 @@ impl<'a> AccountRepository for PostgresRepository<'a> {
         let rows = if let Some(params) = pagination {
             if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
                 query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-                self.client.query(&query, &[]).await?
+                self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list accounts", e))?
             } else {
-                self.client.query(&query, &[]).await?
+                self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list accounts", e))?
             }
         } else {
-            self.client.query(&query, &[]).await?
+            self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list accounts", e))?
         };
 
         Ok((rows.into_iter().map(|row| map_row_to_account(&row, None)).collect(), total))
@@ -146,7 +152,8 @@ impl<'a> AccountRepository for PostgresRepository<'a> {
         "#,
                 &[&id],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to delete account", e))?;
 
         Ok(())
     }
@@ -181,7 +188,8 @@ impl<'a> AccountRepository for PostgresRepository<'a> {
                         &id,
                     ],
                 )
-                .await?;
+                .await
+                .map_err(|e| AppError::db("Failed to update account", e))?;
 
             if let Some(row) = rows.first() {
                 Ok(map_row_to_account(row, Some(currency)))

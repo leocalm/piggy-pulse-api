@@ -31,12 +31,13 @@ impl<'a> UserRepository for PostgresRepository<'a> {
         "#,
                 &[&name, &email, &salt, &password_hash],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to create user", e))?;
 
         if let Some(row) = result.first() {
             Ok(map_response_to_model(row))
         } else {
-            Err(AppError::Db("Error creating user".to_string()))
+            Err(AppError::db_message("Error creating user"))
         }
     }
 
@@ -50,7 +51,8 @@ impl<'a> UserRepository for PostgresRepository<'a> {
     "#,
                 &[&email],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to fetch user by email", e))?;
 
         if let Some(row) = result.first() {
             Ok(Some(map_response_to_model(row)))
@@ -60,7 +62,7 @@ impl<'a> UserRepository for PostgresRepository<'a> {
     }
 
     async fn verify_password(&self, user: &User, password: &str) -> Result<(), AppError> {
-        let password_hash = PasswordHash::new(&user.password_hash)?;
+        let password_hash = PasswordHash::new(&user.password_hash).map_err(|e| AppError::password_hash("Failed to parse stored password hash", e))?;
         Argon2::default()
             .verify_password(password.as_bytes(), &password_hash)
             .map_err(|_| AppError::InvalidCredentials)?;
@@ -82,7 +84,8 @@ impl<'a> UserRepository for PostgresRepository<'a> {
         "#,
                 &[&name, &email, &salt, &password_hash, &id],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to update user", e))?;
 
         if let Some(row) = result.first() {
             Ok(map_response_to_model(row))
@@ -100,7 +103,8 @@ impl<'a> UserRepository for PostgresRepository<'a> {
         "#,
                 &[&id],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to delete user", e))?;
 
         Ok(())
     }

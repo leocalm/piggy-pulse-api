@@ -26,7 +26,8 @@ impl<'a> CurrencyRepository for PostgresRepository<'a> {
         "#,
                 &[&currency_code],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to fetch currency by code", e))?;
 
         if let Some(row) = rows.first() {
             Ok(Some(map_row_to_currency(row)))
@@ -46,7 +47,8 @@ impl<'a> CurrencyRepository for PostgresRepository<'a> {
         "#,
                 &[&format!("%{}%", name)],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to search currencies", e))?;
 
         Ok(rows.iter().map(map_row_to_currency).collect())
     }
@@ -68,12 +70,13 @@ impl<'a> CurrencyRepository for PostgresRepository<'a> {
         "#,
                 &[&currency.name, &currency.symbol, &currency.currency, &currency.decimal_places],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to create currency", e))?;
 
         if let Some(row) = rows.first() {
             Ok(map_row_to_currency(row))
         } else {
-            Err(AppError::Db("Error mapping created currency".into()))
+            Err(AppError::db_message("Error mapping created currency"))
         }
     }
 
@@ -86,7 +89,8 @@ impl<'a> CurrencyRepository for PostgresRepository<'a> {
         "#,
                 &[&currency_id],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to delete currency", e))?;
 
         Ok(())
     }
@@ -103,7 +107,8 @@ impl<'a> CurrencyRepository for PostgresRepository<'a> {
             "#,
                 &[&request.name, &request.symbol, &request.currency, &request.decimal_places, &id],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to update currency", e))?;
 
         if let Some(row) = rows.first() {
             Ok(map_row_to_currency(row))

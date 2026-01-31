@@ -27,12 +27,13 @@ impl<'a> BudgetRepository for PostgresRepository<'a> {
             "#,
                 &[&request.name, &{ request.start_day }],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to create budget", e))?;
 
         if let Some(row) = rows.first() {
             Ok(map_row_to_budget(row))
         } else {
-            Err(AppError::Db("Error mapping created budget".to_string()))
+            Err(AppError::db_message("Error mapping created budget"))
         }
     }
 
@@ -47,7 +48,8 @@ impl<'a> BudgetRepository for PostgresRepository<'a> {
             "#,
                 &[id],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to fetch budget", e))?;
 
         if let Some(row) = rows.first() {
             Ok(Some(map_row_to_budget(row)))
@@ -58,7 +60,11 @@ impl<'a> BudgetRepository for PostgresRepository<'a> {
 
     async fn list_budgets(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Budget>, i64), AppError> {
         // Get total count
-        let count_row = self.client.query_one("SELECT COUNT(*) as total FROM budget", &[]).await?;
+        let count_row = self
+            .client
+            .query_one("SELECT COUNT(*) as total FROM budget", &[])
+            .await
+            .map_err(|e| AppError::db("Failed to count budgets", e))?;
         let total: i64 = count_row.get("total");
 
         // Build query with optional pagination
@@ -74,12 +80,12 @@ impl<'a> BudgetRepository for PostgresRepository<'a> {
         let rows = if let Some(params) = pagination {
             if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
                 query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-                self.client.query(&query, &[]).await?
+                self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list budgets", e))?
             } else {
-                self.client.query(&query, &[]).await?
+                self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list budgets", e))?
             }
         } else {
-            self.client.query(&query, &[]).await?
+            self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list budgets", e))?
         };
 
         Ok((rows.into_iter().map(|r| map_row_to_budget(&r)).collect(), total))
@@ -94,7 +100,8 @@ impl<'a> BudgetRepository for PostgresRepository<'a> {
             "#,
                 &[id],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to delete budget", e))?;
         Ok(())
     }
 
@@ -110,12 +117,13 @@ impl<'a> BudgetRepository for PostgresRepository<'a> {
             "#,
                 &[&budget.name, &{ budget.start_day }, &id],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to update budget", e))?;
 
         if let Some(row) = rows.first() {
             Ok(map_row_to_budget(row))
         } else {
-            Err(AppError::Db("Error mapping created budget".to_string()))
+            Err(AppError::db_message("Error mapping created budget"))
         }
     }
 }

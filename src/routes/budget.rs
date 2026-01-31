@@ -56,7 +56,7 @@ pub async fn list_all_budgets(
 pub async fn get_budget(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Json<BudgetResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget id", e))?;
     if let Some(budget) = repo.get_budget_by_id(&uuid).await? {
         Ok(Json(BudgetResponse::from(&budget)))
     } else {
@@ -73,7 +73,8 @@ pub async fn put_budget(
 ) -> Result<(Status, Json<BudgetResponse>), AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let budget = repo.update_budget(&Uuid::parse_str(id)?, &payload).await?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget id", e))?;
+    let budget = repo.update_budget(&uuid, &payload).await?;
     Ok((Status::Ok, Json(BudgetResponse::from(&budget))))
 }
 
@@ -81,7 +82,7 @@ pub async fn put_budget(
 pub async fn delete_budget(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget id", e))?;
     repo.delete_budget(&uuid).await?;
     Ok(Status::Ok)
 }
