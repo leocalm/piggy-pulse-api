@@ -31,7 +31,17 @@ fn init_tracing(log_level: &str, json_format: bool) {
 }
 
 fn build_cors(cors_config: &config::CorsConfig) -> CorsOptions {
-    let allowed_origins = if cors_config.allowed_origins.len() == 1 && cors_config.allowed_origins[0] == "*" {
+    let is_wildcard = cors_config.allowed_origins.len() == 1 && cors_config.allowed_origins[0] == "*";
+
+    // Validate that wildcard origins are not combined with credentials
+    if is_wildcard && cors_config.allow_credentials {
+        panic!(
+            "Invalid CORS configuration: Cannot use wildcard origins (*) with credentials enabled. \
+            Either set specific origins or disable credentials."
+        );
+    }
+
+    let allowed_origins = if is_wildcard {
         AllowedOrigins::all()
     } else {
         AllowedOrigins::some_exact(&cors_config.allowed_origins.iter().map(String::as_str).collect::<Vec<_>>())

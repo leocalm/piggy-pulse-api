@@ -74,7 +74,7 @@ impl Default for CorsConfig {
     fn default() -> Self {
         Self {
             allowed_origins: vec!["*".to_string()],
-            allow_credentials: true,
+            allow_credentials: false,
         }
     }
 }
