@@ -30,7 +30,7 @@ pub async fn post_user(pool: &State<Pool>, payload: Json<UserRequest>) -> Result
 pub async fn put_user(pool: &State<Pool>, _current_user: CurrentUser, id: &str, payload: Json<UserRequest>) -> Result<Json<UserResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid user id", e))?;
     let user = repo.update_user(&uuid, &payload.name, &payload.email, &payload.password).await?;
     Ok(Json(UserResponse::from(&user)))
 }
@@ -39,7 +39,7 @@ pub async fn put_user(pool: &State<Pool>, _current_user: CurrentUser, id: &str, 
 pub async fn delete_user_route(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid user id", e))?;
     repo.delete_user(&uuid).await?;
     Ok(Status::Ok)
 }

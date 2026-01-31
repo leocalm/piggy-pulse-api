@@ -48,7 +48,8 @@ pub async fn get_currencies(pool: &State<Pool>, _current_user: CurrentUser, name
 pub async fn delete_currency(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    repo.delete_currency(&Uuid::parse_str(id)?).await?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid currency id", e))?;
+    repo.delete_currency(&uuid).await?;
     Ok(Status::Ok)
 }
 
@@ -61,7 +62,7 @@ pub async fn put_currency(
 ) -> Result<Json<CurrencyResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid currency id", e))?;
     let currency = repo.update_currency(&uuid, &payload).await?;
     Ok(Json(CurrencyResponse::from(&currency)))
 }

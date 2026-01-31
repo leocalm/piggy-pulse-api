@@ -23,6 +23,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 log = "0.4.28"
 async-trait = "0.1.89"
 validator = { version = "0.20", features = ["derive"] }
+thiserror = "2.0"
 
 [dev-dependencies]
 proptest = "1.6"

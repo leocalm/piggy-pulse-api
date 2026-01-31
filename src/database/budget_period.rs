@@ -15,7 +15,8 @@ pub async fn get_budget_period(client: &tokio_postgres::Client, budget_period_id
             "#,
             &[budget_period_id],
         )
-        .await?;
+        .await
+        .map_err(|e| AppError::db("Failed to fetch budget period", e))?;
 
     if let Some(row) = rows.first() {
         Ok(map_row_to_budget_period(row))
@@ -47,18 +48,23 @@ impl<'a> BudgetPeriodRepository for PostgresRepository<'a> {
             "#,
                 &[&request.name, &request.start_date, &request.end_date],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to create budget period", e))?;
 
         if let Some(row) = rows.first() {
             Ok(row.get("id"))
         } else {
-            Err(AppError::Db("Unable to create budget period".to_string()))
+            Err(AppError::db_message("Unable to create budget period"))
         }
     }
 
     async fn list_budget_periods(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<BudgetPeriod>, i64), AppError> {
         // Get total count
-        let count_row = self.client.query_one("SELECT COUNT(*) as total FROM budget_period", &[]).await?;
+        let count_row = self
+            .client
+            .query_one("SELECT COUNT(*) as total FROM budget_period", &[])
+            .await
+            .map_err(|e| AppError::db("Failed to count budget periods", e))?;
         let total: i64 = count_row.get("total");
 
         // Build query with optional pagination
@@ -74,12 +80,21 @@ impl<'a> BudgetPeriodRepository for PostgresRepository<'a> {
         let rows = if let Some(params) = pagination {
             if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
                 query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-                self.client.query(&query, &[]).await?
+                self.client
+                    .query(&query, &[])
+                    .await
+                    .map_err(|e| AppError::db("Failed to list budget periods", e))?
             } else {
-                self.client.query(&query, &[]).await?
+                self.client
+                    .query(&query, &[])
+                    .await
+                    .map_err(|e| AppError::db("Failed to list budget periods", e))?
             }
         } else {
-            self.client.query(&query, &[]).await?
+            self.client
+                .query(&query, &[])
+                .await
+                .map_err(|e| AppError::db("Failed to list budget periods", e))?
         };
 
         Ok((rows.into_iter().map(|r| map_row_to_budget_period(&r)).collect(), total))
@@ -97,12 +112,13 @@ impl<'a> BudgetPeriodRepository for PostgresRepository<'a> {
             "#,
                 &[],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to fetch current budget period", e))?;
 
         if let Some(row) = rows.first() {
             Ok(map_row_to_budget_period(row))
         } else {
-            Err(AppError::Db("Unable to get current budget period".to_string()))
+            Err(AppError::db_message("Unable to get current budget period"))
         }
     }
 
@@ -122,7 +138,8 @@ impl<'a> BudgetPeriodRepository for PostgresRepository<'a> {
             "#,
                 &[&request.name, &request.start_date, &request.end_date, &id],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to update budget period", e))?;
 
         if let Some(row) = rows.first() {
             Ok(map_row_to_budget_period(row))
@@ -140,7 +157,8 @@ impl<'a> BudgetPeriodRepository for PostgresRepository<'a> {
             "#,
                 &[id],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to delete budget period", e))?;
         Ok(())
     }
 }

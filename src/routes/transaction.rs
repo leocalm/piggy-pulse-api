@@ -55,7 +55,7 @@ pub async fn list_all_transactions(
     };
 
     let (txs, total) = if let Some(period_id) = period_id {
-        let uuid = Uuid::parse_str(&period_id)?;
+        let uuid = Uuid::parse_str(&period_id).map_err(|e| AppError::uuid("Invalid period id", e))?;
         repo.get_transactions_for_period(&uuid, pagination.as_ref()).await?
     } else {
         repo.list_transactions(pagination.as_ref()).await?
@@ -79,7 +79,7 @@ pub async fn list_all_transactions(
 pub async fn get_transaction(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Json<TransactionResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid transaction id", e))?;
     if let Some(tx) = repo.get_transaction_by_id(&uuid).await? {
         Ok(Json(TransactionResponse::from(&tx)))
     } else {
@@ -91,7 +91,7 @@ pub async fn get_transaction(pool: &State<Pool>, _current_user: CurrentUser, id:
 pub async fn delete_transaction(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid transaction id", e))?;
     repo.delete_transaction(&uuid).await?;
     Ok(Status::Ok)
 }
@@ -105,7 +105,7 @@ pub async fn put_transaction(
 ) -> Result<Json<TransactionResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid transaction id", e))?;
     let tx = repo.update_transaction(&uuid, &payload).await?;
     Ok(Json(TransactionResponse::from(&tx)))
 }

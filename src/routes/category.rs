@@ -60,7 +60,7 @@ pub async fn list_all_categories(
 pub async fn get_category(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Json<CategoryResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
     if let Some(category) = repo.get_category_by_id(&uuid).await? {
         Ok(Json(CategoryResponse::from(&category)))
     } else {
@@ -72,7 +72,7 @@ pub async fn get_category(pool: &State<Pool>, _current_user: CurrentUser, id: &s
 pub async fn delete_category(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
     repo.delete_category(&uuid).await?;
     Ok(Status::Ok)
 }
@@ -86,7 +86,7 @@ pub async fn put_category(
 ) -> Result<Json<CategoryResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
     let category = repo.update_category(&uuid, &payload).await?;
     Ok(Json(CategoryResponse::from(&category)))
 }

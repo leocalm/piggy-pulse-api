@@ -61,7 +61,7 @@ pub async fn list_all_accounts(
 pub async fn get_account(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Json<AccountResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
     if let Some(account) = repo.get_account_by_id(&uuid).await? {
         Ok(Json(AccountResponse::from(&account)))
     } else {
@@ -73,7 +73,7 @@ pub async fn get_account(pool: &State<Pool>, _current_user: CurrentUser, id: &st
 pub async fn delete_account(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
     repo.delete_account(&uuid).await?;
     Ok(Status::Ok)
 }
@@ -82,7 +82,7 @@ pub async fn delete_account(pool: &State<Pool>, _current_user: CurrentUser, id: 
 pub async fn put_account(pool: &State<Pool>, _current_user: CurrentUser, id: &str, payload: Json<AccountRequest>) -> Result<Json<AccountResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
     let account = repo.update_account(&uuid, &payload).await?;
     Ok(Json(AccountResponse::from(&account)))
 }
