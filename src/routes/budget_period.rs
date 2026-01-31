@@ -69,7 +69,7 @@ pub async fn put_budget_period(
 ) -> Result<Json<BudgetPeriodResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget period id", e))?;
     let budget_period = repo.update_budget_period(&uuid, &payload).await?;
     Ok(Json(BudgetPeriodResponse::from(&budget_period)))
 }
@@ -78,7 +78,7 @@ pub async fn put_budget_period(
 pub async fn delete_budget_period(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget period id", e))?;
     repo.delete_budget_period(&uuid).await?;
     Ok(Status::Ok)
 }

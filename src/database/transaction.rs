@@ -135,18 +135,23 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
                     &vendor_id,
                 ],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to create transaction", e))?;
 
         if let Some(row) = rows.first() {
             Ok(map_row_to_transaction(row))
         } else {
-            Err(AppError::Db("Failed to create transaction".to_string()))
+            Err(AppError::db_message("Failed to create transaction"))
         }
     }
 
     async fn get_transaction_by_id(&self, id: &Uuid) -> Result<Option<Transaction>, AppError> {
         let query = build_transaction_query("transaction t", "t.id = $1", "");
-        let rows = self.client.query(&query, &[id]).await?;
+        let rows = self
+            .client
+            .query(&query, &[id])
+            .await
+            .map_err(|e| AppError::db("Failed to fetch transaction", e))?;
 
         if let Some(row) = rows.first() {
             Ok(Some(map_row_to_transaction(row)))
@@ -157,7 +162,11 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
 
     async fn list_transactions(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Transaction>, i64), AppError> {
         // Get total count
-        let count_row = self.client.query_one("SELECT COUNT(*) as total FROM transaction", &[]).await?;
+        let count_row = self
+            .client
+            .query_one("SELECT COUNT(*) as total FROM transaction", &[])
+            .await
+            .map_err(|e| AppError::db("Failed to count transactions", e))?;
         let total: i64 = count_row.get("total");
 
         // Build query with optional pagination
@@ -170,7 +179,11 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
             query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
         }
 
-        let rows = self.client.query(&query, &[]).await?;
+        let rows = self
+            .client
+            .query(&query, &[])
+            .await
+            .map_err(|e| AppError::db("Failed to list transactions", e))?;
         Ok((rows.into_iter().map(|row| map_row_to_transaction(&row)).collect(), total))
     }
 
@@ -189,7 +202,8 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
             "#,
                 &[period_id],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to count transactions for period", e))?;
         let total: i64 = count_row.get("total");
 
         // Build query with budget_period cross join and WHERE clause
@@ -205,7 +219,11 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
             query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
         }
 
-        let rows = self.client.query(&query, &[period_id]).await?;
+        let rows = self
+            .client
+            .query(&query, &[period_id])
+            .await
+            .map_err(|e| AppError::db("Failed to list transactions for period", e))?;
         Ok((rows.into_iter().map(|row| map_row_to_transaction(&row)).collect(), total))
     }
 
@@ -218,7 +236,8 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
             "#,
                 &[id],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to delete transaction", e))?;
 
         Ok(())
     }
@@ -260,7 +279,8 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
                     &id,
                 ],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to update transaction", e))?;
 
         if let Some(row) = rows.first() {
             Ok(map_row_to_transaction(row))

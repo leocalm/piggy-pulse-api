@@ -56,7 +56,7 @@ pub async fn list_all_vendors(
 pub async fn get_vendor(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Json<VendorResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid vendor id", e))?;
     if let Some(vendor) = repo.get_vendor_by_id(&uuid).await? {
         Ok(Json(VendorResponse::from(&vendor)))
     } else {
@@ -68,7 +68,7 @@ pub async fn get_vendor(pool: &State<Pool>, _current_user: CurrentUser, id: &str
 pub async fn delete_vendor(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid vendor id", e))?;
     repo.delete_vendor(&uuid).await?;
     Ok(Status::Ok)
 }
@@ -77,7 +77,7 @@ pub async fn delete_vendor(pool: &State<Pool>, _current_user: CurrentUser, id: &
 pub async fn put_vendor(pool: &State<Pool>, _current_user: CurrentUser, id: &str, payload: Json<VendorRequest>) -> Result<Json<VendorResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid vendor id", e))?;
     let vendor = repo.update_vendor(&uuid, &payload).await?;
     Ok(Json(VendorResponse::from(&vendor)))
 }
