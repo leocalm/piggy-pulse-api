@@ -27,11 +27,7 @@ pub enum AppError {
     #[error("Invalid credentials")]
     InvalidCredentials,
     #[error("Internal server error")]
-    PasswordHash {
-        message: String,
-        #[source]
-        source: password_hash::Error,
-    },
+    PasswordHash { message: String },
     #[error("User {0} already exists")]
     UserAlreadyExists(String),
     #[error("Bad request: {0}")]
@@ -87,8 +83,7 @@ impl AppError {
 
     pub fn password_hash(message: impl Into<String>, source: password_hash::Error) -> Self {
         Self::PasswordHash {
-            message: message.into(),
-            source,
+            message: format!("{}: {}", message.into(), source),
         }
     }
 }
