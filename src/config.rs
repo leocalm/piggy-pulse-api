@@ -10,6 +10,7 @@ pub struct Config {
     pub database: DatabaseConfig,
     pub server: ServerConfig,
     pub logging: LoggingConfig,
+    pub cors: CorsConfig,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -31,6 +32,12 @@ pub struct ServerConfig {
 pub struct LoggingConfig {
     pub level: String,
     pub json_format: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CorsConfig {
+    pub allowed_origins: Vec<String>,
+    pub allow_credentials: bool,
 }
 
 impl Default for DatabaseConfig {
@@ -59,6 +66,15 @@ impl Default for LoggingConfig {
         Self {
             level: "info".to_string(),
             json_format: false,
+        }
+    }
+}
+
+impl Default for CorsConfig {
+    fn default() -> Self {
+        Self {
+            allowed_origins: vec!["*".to_string()],
+            allow_credentials: true,
         }
     }
 }
