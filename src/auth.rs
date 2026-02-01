@@ -1,4 +1,5 @@
 use crate::error::app_error::AppError;
+use rocket::http::Status;
 use rocket::outcome::Outcome;
 use rocket::request::{FromRequest, Outcome as RequestOutcome, Request};
 use serde::Serialize;
@@ -26,10 +27,6 @@ impl<'r> FromRequest<'r> for CurrentUser {
             });
         }
 
-        //Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials))
-        Outcome::Success(CurrentUser {
-            id: Uuid::new_v4(),
-            username: String::new(),
-        })
+        Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials))
     }
 }
