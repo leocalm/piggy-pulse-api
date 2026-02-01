@@ -35,12 +35,13 @@ impl<'a> CategoryRepository for PostgresRepository<'a> {
             "#,
                 &[&request.name, &request.color, &request.icon, &request.parent_id, &request.category_type_to_db()],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to create category", e))?;
 
         if let Some(row) = rows.first() {
             Ok(map_row_to_category(row))
         } else {
-            Err(AppError::Db("Error mapping created category".to_string()))
+            Err(AppError::db_message("Error mapping created category"))
         }
     }
 
@@ -62,7 +63,8 @@ impl<'a> CategoryRepository for PostgresRepository<'a> {
             "#,
                 &[id],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to fetch category", e))?;
 
         if let Some(row) = rows.first() {
             Ok(Some(map_row_to_category(row)))
@@ -73,7 +75,11 @@ impl<'a> CategoryRepository for PostgresRepository<'a> {
 
     async fn list_categories(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Category>, i64), AppError> {
         // Get total count
-        let count_row = self.client.query_one("SELECT COUNT(*) as total FROM category", &[]).await?;
+        let count_row = self
+            .client
+            .query_one("SELECT COUNT(*) as total FROM category", &[])
+            .await
+            .map_err(|e| AppError::db("Failed to count categories", e))?;
         let total: i64 = count_row.get("total");
 
         // Build query with optional pagination
@@ -96,12 +102,12 @@ impl<'a> CategoryRepository for PostgresRepository<'a> {
         let rows = if let Some(params) = pagination {
             if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
                 query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-                self.client.query(&query, &[]).await?
+                self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list categories", e))?
             } else {
-                self.client.query(&query, &[]).await?
+                self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list categories", e))?
             }
         } else {
-            self.client.query(&query, &[]).await?
+            self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list categories", e))?
         };
 
         Ok((rows.into_iter().map(|r| map_row_to_category(&r)).collect(), total))
@@ -116,7 +122,8 @@ impl<'a> CategoryRepository for PostgresRepository<'a> {
             "#,
                 &[id],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to delete category", e))?;
         Ok(())
     }
 
@@ -146,7 +153,8 @@ impl<'a> CategoryRepository for PostgresRepository<'a> {
                     &id,
                 ],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to update category", e))?;
 
         if let Some(row) = rows.first() {
             Ok(map_row_to_category(row))
@@ -170,7 +178,8 @@ impl<'a> CategoryRepository for PostgresRepository<'a> {
             "#,
                 &[],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to count categories not in budget", e))?;
         let total: i64 = count_row.get("total");
 
         // Build query with optional pagination
@@ -197,12 +206,21 @@ impl<'a> CategoryRepository for PostgresRepository<'a> {
         let rows = if let Some(params) = pagination {
             if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
                 query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-                self.client.query(&query, &[]).await?
+                self.client
+                    .query(&query, &[])
+                    .await
+                    .map_err(|e| AppError::db("Failed to list categories not in budget", e))?
             } else {
-                self.client.query(&query, &[]).await?
+                self.client
+                    .query(&query, &[])
+                    .await
+                    .map_err(|e| AppError::db("Failed to list categories not in budget", e))?
             }
         } else {
-            self.client.query(&query, &[]).await?
+            self.client
+                .query(&query, &[])
+                .await
+                .map_err(|e| AppError::db("Failed to list categories not in budget", e))?
         };
 
         Ok((rows.into_iter().map(|r| map_row_to_category(&r)).collect(), total))
@@ -241,5 +259,53 @@ impl CategoryRequestDbExt for CategoryRequest {
             CategoryType::Outgoing => "Outgoing".to_string(),
             CategoryType::Transfer => "Transfer".to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_category_type_from_db_all_types() {
+        assert!(matches!(category_type_from_db("Incoming"), CategoryType::Incoming));
+        assert!(matches!(category_type_from_db("Outgoing"), CategoryType::Outgoing));
+        assert!(matches!(category_type_from_db("Transfer"), CategoryType::Transfer));
+    }
+
+    #[test]
+    #[should_panic(expected = "Unknown category type")]
+    fn test_category_type_from_db_invalid() {
+        category_type_from_db("InvalidType");
+    }
+
+    #[test]
+    fn test_category_type_to_db() {
+        let request = CategoryRequest {
+            name: "Test".to_string(),
+            color: "#000000".to_string(),
+            icon: "icon".to_string(),
+            parent_id: None,
+            category_type: CategoryType::Incoming,
+        };
+        assert_eq!(request.category_type_to_db(), "Incoming");
+
+        let request_outgoing = CategoryRequest {
+            name: "Test".to_string(),
+            color: "#000000".to_string(),
+            icon: "icon".to_string(),
+            parent_id: None,
+            category_type: CategoryType::Outgoing,
+        };
+        assert_eq!(request_outgoing.category_type_to_db(), "Outgoing");
+
+        let request_transfer = CategoryRequest {
+            name: "Test".to_string(),
+            color: "#000000".to_string(),
+            icon: "icon".to_string(),
+            parent_id: None,
+            category_type: CategoryType::Transfer,
+        };
+        assert_eq!(request_transfer.category_type_to_db(), "Transfer");
     }
 }

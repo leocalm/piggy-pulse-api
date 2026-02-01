@@ -13,7 +13,8 @@ pub trait DashboardRepository {
 #[async_trait::async_trait]
 impl<'a> DashboardRepository for PostgresRepository<'a> {
     async fn balance_per_day(&self) -> Result<Vec<BudgetPerDayResponse>, AppError> {
-        let rows = self.client
+        let rows = self
+            .client
             .query(
                 r#"
             SELECT
@@ -35,7 +36,8 @@ impl<'a> DashboardRepository for PostgresRepository<'a> {
             "#,
                 &[],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to fetch balance per day", e))?;
 
         Ok(rows
             .iter()
@@ -94,7 +96,8 @@ GROUP BY category_name, budgeted_value
             "#,
                 &[],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to fetch spent per category", e))?;
 
         Ok(rows
             .iter()
@@ -108,7 +111,9 @@ GROUP BY category_name, budgeted_value
     }
 
     async fn monthly_burn_in(&self) -> Result<MonthlyBurnInResponse, AppError> {
-        let rows = self.client.query(
+        let rows = self
+            .client
+            .query(
             r#"
 WITH budget_settings AS (
     SELECT b.start_day
@@ -159,8 +164,11 @@ SELECT
 FROM total_budget
 CROSS JOIN spent_budget
 CROSS JOIN cutoff
-        "#, &[]
-        ).await?;
+        "#,
+                &[],
+            )
+            .await
+            .map_err(|e| AppError::db("Failed to fetch monthly burn-in", e))?;
 
         if let Some(row) = rows.first() {
             Ok(MonthlyBurnInResponse {
@@ -170,7 +178,7 @@ CROSS JOIN cutoff
                 days_in_period: row.get("days_in_period"),
             })
         } else {
-            Err(AppError::Db("No row returned for monthly burn-in".into()))
+            Err(AppError::db_message("No row returned for monthly burn-in"))
         }
     }
 }

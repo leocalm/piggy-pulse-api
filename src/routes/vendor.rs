@@ -56,7 +56,7 @@ pub async fn list_all_vendors(
 pub async fn get_vendor(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Json<VendorResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid vendor id", e))?;
     if let Some(vendor) = repo.get_vendor_by_id(&uuid).await? {
         Ok(Json(VendorResponse::from(&vendor)))
     } else {
@@ -68,7 +68,7 @@ pub async fn get_vendor(pool: &State<Pool>, _current_user: CurrentUser, id: &str
 pub async fn delete_vendor(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid vendor id", e))?;
     repo.delete_vendor(&uuid).await?;
     Ok(Status::Ok)
 }
@@ -77,7 +77,7 @@ pub async fn delete_vendor(pool: &State<Pool>, _current_user: CurrentUser, id: &
 pub async fn put_vendor(pool: &State<Pool>, _current_user: CurrentUser, id: &str, payload: Json<VendorRequest>) -> Result<Json<VendorResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid vendor id", e))?;
     let vendor = repo.update_vendor(&uuid, &payload).await?;
     Ok(Json(VendorResponse::from(&vendor)))
 }
@@ -97,4 +97,60 @@ pub async fn get_vendors_with_status(pool: &State<Pool>, order_by: VendorOrderBy
 
 pub fn routes() -> Vec<rocket::Route> {
     routes![create_vendor, list_all_vendors, get_vendor, delete_vendor, put_vendor, get_vendors_with_status]
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Config, build_rocket};
+    use rocket::http::{ContentType, Status};
+    use rocket::local::asynchronous::Client;
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_create_vendor_validation_error() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let invalid_payload = serde_json::json!({
+            "name": "AB",  // Too short
+            "color": "#000"
+        });
+
+        let response = client
+            .post("/api/vendors/")
+            .header(ContentType::JSON)
+            .body(invalid_payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::BadRequest);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_get_vendor_invalid_uuid() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let response = client.get("/api/vendors/not-valid").dispatch().await;
+
+        assert_eq!(response.status(), Status::BadRequest);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_delete_vendor_invalid_uuid() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let response = client.delete("/api/vendors/invalid").dispatch().await;
+
+        assert_eq!(response.status(), Status::BadRequest);
+    }
 }
