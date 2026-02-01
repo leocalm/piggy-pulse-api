@@ -60,7 +60,7 @@ pub async fn list_all_budget_categories(
 pub async fn get_budget_category(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Json<BudgetCategoryResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget category id", e))?;
     if let Some(bc) = repo.get_budget_category_by_id(&uuid).await? {
         Ok(Json(BudgetCategoryResponse::from(&bc)))
     } else {
@@ -72,7 +72,7 @@ pub async fn get_budget_category(pool: &State<Pool>, _current_user: CurrentUser,
 pub async fn delete_budget_category(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget category id", e))?;
     repo.delete_budget_category(&uuid).await?;
     Ok(Status::Ok)
 }
@@ -81,7 +81,7 @@ pub async fn delete_budget_category(pool: &State<Pool>, _current_user: CurrentUs
 pub async fn put_budget_category(pool: &State<Pool>, _current_user: CurrentUser, id: &str, payload: Json<i32>) -> Result<Status, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget category id", e))?;
     repo.update_budget_category_value(&uuid, &payload).await?;
     Ok(Status::Ok)
 }
@@ -94,4 +94,37 @@ pub fn routes() -> Vec<rocket::Route> {
         delete_budget_category,
         put_budget_category
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Config, build_rocket};
+    use rocket::http::Status;
+    use rocket::local::asynchronous::Client;
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_get_budget_category_invalid_uuid() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let response = client.get("/api/budget-categories/invalid-uuid").dispatch().await;
+
+        assert_eq!(response.status(), Status::BadRequest);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_delete_budget_category_invalid_uuid() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let response = client.delete("/api/budget-categories/bad-id").dispatch().await;
+
+        assert_eq!(response.status(), Status::BadRequest);
+    }
 }

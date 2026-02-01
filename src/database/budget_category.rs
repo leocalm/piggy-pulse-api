@@ -28,15 +28,16 @@ impl<'a> BudgetCategoryRepository for PostgresRepository<'a> {
             "#,
                 &[&request.category_id, &{ request.budgeted_value }],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to create budget category", e))?;
 
         if let Some(row) = rows.first() {
             match self.get_budget_category_by_id(&row.get("id")).await? {
-                None => Err(AppError::Db("Error gettignthe created created budget_category".to_string())),
+                None => Err(AppError::db_message("Error getting created budget category")),
                 Some(new_budget_category) => Ok(new_budget_category),
             }
         } else {
-            Err(AppError::Db("Error mapping created budget_category".to_string()))
+            Err(AppError::db_message("Error mapping created budget category"))
         }
     }
 
@@ -64,7 +65,8 @@ impl<'a> BudgetCategoryRepository for PostgresRepository<'a> {
             "#,
                 &[id],
             )
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to fetch budget category", e))?;
 
         if let Some(row) = rows.first() {
             Ok(Some(map_row_to_budget_category(row)))
@@ -75,7 +77,11 @@ impl<'a> BudgetCategoryRepository for PostgresRepository<'a> {
 
     async fn list_budget_categories(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<BudgetCategory>, i64), AppError> {
         // Get total count
-        let count_row = self.client.query_one("SELECT COUNT(*) as total FROM budget_category", &[]).await?;
+        let count_row = self
+            .client
+            .query_one("SELECT COUNT(*) as total FROM budget_category", &[])
+            .await
+            .map_err(|e| AppError::db("Failed to count budget categories", e))?;
         let total: i64 = count_row.get("total");
 
         // Build query with optional pagination
@@ -104,26 +110,39 @@ impl<'a> BudgetCategoryRepository for PostgresRepository<'a> {
         let rows = if let Some(params) = pagination {
             if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
                 query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-                self.client.query(&query, &[]).await?
+                self.client
+                    .query(&query, &[])
+                    .await
+                    .map_err(|e| AppError::db("Failed to list budget categories", e))?
             } else {
-                self.client.query(&query, &[]).await?
+                self.client
+                    .query(&query, &[])
+                    .await
+                    .map_err(|e| AppError::db("Failed to list budget categories", e))?
             }
         } else {
-            self.client.query(&query, &[]).await?
+            self.client
+                .query(&query, &[])
+                .await
+                .map_err(|e| AppError::db("Failed to list budget categories", e))?
         };
 
         Ok((rows.into_iter().map(|r| map_row_to_budget_category(&r)).collect(), total))
     }
 
     async fn delete_budget_category(&self, id: &Uuid) -> Result<(), AppError> {
-        self.client.execute(r#"DELETE FROM budget_category WHERE id = $1"#, &[id]).await?;
+        self.client
+            .execute(r#"DELETE FROM budget_category WHERE id = $1"#, &[id])
+            .await
+            .map_err(|e| AppError::db("Failed to delete budget category", e))?;
         Ok(())
     }
 
     async fn update_budget_category_value(&self, id: &Uuid, new_budget_value: &i32) -> Result<(), AppError> {
         self.client
             .execute(r#"UPDATE budget_category SET budgeted_value = $2 WHERE id = $1"#, &[id, &new_budget_value])
-            .await?;
+            .await
+            .map_err(|e| AppError::db("Failed to update budget category", e))?;
         Ok(())
     }
 }

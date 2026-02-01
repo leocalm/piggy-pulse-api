@@ -36,7 +36,7 @@ pub async fn get_monthly_burn_in(pool: &State<Pool>, _current_user: CurrentUser)
 pub async fn get_month_progress(pool: &State<Pool>, _current_user: CurrentUser, period_id: String) -> Result<Json<MonthProgressResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let budget_period_uuid = Uuid::parse_str(&period_id)?;
+    let budget_period_uuid = Uuid::parse_str(&period_id).map_err(|e| AppError::uuid("Invalid budget period id", e))?;
     let budget_period = repo.get_budget_period(&budget_period_uuid).await?;
     let dashboard_service = DashboardService::new(&repo, &budget_period);
     Ok(Json(dashboard_service.month_progress().await?))
@@ -46,7 +46,7 @@ pub async fn get_month_progress(pool: &State<Pool>, _current_user: CurrentUser, 
 pub async fn get_recent_transactions(pool: &State<Pool>, _current_user: CurrentUser, period_id: String) -> Result<Json<Vec<TransactionResponse>>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let budget_period_uuid = Uuid::parse_str(&period_id)?;
+    let budget_period_uuid = Uuid::parse_str(&period_id).map_err(|e| AppError::uuid("Invalid budget period id", e))?;
     let budget_period = repo.get_budget_period(&budget_period_uuid).await?;
     let mut dashboard_service = DashboardService::new(&repo, &budget_period);
     Ok(Json(dashboard_service.recent_transactions().await?))
@@ -56,7 +56,7 @@ pub async fn get_recent_transactions(pool: &State<Pool>, _current_user: CurrentU
 pub async fn get_dashboard(pool: &State<Pool>, _current_user: CurrentUser, period_id: String) -> Result<Json<DashboardResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let budget_period_uuid = Uuid::parse_str(&period_id)?;
+    let budget_period_uuid = Uuid::parse_str(&period_id).map_err(|e| AppError::uuid("Invalid budget period id", e))?;
     let budget_period = repo.get_budget_period(&budget_period_uuid).await?;
     let mut dashboard_service = DashboardService::new(&repo, &budget_period);
     Ok(Json(dashboard_service.dashboard_response().await?))

@@ -69,7 +69,7 @@ pub async fn put_budget_period(
 ) -> Result<Json<BudgetPeriodResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget period id", e))?;
     let budget_period = repo.update_budget_period(&uuid, &payload).await?;
     Ok(Json(BudgetPeriodResponse::from(&budget_period)))
 }
@@ -78,7 +78,7 @@ pub async fn put_budget_period(
 pub async fn delete_budget_period(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget period id", e))?;
     repo.delete_budget_period(&uuid).await?;
     Ok(Status::Ok)
 }
@@ -91,4 +91,37 @@ pub fn routes() -> Vec<rocket::Route> {
         put_budget_period,
         delete_budget_period
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Config, build_rocket};
+    use rocket::http::Status;
+    use rocket::local::asynchronous::Client;
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_put_budget_period_invalid_uuid() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let response = client.put("/api/budget_period/invalid").dispatch().await;
+
+        assert_eq!(response.status(), Status::BadRequest);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_delete_budget_period_invalid_uuid() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let response = client.delete("/api/budget_period/not-valid").dispatch().await;
+
+        assert_eq!(response.status(), Status::BadRequest);
+    }
 }

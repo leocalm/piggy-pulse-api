@@ -55,7 +55,7 @@ pub async fn list_all_transactions(
     };
 
     let (txs, total) = if let Some(period_id) = period_id {
-        let uuid = Uuid::parse_str(&period_id)?;
+        let uuid = Uuid::parse_str(&period_id).map_err(|e| AppError::uuid("Invalid period id", e))?;
         repo.get_transactions_for_period(&uuid, pagination.as_ref()).await?
     } else {
         repo.list_transactions(pagination.as_ref()).await?
@@ -79,7 +79,7 @@ pub async fn list_all_transactions(
 pub async fn get_transaction(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Json<TransactionResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid transaction id", e))?;
     if let Some(tx) = repo.get_transaction_by_id(&uuid).await? {
         Ok(Json(TransactionResponse::from(&tx)))
     } else {
@@ -91,7 +91,7 @@ pub async fn get_transaction(pool: &State<Pool>, _current_user: CurrentUser, id:
 pub async fn delete_transaction(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid transaction id", e))?;
     repo.delete_transaction(&uuid).await?;
     Ok(Status::Ok)
 }
@@ -105,11 +105,57 @@ pub async fn put_transaction(
 ) -> Result<Json<TransactionResponse>, AppError> {
     let client = get_client(pool).await?;
     let repo = PostgresRepository { client: &client };
-    let uuid = Uuid::parse_str(id)?;
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid transaction id", e))?;
     let tx = repo.update_transaction(&uuid, &payload).await?;
     Ok(Json(TransactionResponse::from(&tx)))
 }
 
 pub fn routes() -> Vec<rocket::Route> {
     routes![create_transaction, list_all_transactions, get_transaction, delete_transaction, put_transaction]
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Config, build_rocket};
+    use rocket::http::Status;
+    use rocket::local::asynchronous::Client;
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_get_transaction_invalid_uuid() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let response = client.get("/api/transactions/invalid-uuid").dispatch().await;
+
+        assert_eq!(response.status(), Status::BadRequest);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_delete_transaction_invalid_uuid() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let response = client.delete("/api/transactions/bad-id").dispatch().await;
+
+        assert_eq!(response.status(), Status::BadRequest);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_list_transactions_invalid_period_id() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let response = client.get("/api/transactions/?period_id=invalid-uuid").dispatch().await;
+
+        assert_eq!(response.status(), Status::BadRequest);
+    }
 }
