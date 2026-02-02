@@ -59,22 +59,23 @@ impl BudgetRepository for PostgresRepository {
         let total = count_row.total;
 
         // Build query with optional pagination
-        let mut query = String::from(
-            r#"
+        let base_query = r#"
             SELECT id, name, start_day, created_at
             FROM budget
             ORDER BY created_at DESC
-            "#,
-        );
+            "#;
 
-        // Add pagination if requested
-        if let Some(params) = pagination
+        let budgets = if let Some(params) = pagination
             && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
         {
-            query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-        }
-
-        let budgets = sqlx::query_as::<_, Budget>(&query).fetch_all(&self.pool).await?;
+            sqlx::query_as::<_, Budget>(&format!("{} LIMIT $1 OFFSET $2", base_query))
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+        } else {
+            sqlx::query_as::<_, Budget>(base_query).fetch_all(&self.pool).await?
+        };
 
         Ok((budgets, total))
     }

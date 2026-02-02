@@ -20,18 +20,17 @@ impl UserRepository for PostgresRepository {
     async fn create_user(&self, name: &str, email: &str, password: &str) -> Result<User, AppError> {
         let (salt, password_hash) = password_hash(password);
 
-        let user = sqlx::query_as!(
-            User,
+        let user = sqlx::query_as::<_, User>(
             r#"
             INSERT INTO users (name, email, salt, password_hash)
             VALUES($1, $2, $3, $4)
             RETURNING id, name, email, password_hash, created_at
             "#,
-            name,
-            email,
-            &salt,
-            &password_hash
         )
+        .bind(name)
+        .bind(email)
+        .bind(&salt)
+        .bind(&password_hash)
         .fetch_one(&self.pool)
         .await?;
 
@@ -39,15 +38,14 @@ impl UserRepository for PostgresRepository {
     }
 
     async fn get_user_by_email(&self, email: &str) -> Result<Option<User>, AppError> {
-        let user = sqlx::query_as!(
-            User,
+        let user = sqlx::query_as::<_, User>(
             r#"
             SELECT id, name, email, password_hash, created_at
             FROM users
             WHERE email = $1
             "#,
-            email
         )
+        .bind(email)
         .fetch_optional(&self.pool)
         .await?;
 
@@ -66,20 +64,19 @@ impl UserRepository for PostgresRepository {
     async fn update_user(&self, id: &Uuid, name: &str, email: &str, password: &str) -> Result<User, AppError> {
         let (salt, password_hash) = password_hash(password);
 
-        let user = sqlx::query_as!(
-            User,
+        let user = sqlx::query_as::<_, User>(
             r#"
             UPDATE users
             SET name = $1, email = $2, salt = $3, password_hash = $4
             WHERE id = $5
             RETURNING id, name, email, password_hash, created_at
             "#,
-            name,
-            email,
-            &salt,
-            &password_hash,
-            id
         )
+        .bind(name)
+        .bind(email)
+        .bind(&salt)
+        .bind(&password_hash)
+        .bind(id)
         .fetch_one(&self.pool)
         .await?;
 

@@ -162,8 +162,7 @@ impl AccountRepository for PostgresRepository {
         let total = count_row.total;
 
         // Build query with optional pagination
-        let mut query = String::from(
-            r#"
+        let base_query = r#"
             SELECT
                 a.id,
                 a.name,
@@ -182,17 +181,19 @@ impl AccountRepository for PostgresRepository {
             FROM account a
             JOIN currency c ON c.id = a.currency_id
             ORDER BY a.created_at DESC
-        "#,
-        );
+        "#;
 
-        // Add pagination if requested
-        if let Some(params) = pagination
+        let rows = if let Some(params) = pagination
             && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
         {
-            query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-        }
-
-        let rows = sqlx::query_as::<_, AccountRow>(&query).fetch_all(&self.pool).await?;
+            sqlx::query_as::<_, AccountRow>(&format!("{} LIMIT $1 OFFSET $2", base_query))
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+        } else {
+            sqlx::query_as::<_, AccountRow>(base_query).fetch_all(&self.pool).await?
+        };
 
         let accounts: Vec<Account> = rows.into_iter().map(Account::from).collect();
 

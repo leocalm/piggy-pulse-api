@@ -104,8 +104,7 @@ impl CategoryRepository for PostgresRepository {
         let total = count_row.total;
 
         // Build query with optional pagination
-        let mut query = String::from(
-            r#"
+        let base_query = r#"
             SELECT
                 id,
                 name,
@@ -116,17 +115,19 @@ impl CategoryRepository for PostgresRepository {
                 created_at
             FROM category
             ORDER BY created_at DESC
-            "#,
-        );
+            "#;
 
-        // Add pagination if requested
-        if let Some(params) = pagination
+        let rows = if let Some(params) = pagination
             && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
         {
-            query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-        }
-
-        let rows = sqlx::query_as::<_, CategoryRow>(&query).fetch_all(&self.pool).await?;
+            sqlx::query_as::<_, CategoryRow>(&format!("{} LIMIT $1 OFFSET $2", base_query))
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+        } else {
+            sqlx::query_as::<_, CategoryRow>(base_query).fetch_all(&self.pool).await?
+        };
 
         let categories: Vec<Category> = rows.into_iter().map(Category::from).collect();
 
@@ -189,8 +190,7 @@ impl CategoryRepository for PostgresRepository {
         let total = count_row.total;
 
         // Build query with optional pagination
-        let mut query = String::from(
-            r#"
+        let base_query = r#"
             SELECT
                 c.id,
                 c.name,
@@ -205,17 +205,19 @@ impl CategoryRepository for PostgresRepository {
             WHERE bc.id is null
                 AND c.category_type = 'Outgoing'
             ORDER BY created_at DESC
-            "#,
-        );
+            "#;
 
-        // Add pagination if requested
-        if let Some(params) = pagination
+        let rows = if let Some(params) = pagination
             && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
         {
-            query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-        }
-
-        let rows = sqlx::query_as::<_, CategoryRow>(&query).fetch_all(&self.pool).await?;
+            sqlx::query_as::<_, CategoryRow>(&format!("{} LIMIT $1 OFFSET $2", base_query))
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+        } else {
+            sqlx::query_as::<_, CategoryRow>(base_query).fetch_all(&self.pool).await?
+        };
 
         let categories: Vec<Category> = rows.into_iter().map(Category::from).collect();
 

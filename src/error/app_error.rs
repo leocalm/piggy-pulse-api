@@ -54,13 +54,6 @@ impl AppError {
         }
     }
 
-    pub fn db_message(message: impl Into<String>) -> Self {
-        Self::Db {
-            message: message.into(),
-            source: sqlx::Error::RowNotFound, // placeholder error
-        }
-    }
-
     pub fn uuid(message: impl Into<String>, source: uuid::Error) -> Self {
         Self::UuidError {
             message: message.into(),

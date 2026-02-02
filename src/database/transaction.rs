@@ -279,16 +279,19 @@ impl TransactionRepository for PostgresRepository {
         let total = count_row.total;
 
         // Build query with optional pagination
-        let mut query = build_transaction_query("transaction t", "", "occurred_at DESC, t.created_at DESC");
+        let base_query = build_transaction_query("transaction t", "", "occurred_at DESC, t.created_at DESC");
 
-        // Add pagination if requested
-        if let Some(params) = pagination
+        let rows = if let Some(params) = pagination
             && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
         {
-            query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-        }
-
-        let rows = sqlx::query_as::<_, TransactionRow>(&query).fetch_all(&self.pool).await?;
+            sqlx::query_as::<_, TransactionRow>(&format!("{} LIMIT $1 OFFSET $2", base_query))
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+        } else {
+            sqlx::query_as::<_, TransactionRow>(&base_query).fetch_all(&self.pool).await?
+        };
 
         let transactions: Vec<Transaction> = rows.into_iter().map(Transaction::from).collect();
 
@@ -318,19 +321,23 @@ impl TransactionRepository for PostgresRepository {
         let total = count_row.total;
 
         // Build query with budget_period cross join and WHERE clause
-        let mut query = format!(
+        let base_query = format!(
             "SELECT {} FROM transaction t CROSS JOIN budget_period bp {} WHERE bp.id = $1 AND t.occurred_at >= bp.start_date AND t.occurred_at <= bp.end_date ORDER BY occurred_at DESC, t.created_at DESC",
             TRANSACTION_SELECT_FIELDS, TRANSACTION_JOINS
         );
 
-        // Add pagination if requested
-        if let Some(params) = pagination
+        let rows = if let Some(params) = pagination
             && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
         {
-            query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-        }
-
-        let rows = sqlx::query_as::<_, TransactionRow>(&query).bind(period_id).fetch_all(&self.pool).await?;
+            sqlx::query_as::<_, TransactionRow>(&format!("{} LIMIT $2 OFFSET $3", base_query))
+                .bind(period_id)
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+        } else {
+            sqlx::query_as::<_, TransactionRow>(&base_query).bind(period_id).fetch_all(&self.pool).await?
+        };
 
         let transactions: Vec<Transaction> = rows.into_iter().map(Transaction::from).collect();
 

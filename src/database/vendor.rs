@@ -29,15 +29,14 @@ pub trait VendorRepository {
 #[async_trait::async_trait]
 impl VendorRepository for PostgresRepository {
     async fn create_vendor(&self, request: &VendorRequest) -> Result<Vendor, AppError> {
-        let vendor = sqlx::query_as!(
-            Vendor,
+        let vendor = sqlx::query_as::<_, Vendor>(
             r#"
             INSERT INTO vendor (name)
             VALUES ($1)
             RETURNING id, name, created_at
             "#,
-            &request.name
         )
+        .bind(&request.name)
         .fetch_one(&self.pool)
         .await?;
 
@@ -45,15 +44,14 @@ impl VendorRepository for PostgresRepository {
     }
 
     async fn get_vendor_by_id(&self, id: &Uuid) -> Result<Option<Vendor>, AppError> {
-        let vendor = sqlx::query_as!(
-            Vendor,
+        let vendor = sqlx::query_as::<_, Vendor>(
             r#"
             SELECT id, name, created_at
             FROM vendor
             WHERE id = $1
             "#,
-            id
         )
+        .bind(id)
         .fetch_optional(&self.pool)
         .await?;
 
@@ -73,22 +71,23 @@ impl VendorRepository for PostgresRepository {
         let total = count_row.total;
 
         // Build query with optional pagination
-        let mut query = String::from(
-            r#"
+        let base_query = r#"
             SELECT id, name, created_at
             FROM vendor
             ORDER BY created_at DESC
-            "#,
-        );
+            "#;
 
-        // Add pagination if requested
-        if let Some(params) = pagination
+        let vendors = if let Some(params) = pagination
             && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
         {
-            query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-        }
-
-        let vendors = sqlx::query_as::<_, Vendor>(&query).fetch_all(&self.pool).await?;
+            sqlx::query_as::<_, Vendor>(&format!("{} LIMIT $1 OFFSET $2", base_query))
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+        } else {
+            sqlx::query_as::<_, Vendor>(base_query).fetch_all(&self.pool).await?
+        };
 
         Ok((vendors, total))
     }
@@ -149,17 +148,16 @@ impl VendorRepository for PostgresRepository {
     }
 
     async fn update_vendor(&self, id: &Uuid, request: &VendorRequest) -> Result<Vendor, AppError> {
-        let vendor = sqlx::query_as!(
-            Vendor,
+        let vendor = sqlx::query_as::<_, Vendor>(
             r#"
             UPDATE vendor
             SET name = $1
             WHERE id = $2
             RETURNING id, name, created_at
             "#,
-            &request.name,
-            id
         )
+        .bind(&request.name)
+        .bind(id)
         .fetch_one(&self.pool)
         .await?;
 

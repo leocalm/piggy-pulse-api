@@ -71,7 +71,7 @@ impl BudgetCategoryRepository for PostgresRepository {
         .await?;
 
         match self.get_budget_category_by_id(&row.id).await? {
-            None => Err(AppError::db_message("Error getting created budget category")),
+            None => Err(AppError::BadRequest("Failed to retrieve newly created budget category".to_string())),
             Some(new_budget_category) => Ok(new_budget_category),
         }
     }
@@ -116,8 +116,7 @@ impl BudgetCategoryRepository for PostgresRepository {
         let total = count_row.total;
 
         // Build query with optional pagination
-        let mut query = String::from(
-            r#"
+        let base_query = r#"
             SELECT
                 bc.id,
                 bc.category_id,
@@ -133,17 +132,19 @@ impl BudgetCategoryRepository for PostgresRepository {
             JOIN category c
                 ON c.id = bc.category_id
             ORDER BY bc.created_at DESC
-            "#,
-        );
+            "#;
 
-        // Add pagination if requested
-        if let Some(params) = pagination
+        let rows = if let Some(params) = pagination
             && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
         {
-            query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-        }
-
-        let rows = sqlx::query_as::<_, BudgetCategoryRow>(&query).fetch_all(&self.pool).await?;
+            sqlx::query_as::<_, BudgetCategoryRow>(&format!("{} LIMIT $1 OFFSET $2", base_query))
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+        } else {
+            sqlx::query_as::<_, BudgetCategoryRow>(base_query).fetch_all(&self.pool).await?
+        };
 
         let budget_categories: Vec<BudgetCategory> = rows.into_iter().map(BudgetCategory::from).collect();
 
