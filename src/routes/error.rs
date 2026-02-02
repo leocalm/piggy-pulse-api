@@ -1,6 +1,6 @@
-use rocket::serde::json::Json;
 use rocket::serde::Serialize;
-use rocket::{catch, Request};
+use rocket::serde::json::Json;
+use rocket::{Request, catch};
 
 #[derive(Serialize)]
 #[serde(crate = "rocket::serde")]

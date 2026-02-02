@@ -7,7 +7,7 @@ use crate::models::dashboard::{BudgetPerDayResponse, DashboardResponse, MonthPro
 use crate::models::transaction::TransactionResponse;
 use crate::service::dashboard::DashboardService;
 use rocket::serde::json::Json;
-use rocket::{routes, State};
+use rocket::{State, routes};
 use sqlx::PgPool;
 use uuid::Uuid;
 

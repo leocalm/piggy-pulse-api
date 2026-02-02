@@ -30,8 +30,8 @@ impl BudgetPeriodRepository for PostgresRepository {
             "#,
         )
         .bind(&request.name)
-        .bind(&request.start_date)
-        .bind(&request.end_date)
+        .bind(request.start_date)
+        .bind(request.end_date)
         .fetch_one(&self.pool)
         .await?;
 
@@ -60,15 +60,13 @@ impl BudgetPeriodRepository for PostgresRepository {
         );
 
         // Add pagination if requested
-        if let Some(params) = pagination {
-            if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
-                query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-            }
+        if let Some(params) = pagination
+            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
+        {
+            query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
         }
 
-        let budget_periods = sqlx::query_as::<_, BudgetPeriod>(&query)
-            .fetch_all(&self.pool)
-            .await?;
+        let budget_periods = sqlx::query_as::<_, BudgetPeriod>(&query).fetch_all(&self.pool).await?;
 
         Ok((budget_periods, total))
     }
@@ -113,8 +111,8 @@ impl BudgetPeriodRepository for PostgresRepository {
             "#,
         )
         .bind(&request.name)
-        .bind(&request.start_date)
-        .bind(&request.end_date)
+        .bind(request.start_date)
+        .bind(request.end_date)
         .bind(id)
         .fetch_one(&self.pool)
         .await?;
@@ -123,10 +121,7 @@ impl BudgetPeriodRepository for PostgresRepository {
     }
 
     async fn delete_budget_period(&self, id: &Uuid) -> Result<(), AppError> {
-        sqlx::query("DELETE FROM budget_period WHERE id = $1")
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query("DELETE FROM budget_period WHERE id = $1").bind(id).execute(&self.pool).await?;
 
         Ok(())
     }

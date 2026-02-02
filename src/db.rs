@@ -1,7 +1,7 @@
 use crate::config::DatabaseConfig;
 use rocket::fairing::AdHoc;
-use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use std::time::Duration;
 
 async fn init_pool(db_config: &DatabaseConfig) -> Result<PgPool, sqlx::Error> {

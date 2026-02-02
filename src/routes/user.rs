@@ -5,7 +5,7 @@ use crate::error::app_error::AppError;
 use crate::models::user::{LoginRequest, UserRequest, UserResponse};
 use rocket::http::{Cookie, CookieJar, Status};
 use rocket::serde::json::Json;
-use rocket::{routes, State};
+use rocket::{State, routes};
 use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;

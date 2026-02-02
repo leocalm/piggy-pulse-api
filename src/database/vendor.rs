@@ -82,15 +82,13 @@ impl VendorRepository for PostgresRepository {
         );
 
         // Add pagination if requested
-        if let Some(params) = pagination {
-            if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
-                query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-            }
+        if let Some(params) = pagination
+            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
+        {
+            query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
         }
 
-        let vendors = sqlx::query_as::<_, Vendor>(&query)
-            .fetch_all(&self.pool)
-            .await?;
+        let vendors = sqlx::query_as::<_, Vendor>(&query).fetch_all(&self.pool).await?;
 
         Ok((vendors, total))
     }
@@ -127,9 +125,7 @@ impl VendorRepository for PostgresRepository {
             order_by_clause
         );
 
-        let rows = sqlx::query_as::<_, VendorWithStatsRow>(&query)
-            .fetch_all(&self.pool)
-            .await?;
+        let rows = sqlx::query_as::<_, VendorWithStatsRow>(&query).fetch_all(&self.pool).await?;
 
         Ok(rows
             .into_iter()
@@ -148,10 +144,7 @@ impl VendorRepository for PostgresRepository {
     }
 
     async fn delete_vendor(&self, id: &Uuid) -> Result<(), AppError> {
-        sqlx::query("DELETE FROM vendor WHERE id = $1")
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query("DELETE FROM vendor WHERE id = $1").bind(id).execute(&self.pool).await?;
         Ok(())
     }
 
@@ -173,4 +166,3 @@ impl VendorRepository for PostgresRepository {
         Ok(vendor)
     }
 }
-

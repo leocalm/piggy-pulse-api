@@ -76,7 +76,6 @@ impl AccountRepository for PostgresRepository {
             icon: String,
             account_type: String,
             balance: i64,
-            currency_id: Uuid,
             created_at: DateTime<Utc>,
             spend_limit: Option<i32>,
         }
@@ -101,9 +100,9 @@ impl AccountRepository for PostgresRepository {
         .bind(&request.color)
         .bind(&request.icon)
         .bind(&account_type_str)
-        .bind(&currency.id)
-        .bind(&request.balance)
-        .bind(&request.spend_limit)
+        .bind(currency.id)
+        .bind(request.balance)
+        .bind(request.spend_limit)
         .fetch_one(&self.pool)
         .await?;
 
@@ -187,15 +186,13 @@ impl AccountRepository for PostgresRepository {
         );
 
         // Add pagination if requested
-        if let Some(params) = pagination {
-            if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
-                query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-            }
+        if let Some(params) = pagination
+            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
+        {
+            query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
         }
 
-        let rows = sqlx::query_as::<_, AccountRow>(&query)
-            .fetch_all(&self.pool)
-            .await?;
+        let rows = sqlx::query_as::<_, AccountRow>(&query).fetch_all(&self.pool).await?;
 
         let accounts: Vec<Account> = rows.into_iter().map(Account::from).collect();
 
@@ -203,10 +200,7 @@ impl AccountRepository for PostgresRepository {
     }
 
     async fn delete_account(&self, id: &Uuid) -> Result<(), AppError> {
-        sqlx::query("DELETE FROM account WHERE id = $1")
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query("DELETE FROM account WHERE id = $1").bind(id).execute(&self.pool).await?;
 
         Ok(())
     }
@@ -227,7 +221,6 @@ impl AccountRepository for PostgresRepository {
             icon: String,
             account_type: String,
             balance: i64,
-            currency_id: Uuid,
             created_at: DateTime<Utc>,
             spend_limit: Option<i32>,
         }
@@ -253,8 +246,8 @@ impl AccountRepository for PostgresRepository {
         .bind(&request.color)
         .bind(&request.icon)
         .bind(&account_type_str)
-        .bind(&currency.id)
-        .bind(&request.balance)
+        .bind(currency.id)
+        .bind(request.balance)
         .bind(id)
         .fetch_one(&self.pool)
         .await?;
@@ -272,7 +265,6 @@ impl AccountRepository for PostgresRepository {
         })
     }
 }
-
 
 pub fn account_type_from_db<T: AsRef<str>>(value: T) -> AccountType {
     match value.as_ref() {

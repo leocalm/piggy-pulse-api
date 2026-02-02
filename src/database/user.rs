@@ -87,10 +87,7 @@ impl UserRepository for PostgresRepository {
     }
 
     async fn delete_user(&self, id: &Uuid) -> Result<(), AppError> {
-        sqlx::query("DELETE FROM users WHERE id = $1")
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query("DELETE FROM users WHERE id = $1").bind(id).execute(&self.pool).await?;
 
         Ok(())
     }

@@ -5,7 +5,7 @@ use crate::error::app_error::AppError;
 use crate::models::currency::{CurrencyRequest, CurrencyResponse};
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket::{routes, State};
+use rocket::{State, routes};
 use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;

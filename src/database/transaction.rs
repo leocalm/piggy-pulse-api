@@ -63,13 +63,13 @@ struct TransactionRow {
 
 impl From<TransactionRow> for Transaction {
     fn from(row: TransactionRow) -> Self {
-        let to_account = if row.to_account_id.is_some() {
+        let to_account = if let Some(to_account_id) = row.to_account_id {
             Some(Account {
-                id: row.to_account_id.unwrap(),
+                id: to_account_id,
                 name: row.to_account_name.unwrap(),
                 color: row.to_account_color.unwrap(),
                 icon: row.to_account_icon.unwrap(),
-                account_type: crate::database::account::account_type_from_db(&row.to_account_account_type.unwrap()),
+                account_type: crate::database::account::account_type_from_db(row.to_account_account_type.unwrap()),
                 currency: Currency {
                     id: row.to_account_currency_id.unwrap(),
                     name: row.to_account_currency_name.unwrap(),
@@ -86,9 +86,9 @@ impl From<TransactionRow> for Transaction {
             None
         };
 
-        let vendor = if row.vendor_id.is_some() {
+        let vendor = if let Some(vendor_id) = row.vendor_id {
             Some(Vendor {
-                id: row.vendor_id.unwrap(),
+                id: vendor_id,
                 name: row.vendor_name.unwrap(),
                 created_at: row.vendor_created_at.unwrap(),
             })
@@ -246,13 +246,13 @@ impl TransactionRepository for PostgresRepository {
         );
 
         let row = sqlx::query_as::<_, TransactionRow>(&query)
-            .bind(&transaction.amount)
+            .bind(transaction.amount)
             .bind(&transaction.description)
-            .bind(&transaction.occurred_at)
-            .bind(&transaction.category_id)
-            .bind(&transaction.from_account_id)
-            .bind(&to_account_id)
-            .bind(&vendor_id)
+            .bind(transaction.occurred_at)
+            .bind(transaction.category_id)
+            .bind(transaction.from_account_id)
+            .bind(to_account_id)
+            .bind(vendor_id)
             .fetch_one(&self.pool)
             .await?;
 
@@ -261,10 +261,7 @@ impl TransactionRepository for PostgresRepository {
 
     async fn get_transaction_by_id(&self, id: &Uuid) -> Result<Option<Transaction>, AppError> {
         let query = build_transaction_query("transaction t", "t.id = $1", "");
-        let row = sqlx::query_as::<_, TransactionRow>(&query)
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row = sqlx::query_as::<_, TransactionRow>(&query).bind(id).fetch_optional(&self.pool).await?;
 
         Ok(row.map(Transaction::from))
     }
@@ -291,9 +288,7 @@ impl TransactionRepository for PostgresRepository {
             query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
         }
 
-        let rows = sqlx::query_as::<_, TransactionRow>(&query)
-            .fetch_all(&self.pool)
-            .await?;
+        let rows = sqlx::query_as::<_, TransactionRow>(&query).fetch_all(&self.pool).await?;
 
         let transactions: Vec<Transaction> = rows.into_iter().map(Transaction::from).collect();
 
@@ -335,10 +330,7 @@ impl TransactionRepository for PostgresRepository {
             query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
         }
 
-        let rows = sqlx::query_as::<_, TransactionRow>(&query)
-            .bind(period_id)
-            .fetch_all(&self.pool)
-            .await?;
+        let rows = sqlx::query_as::<_, TransactionRow>(&query).bind(period_id).fetch_all(&self.pool).await?;
 
         let transactions: Vec<Transaction> = rows.into_iter().map(Transaction::from).collect();
 
@@ -346,10 +338,7 @@ impl TransactionRepository for PostgresRepository {
     }
 
     async fn delete_transaction(&self, id: &Uuid) -> Result<(), AppError> {
-        sqlx::query("DELETE FROM transaction WHERE id = $1")
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query("DELETE FROM transaction WHERE id = $1").bind(id).execute(&self.pool).await?;
 
         Ok(())
     }
@@ -377,13 +366,13 @@ impl TransactionRepository for PostgresRepository {
         );
 
         let row = sqlx::query_as::<_, TransactionRow>(&query)
-            .bind(&transaction.amount)
+            .bind(transaction.amount)
             .bind(&transaction.description)
-            .bind(&transaction.occurred_at)
-            .bind(&transaction.category_id)
-            .bind(&transaction.from_account_id)
-            .bind(&transaction.to_account_id)
-            .bind(&transaction.vendor_id)
+            .bind(transaction.occurred_at)
+            .bind(transaction.category_id)
+            .bind(transaction.from_account_id)
+            .bind(transaction.to_account_id)
+            .bind(transaction.vendor_id)
             .bind(id)
             .fetch_one(&self.pool)
             .await?;

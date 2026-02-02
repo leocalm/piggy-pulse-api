@@ -6,7 +6,7 @@ use crate::models::pagination::{PaginatedResponse, PaginationParams};
 use crate::models::vendor::{VendorRequest, VendorResponse, VendorWithStatsResponse};
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket::{routes, State};
+use rocket::{State, routes};
 use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
@@ -94,7 +94,7 @@ pub fn routes() -> Vec<rocket::Route> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{build_rocket, Config};
+    use crate::{Config, build_rocket};
     use rocket::http::{ContentType, Status};
     use rocket::local::asynchronous::Client;
 

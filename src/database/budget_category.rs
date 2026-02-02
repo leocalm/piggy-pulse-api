@@ -65,8 +65,8 @@ impl BudgetCategoryRepository for PostgresRepository {
             RETURNING id
             "#,
         )
-        .bind(&request.category_id)
-        .bind(&request.budgeted_value)
+        .bind(request.category_id)
+        .bind(request.budgeted_value)
         .fetch_one(&self.pool)
         .await?;
 
@@ -137,15 +137,13 @@ impl BudgetCategoryRepository for PostgresRepository {
         );
 
         // Add pagination if requested
-        if let Some(params) = pagination {
-            if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
-                query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-            }
+        if let Some(params) = pagination
+            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
+        {
+            query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
         }
 
-        let rows = sqlx::query_as::<_, BudgetCategoryRow>(&query)
-            .fetch_all(&self.pool)
-            .await?;
+        let rows = sqlx::query_as::<_, BudgetCategoryRow>(&query).fetch_all(&self.pool).await?;
 
         let budget_categories: Vec<BudgetCategory> = rows.into_iter().map(BudgetCategory::from).collect();
 
@@ -153,10 +151,7 @@ impl BudgetCategoryRepository for PostgresRepository {
     }
 
     async fn delete_budget_category(&self, id: &Uuid) -> Result<(), AppError> {
-        sqlx::query("DELETE FROM budget_category WHERE id = $1")
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query("DELETE FROM budget_category WHERE id = $1").bind(id).execute(&self.pool).await?;
 
         Ok(())
     }
