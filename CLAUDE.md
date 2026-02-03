@@ -40,18 +40,20 @@ Set the `DATABASE_URL` environment variable (or use `.env` file):
 export DATABASE_URL=postgres://user:password@localhost:5432/budget_db
 ```
 
-Apply migrations manually using psql:
-
-```bash
-psql "$DATABASE_URL" -f migrations/0001_init.sql
-psql "$DATABASE_URL" -f migrations/0002_add_transaction_indexes.sql
-```
-
-Or use sqlx-cli:
+Migrations are managed by sqlx-cli. Each migration lives in its own directory under `migrations/`
+with `up.sql` (apply) and `down.sql` (rollback). Install sqlx-cli and apply:
 
 ```bash
 cargo install sqlx-cli --no-default-features --features rustls,postgres
-sqlx migrate run
+sqlx migrate run       # apply all pending migrations
+sqlx migrate revert    # roll back the last migration
+sqlx migrate info      # show migration status
+```
+
+When adding a new migration:
+
+```bash
+sqlx migrate add <description>   # creates migrations/NNNN_description/{up,down}.sql
 ```
 
 ## Architecture
