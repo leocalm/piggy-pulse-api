@@ -26,15 +26,18 @@ impl From<&TransactionRequest> for Transaction {
 
         Self {
             id: Uuid::new_v4(),
+            user_id: Uuid::nil(),
             amount: transaction_request.amount,
             description: transaction_request.description.clone(),
             occurred_at: transaction_request.occurred_at,
             category: Category {
                 id: transaction_request.category_id,
+                user_id: Uuid::nil(),
                 ..Category::default()
             },
             from_account: Account {
                 id: transaction_request.from_account_id,
+                user_id: Uuid::nil(),
                 ..Account::default()
             },
             to_account,

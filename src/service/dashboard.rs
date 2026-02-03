@@ -279,6 +279,7 @@ mod tests {
                 let repository = MockRepository {};
                 let budget_period = BudgetPeriod {
                     id: Uuid::new_v4(),
+                    user_id: Uuid::nil(),
                     name: "Test Period".to_string(),
                     start_date,
                     end_date,
