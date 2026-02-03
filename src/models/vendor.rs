@@ -6,6 +6,7 @@ use validator::Validate;
 #[derive(Serialize, Debug, Clone, Default, sqlx::FromRow)]
 pub struct Vendor {
     pub id: Uuid,
+    pub user_id: Uuid,
     pub name: String,
     pub created_at: DateTime<Utc>,
 }

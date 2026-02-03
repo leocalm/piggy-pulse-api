@@ -15,7 +15,7 @@ use validator::Validate;
 #[rocket::post("/", data = "<payload>")]
 pub async fn create_transaction(
     pool: &State<PgPool>,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     payload: JsonBody<TransactionRequest>,
 ) -> Result<(Status, Json<TransactionResponse>), AppError> {
     payload.validate()?;
@@ -28,7 +28,7 @@ pub async fn create_transaction(
     tracing::trace!("Using PgPool in {:?}", client_start.elapsed());
 
     let query_start = std::time::Instant::now();
-    let tx = repo.create_transaction(&payload).await?;
+    let tx = repo.create_transaction(&payload, &current_user.id).await?;
     tracing::trace!("Created transaction in {:?}", query_start.elapsed());
 
     tracing::trace!("Total create_transaction time: {:?}", start.elapsed());
@@ -38,7 +38,7 @@ pub async fn create_transaction(
 #[rocket::get("/?<period_id>&<cursor>&<limit>")]
 pub async fn list_all_transactions(
     pool: &State<PgPool>,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     period_id: Option<String>,
     cursor: Option<String>,
     limit: Option<i64>,
@@ -48,9 +48,9 @@ pub async fn list_all_transactions(
 
     let txs = if let Some(period_id) = period_id {
         let uuid = Uuid::parse_str(&period_id).map_err(|e| AppError::uuid("Invalid period id", e))?;
-        repo.get_transactions_for_period(&uuid, &params).await?
+        repo.get_transactions_for_period(&uuid, &params, &current_user.id).await?
     } else {
-        repo.list_transactions(&params).await?
+        repo.list_transactions(&params, &current_user.id).await?
     };
 
     let responses: Vec<TransactionResponse> = txs.iter().map(TransactionResponse::from).collect();
@@ -58,10 +58,10 @@ pub async fn list_all_transactions(
 }
 
 #[rocket::get("/<id>")]
-pub async fn get_transaction(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Json<TransactionResponse>, AppError> {
+pub async fn get_transaction(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Json<TransactionResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid transaction id", e))?;
-    if let Some(tx) = repo.get_transaction_by_id(&uuid).await? {
+    if let Some(tx) = repo.get_transaction_by_id(&uuid, &current_user.id).await? {
         Ok(Json(TransactionResponse::from(&tx)))
     } else {
         Err(AppError::NotFound("Transaction not found".to_string()))
@@ -69,23 +69,23 @@ pub async fn get_transaction(pool: &State<PgPool>, _current_user: CurrentUser, i
 }
 
 #[rocket::delete("/<id>")]
-pub async fn delete_transaction(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+pub async fn delete_transaction(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid transaction id", e))?;
-    repo.delete_transaction(&uuid).await?;
+    repo.delete_transaction(&uuid, &current_user.id).await?;
     Ok(Status::Ok)
 }
 
 #[rocket::put("/<id>", data = "<payload>")]
 pub async fn put_transaction(
     pool: &State<PgPool>,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     id: &str,
     payload: JsonBody<TransactionRequest>,
 ) -> Result<Json<TransactionResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid transaction id", e))?;
-    let tx = repo.update_transaction(&uuid, &payload).await?;
+    let tx = repo.update_transaction(&uuid, &payload, &current_user.id).await?;
     Ok(Json(TransactionResponse::from(&tx)))
 }
 

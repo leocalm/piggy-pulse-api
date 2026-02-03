@@ -11,6 +11,7 @@ use uuid::Uuid;
 #[derive(Debug, sqlx::FromRow)]
 struct AccountRow {
     id: Uuid,
+    user_id: Uuid,
     name: String,
     color: String,
     icon: String,
@@ -30,6 +31,7 @@ impl From<AccountRow> for Account {
     fn from(row: AccountRow) -> Self {
         Account {
             id: row.id,
+            user_id: row.user_id,
             name: row.name,
             color: row.color,
             icon: row.icon,
@@ -51,16 +53,16 @@ impl From<AccountRow> for Account {
 
 #[async_trait::async_trait]
 pub trait AccountRepository {
-    async fn create_account(&self, request: &AccountRequest) -> Result<Account, AppError>;
-    async fn get_account_by_id(&self, id: &Uuid) -> Result<Option<Account>, AppError>;
-    async fn list_accounts(&self, params: &CursorParams) -> Result<Vec<Account>, AppError>;
-    async fn delete_account(&self, id: &Uuid) -> Result<(), AppError>;
-    async fn update_account(&self, id: &Uuid, request: &AccountRequest) -> Result<Account, AppError>;
+    async fn create_account(&self, request: &AccountRequest, user_id: &Uuid) -> Result<Account, AppError>;
+    async fn get_account_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Account>, AppError>;
+    async fn list_accounts(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Account>, AppError>;
+    async fn delete_account(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError>;
+    async fn update_account(&self, id: &Uuid, request: &AccountRequest, user_id: &Uuid) -> Result<Account, AppError>;
 }
 
 #[async_trait::async_trait]
 impl AccountRepository for PostgresRepository {
-    async fn create_account(&self, request: &AccountRequest) -> Result<Account, AppError> {
+    async fn create_account(&self, request: &AccountRequest, user_id: &Uuid) -> Result<Account, AppError> {
         let currency = self
             .get_currency_by_code(&request.currency)
             .await?
@@ -71,6 +73,7 @@ impl AccountRepository for PostgresRepository {
         #[derive(sqlx::FromRow)]
         struct CreateAccountRow {
             id: Uuid,
+            user_id: Uuid,
             name: String,
             color: String,
             icon: String,
@@ -82,10 +85,11 @@ impl AccountRepository for PostgresRepository {
 
         let row = sqlx::query_as::<_, CreateAccountRow>(
             r#"
-            INSERT INTO account (name, color, icon, account_type, currency_id, balance, spend_limit)
-            VALUES ($1, $2, $3, $4::text::account_type, $5, $6, $7)
+            INSERT INTO account (user_id, name, color, icon, account_type, currency_id, balance, spend_limit)
+            VALUES ($1, $2, $3, $4, $5::text::account_type, $6, $7, $8)
             RETURNING
                 id,
+                user_id,
                 name,
                 color,
                 icon,
@@ -97,6 +101,7 @@ impl AccountRepository for PostgresRepository {
             "#,
         )
         .bind(&request.name)
+        .bind(user_id)
         .bind(&request.color)
         .bind(&request.icon)
         .bind(&account_type_str)
@@ -108,6 +113,7 @@ impl AccountRepository for PostgresRepository {
 
         Ok(Account {
             id: row.id,
+            user_id: row.user_id,
             name: row.name,
             color: row.color,
             icon: row.icon,
@@ -119,11 +125,12 @@ impl AccountRepository for PostgresRepository {
         })
     }
 
-    async fn get_account_by_id(&self, id: &Uuid) -> Result<Option<Account>, AppError> {
+    async fn get_account_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Account>, AppError> {
         let row = sqlx::query_as::<_, AccountRow>(
             r#"
             SELECT
                 a.id,
+                a.user_id,
                 a.name,
                 a.color,
                 a.icon,
@@ -139,22 +146,24 @@ impl AccountRepository for PostgresRepository {
                 c.created_at as currency_created_at
             FROM account a
             JOIN currency c ON c.id = a.currency_id
-            WHERE a.id = $1
+            WHERE a.id = $1 AND a.user_id = $2
             "#,
         )
         .bind(id)
+        .bind(user_id)
         .fetch_optional(&self.pool)
         .await?;
 
         Ok(row.map(Account::from))
     }
 
-    async fn list_accounts(&self, params: &CursorParams) -> Result<Vec<Account>, AppError> {
+    async fn list_accounts(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Account>, AppError> {
         let rows = if let Some(cursor) = params.cursor {
             sqlx::query_as::<_, AccountRow>(
                 r#"
                 SELECT
                     a.id,
+                    a.user_id,
                     a.name,
                     a.color,
                     a.icon,
@@ -172,12 +181,13 @@ impl AccountRepository for PostgresRepository {
                 JOIN currency c ON c.id = a.currency_id
                 WHERE (a.created_at, a.id) < (
                     SELECT created_at, id FROM account WHERE id = $1
-                )
+                ) AND a.user_id = $2
                 ORDER BY a.created_at DESC, a.id DESC
-                LIMIT $2
+                LIMIT $3
                 "#,
             )
             .bind(cursor)
+            .bind(user_id)
             .bind(params.fetch_limit())
             .fetch_all(&self.pool)
             .await?
@@ -186,6 +196,7 @@ impl AccountRepository for PostgresRepository {
                 r#"
                 SELECT
                     a.id,
+                    a.user_id,
                     a.name,
                     a.color,
                     a.icon,
@@ -201,10 +212,12 @@ impl AccountRepository for PostgresRepository {
                     c.created_at as currency_created_at
                 FROM account a
                 JOIN currency c ON c.id = a.currency_id
+                WHERE a.user_id = $1
                 ORDER BY a.created_at DESC, a.id DESC
-                LIMIT $1
+                LIMIT $2
                 "#,
             )
+            .bind(user_id)
             .bind(params.fetch_limit())
             .fetch_all(&self.pool)
             .await?
@@ -213,13 +226,17 @@ impl AccountRepository for PostgresRepository {
         Ok(rows.into_iter().map(Account::from).collect())
     }
 
-    async fn delete_account(&self, id: &Uuid) -> Result<(), AppError> {
-        sqlx::query("DELETE FROM account WHERE id = $1").bind(id).execute(&self.pool).await?;
+    async fn delete_account(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
+        sqlx::query("DELETE FROM account WHERE id = $1 AND user_id = $2")
+            .bind(id)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }
 
-    async fn update_account(&self, id: &Uuid, request: &AccountRequest) -> Result<Account, AppError> {
+    async fn update_account(&self, id: &Uuid, request: &AccountRequest, user_id: &Uuid) -> Result<Account, AppError> {
         let currency = self
             .get_currency_by_code(&request.currency)
             .await?
@@ -230,6 +247,7 @@ impl AccountRepository for PostgresRepository {
         #[derive(sqlx::FromRow)]
         struct UpdateAccountRow {
             id: Uuid,
+            user_id: Uuid,
             name: String,
             color: String,
             icon: String,
@@ -243,9 +261,10 @@ impl AccountRepository for PostgresRepository {
             r#"
             UPDATE account
             SET name = $1, color = $2, icon = $3, account_type = $4::text::account_type, currency_id = $5, balance = $6
-            WHERE id = $7
+            WHERE id = $7 and user_id = $8
             RETURNING
                 id,
+                user_id,
                 name,
                 color,
                 icon,
@@ -263,11 +282,13 @@ impl AccountRepository for PostgresRepository {
         .bind(currency.id)
         .bind(request.balance)
         .bind(id)
+        .bind(user_id)
         .fetch_one(&self.pool)
         .await?;
 
         Ok(Account {
             id: row.id,
+            user_id: row.user_id,
             name: row.name,
             color: row.color,
             icon: row.icon,

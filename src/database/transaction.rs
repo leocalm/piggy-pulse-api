@@ -14,6 +14,7 @@ use uuid::Uuid;
 #[derive(Debug, sqlx::FromRow)]
 struct TransactionRow {
     id: Uuid,
+    user_id: Uuid,
     amount: i32,
     description: String,
     occurred_at: NaiveDate,
@@ -66,6 +67,7 @@ impl From<TransactionRow> for Transaction {
         let to_account = if let Some(to_account_id) = row.to_account_id {
             Some(Account {
                 id: to_account_id,
+                user_id: Uuid::nil(),
                 name: row.to_account_name.unwrap(),
                 color: row.to_account_color.unwrap(),
                 icon: row.to_account_icon.unwrap(),
@@ -89,6 +91,7 @@ impl From<TransactionRow> for Transaction {
         let vendor = if let Some(vendor_id) = row.vendor_id {
             Some(Vendor {
                 id: vendor_id,
+                user_id: Uuid::nil(),
                 name: row.vendor_name.unwrap(),
                 created_at: row.vendor_created_at.unwrap(),
             })
@@ -98,11 +101,13 @@ impl From<TransactionRow> for Transaction {
 
         Transaction {
             id: row.id,
+            user_id: row.user_id,
             amount: row.amount,
             description: row.description,
             occurred_at: row.occurred_at,
             category: Category {
                 id: row.category_id,
+                user_id: Uuid::nil(),
                 name: row.category_name,
                 color: row.category_color,
                 icon: row.category_icon,
@@ -110,8 +115,10 @@ impl From<TransactionRow> for Transaction {
                 category_type: category_type_from_db(&row.category_category_type),
                 created_at: row.category_created_at,
             },
+
             from_account: Account {
                 id: row.from_account_id,
+                user_id: Uuid::nil(),
                 name: row.from_account_name,
                 color: row.from_account_color,
                 icon: row.from_account_icon,
@@ -128,6 +135,7 @@ impl From<TransactionRow> for Transaction {
                 created_at: row.from_account_created_at,
                 spend_limit: row.from_account_spend_limit,
             },
+
             to_account,
             vendor,
         }
@@ -137,6 +145,7 @@ impl From<TransactionRow> for Transaction {
 // Common SELECT clause for transaction queries with all joined data
 const TRANSACTION_SELECT_FIELDS: &str = r#"
     t.id,
+    t.user_id,
     t.amount,
     t.description,
     t.occurred_at,
@@ -209,18 +218,18 @@ fn build_transaction_query(from_clause: &str, where_clause: &str, order_by: &str
 
 #[async_trait::async_trait]
 pub trait TransactionRepository {
-    async fn create_transaction(&self, transaction: &TransactionRequest) -> Result<Transaction, AppError>;
+    async fn create_transaction(&self, transaction: &TransactionRequest, user_id: &Uuid) -> Result<Transaction, AppError>;
 
-    async fn get_transaction_by_id(&self, id: &Uuid) -> Result<Option<Transaction>, AppError>;
-    async fn list_transactions(&self, params: &CursorParams) -> Result<Vec<Transaction>, AppError>;
-    async fn get_transactions_for_period(&self, period_id: &Uuid, params: &CursorParams) -> Result<Vec<Transaction>, AppError>;
-    async fn delete_transaction(&self, id: &Uuid) -> Result<(), AppError>;
-    async fn update_transaction(&self, id: &Uuid, transaction: &TransactionRequest) -> Result<Transaction, AppError>;
+    async fn get_transaction_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Transaction>, AppError>;
+    async fn list_transactions(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Transaction>, AppError>;
+    async fn get_transactions_for_period(&self, period_id: &Uuid, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Transaction>, AppError>;
+    async fn delete_transaction(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError>;
+    async fn update_transaction(&self, id: &Uuid, transaction: &TransactionRequest, user_id: &Uuid) -> Result<Transaction, AppError>;
 }
 
 #[async_trait::async_trait]
 impl TransactionRepository for PostgresRepository {
-    async fn create_transaction(&self, transaction: &TransactionRequest) -> Result<Transaction, AppError> {
+    async fn create_transaction(&self, transaction: &TransactionRequest, user_id: &Uuid) -> Result<Transaction, AppError> {
         let to_account_id = if let Some(acc_id) = &transaction.to_account_id { Some(acc_id) } else { None };
         let vendor_id = if let Some(v_id) = &transaction.vendor_id { Some(v_id) } else { None };
 
@@ -229,6 +238,7 @@ impl TransactionRepository for PostgresRepository {
             r#"
             WITH inserted AS (
                 INSERT INTO transaction (
+                    user_id,
                     amount,
                     description,
                     occurred_at,
@@ -237,8 +247,8 @@ impl TransactionRepository for PostgresRepository {
                     to_account_id,
                     vendor_id
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                RETURNING id, amount, description, occurred_at, category_id, from_account_id, to_account_id, vendor_id
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                RETURNING id, user_id, amount, description, occurred_at, category_id, from_account_id, to_account_id, vendor_id
             )
             {}
             "#,
@@ -246,6 +256,7 @@ impl TransactionRepository for PostgresRepository {
         );
 
         let row = sqlx::query_as::<_, TransactionRow>(&query)
+            .bind(user_id)
             .bind(transaction.amount)
             .bind(&transaction.description)
             .bind(transaction.occurred_at)
@@ -259,28 +270,34 @@ impl TransactionRepository for PostgresRepository {
         Ok(Transaction::from(row))
     }
 
-    async fn get_transaction_by_id(&self, id: &Uuid) -> Result<Option<Transaction>, AppError> {
-        let query = build_transaction_query("transaction t", "t.id = $1", "");
-        let row = sqlx::query_as::<_, TransactionRow>(&query).bind(id).fetch_optional(&self.pool).await?;
+    async fn get_transaction_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Transaction>, AppError> {
+        let query = build_transaction_query("transaction t", "t.id = $1 AND t.user_id = $2", "");
+        let row = sqlx::query_as::<_, TransactionRow>(&query)
+            .bind(id)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
 
         Ok(row.map(Transaction::from))
     }
 
-    async fn list_transactions(&self, params: &CursorParams) -> Result<Vec<Transaction>, AppError> {
+    async fn list_transactions(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Transaction>, AppError> {
         let rows = if let Some(cursor) = params.cursor {
             let base = build_transaction_query(
                 "transaction t",
-                "(t.occurred_at, t.created_at, t.id) < (SELECT occurred_at, created_at, id FROM transaction WHERE id = $1)",
+                "t.user_id = $1 AND (t.occurred_at, t.created_at, t.id) < (SELECT occurred_at, created_at, id FROM transaction WHERE id = $2)",
                 "t.occurred_at DESC, t.created_at DESC, t.id DESC",
             );
-            sqlx::query_as::<_, TransactionRow>(&format!("{} LIMIT $2", base))
+            sqlx::query_as::<_, TransactionRow>(&format!("{} LIMIT $3", base))
+                .bind(user_id)
                 .bind(cursor)
                 .bind(params.fetch_limit())
                 .fetch_all(&self.pool)
                 .await?
         } else {
-            let base = build_transaction_query("transaction t", "", "t.occurred_at DESC, t.created_at DESC, t.id DESC");
-            sqlx::query_as::<_, TransactionRow>(&format!("{} LIMIT $1", base))
+            let base = build_transaction_query("transaction t", "t.user_id = $1", "t.occurred_at DESC, t.created_at DESC, t.id DESC");
+            sqlx::query_as::<_, TransactionRow>(&format!("{} LIMIT $2", base))
+                .bind(user_id)
                 .bind(params.fetch_limit())
                 .fetch_all(&self.pool)
                 .await?
@@ -289,36 +306,40 @@ impl TransactionRepository for PostgresRepository {
         Ok(rows.into_iter().map(Transaction::from).collect())
     }
 
-    async fn get_transactions_for_period(&self, period_id: &Uuid, params: &CursorParams) -> Result<Vec<Transaction>, AppError> {
+    async fn get_transactions_for_period(&self, period_id: &Uuid, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Transaction>, AppError> {
         let rows = if let Some(cursor) = params.cursor {
             let query = format!(
                 "SELECT {} FROM transaction t CROSS JOIN budget_period bp {} \
                  WHERE bp.id = $1 \
+                   AND t.user_id = $2 \
                    AND t.occurred_at >= bp.start_date \
                    AND t.occurred_at <= bp.end_date \
-                   AND (t.occurred_at, t.created_at, t.id) < (SELECT occurred_at, created_at, id FROM transaction WHERE id = $2) \
+                   AND (t.occurred_at, t.created_at, t.id) < (SELECT occurred_at, created_at, id FROM transaction WHERE id = $3) \
+                 ORDER BY t.occurred_at DESC, t.created_at DESC, t.id DESC \
+                 LIMIT $4",
+                TRANSACTION_SELECT_FIELDS, TRANSACTION_JOINS
+            );
+            sqlx::query_as::<_, TransactionRow>(&query)
+                .bind(period_id)
+                .bind(user_id)
+                .bind(cursor)
+                .bind(params.fetch_limit())
+                .fetch_all(&self.pool)
+                .await?
+        } else {
+            let query = format!(
+                "SELECT {} FROM transaction t CROSS JOIN budget_period bp {} \
+                 WHERE bp.id = $1 \
+                   AND t.user_id = $2 \
+                   AND t.occurred_at >= bp.start_date \
+                   AND t.occurred_at <= bp.end_date \
                  ORDER BY t.occurred_at DESC, t.created_at DESC, t.id DESC \
                  LIMIT $3",
                 TRANSACTION_SELECT_FIELDS, TRANSACTION_JOINS
             );
             sqlx::query_as::<_, TransactionRow>(&query)
                 .bind(period_id)
-                .bind(cursor)
-                .bind(params.fetch_limit())
-                .fetch_all(&self.pool)
-                .await?
-        } else {
-            let query = format!(
-                "SELECT {} FROM transaction t CROSS JOIN budget_period bp {} \
-                 WHERE bp.id = $1 \
-                   AND t.occurred_at >= bp.start_date \
-                   AND t.occurred_at <= bp.end_date \
-                 ORDER BY t.occurred_at DESC, t.created_at DESC, t.id DESC \
-                 LIMIT $2",
-                TRANSACTION_SELECT_FIELDS, TRANSACTION_JOINS
-            );
-            sqlx::query_as::<_, TransactionRow>(&query)
-                .bind(period_id)
+                .bind(user_id)
                 .bind(params.fetch_limit())
                 .fetch_all(&self.pool)
                 .await?
@@ -327,13 +348,17 @@ impl TransactionRepository for PostgresRepository {
         Ok(rows.into_iter().map(Transaction::from).collect())
     }
 
-    async fn delete_transaction(&self, id: &Uuid) -> Result<(), AppError> {
-        sqlx::query("DELETE FROM transaction WHERE id = $1").bind(id).execute(&self.pool).await?;
+    async fn delete_transaction(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
+        sqlx::query("DELETE FROM transaction WHERE id = $1 AND user_id = $2")
+            .bind(id)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }
 
-    async fn update_transaction(&self, id: &Uuid, transaction: &TransactionRequest) -> Result<Transaction, AppError> {
+    async fn update_transaction(&self, id: &Uuid, transaction: &TransactionRequest, user_id: &Uuid) -> Result<Transaction, AppError> {
         let select_query = build_transaction_query("updated t", "", "");
         let query = format!(
             r#"
@@ -347,8 +372,8 @@ impl TransactionRepository for PostgresRepository {
                     from_account_id = $5,
                     to_account_id = $6,
                     vendor_id = $7
-                WHERE id = $8
-                RETURNING id, amount, description, occurred_at, category_id, from_account_id, to_account_id, vendor_id
+                WHERE id = $8 AND user_id = $9
+                RETURNING id, user_id, amount, description, occurred_at, category_id, from_account_id, to_account_id, vendor_id
             )
             {}
             "#,
@@ -364,6 +389,7 @@ impl TransactionRepository for PostgresRepository {
             .bind(transaction.to_account_id)
             .bind(transaction.vendor_id)
             .bind(id)
+            .bind(user_id)
             .fetch_one(&self.pool)
             .await?;
 

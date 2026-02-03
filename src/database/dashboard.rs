@@ -2,16 +2,18 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::dashboard::{BudgetPerDayResponse, MonthlyBurnInResponse, SpentPerCategoryResponse};
 
+use uuid::Uuid;
+
 #[async_trait::async_trait]
 pub trait DashboardRepository {
-    async fn balance_per_day(&self) -> Result<Vec<BudgetPerDayResponse>, AppError>;
-    async fn spent_per_category(&self) -> Result<Vec<SpentPerCategoryResponse>, AppError>;
-    async fn monthly_burn_in(&self) -> Result<MonthlyBurnInResponse, AppError>;
+    async fn balance_per_day(&self, user_id: &Uuid) -> Result<Vec<BudgetPerDayResponse>, AppError>;
+    async fn spent_per_category(&self, user_id: &Uuid) -> Result<Vec<SpentPerCategoryResponse>, AppError>;
+    async fn monthly_burn_in(&self, user_id: &Uuid) -> Result<MonthlyBurnInResponse, AppError>;
 }
 
 #[async_trait::async_trait]
 impl DashboardRepository for PostgresRepository {
-    async fn balance_per_day(&self) -> Result<Vec<BudgetPerDayResponse>, AppError> {
+    async fn balance_per_day(&self, user_id: &Uuid) -> Result<Vec<BudgetPerDayResponse>, AppError> {
         #[derive(sqlx::FromRow)]
         struct BalancePerDayRow {
             account_name: String,
@@ -29,7 +31,8 @@ impl DashboardRepository for PostgresRepository {
                 JOIN category c ON t.category_id = c.id
                 JOIN account a ON t.from_account_id = a.id
                 JOIN budget b ON 1=1
-            WHERE CASE
+            WHERE a.user_id = $1
+                AND CASE
                 WHEN EXTRACT(MONTH FROM now()) > 1
                     THEN t.occurred_at > MAKE_DATE(CAST(EXTRACT(YEAR FROM now()) AS INTEGER), CAST(EXTRACT(MONTH FROM now()) - 1 AS INTEGER), b.start_day)
                 ELSE
@@ -39,6 +42,7 @@ impl DashboardRepository for PostgresRepository {
             ORDER BY t.occurred_at
             "#,
         )
+        .bind(user_id)
         .fetch_all(&self.pool)
         .await?;
 
@@ -52,7 +56,7 @@ impl DashboardRepository for PostgresRepository {
             .collect())
     }
 
-    async fn spent_per_category(&self) -> Result<Vec<SpentPerCategoryResponse>, AppError> {
+    async fn spent_per_category(&self, user_id: &Uuid) -> Result<Vec<SpentPerCategoryResponse>, AppError> {
         #[derive(sqlx::FromRow)]
         struct SpentPerCategoryRow {
             category_name: String,
@@ -83,7 +87,7 @@ WITH budget_settings AS (
     SELECT t.category_id, t.amount
     FROM transaction t
              CROSS JOIN cutoff c
-    WHERE t.occurred_at > c.start_date
+    WHERE t.occurred_at > c.start_date AND t.user_id = $1
 )
 SELECT c.name AS category_name,
        bc.budgeted_value,
@@ -96,6 +100,7 @@ JOIN budget_category bc
 GROUP BY category_name, budgeted_value
             "#,
         )
+        .bind(user_id)
         .fetch_all(&self.pool)
         .await?;
 
@@ -110,7 +115,7 @@ GROUP BY category_name, budgeted_value
             .collect())
     }
 
-    async fn monthly_burn_in(&self) -> Result<MonthlyBurnInResponse, AppError> {
+    async fn monthly_burn_in(&self, user_id: &Uuid) -> Result<MonthlyBurnInResponse, AppError> {
         let row = sqlx::query_as::<_, MonthlyBurnInResponse>(
             r#"
 WITH budget_settings AS (
@@ -152,7 +157,7 @@ WITH budget_settings AS (
     FROM budget_category bc
              JOIN transaction t ON bc.category_id = t.category_id
              CROSS JOIN cutoff
-    WHERE t.occurred_at > cutoff.start_date
+    WHERE t.occurred_at > cutoff.start_date AND t.user_id = $1
 )
 SELECT
     total_budget.value as total_budget,
@@ -164,6 +169,7 @@ CROSS JOIN spent_budget
 CROSS JOIN cutoff
         "#,
         )
+        .bind(user_id)
         .fetch_one(&self.pool)
         .await?;
 

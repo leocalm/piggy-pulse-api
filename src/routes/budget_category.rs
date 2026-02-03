@@ -14,36 +14,36 @@ use validator::Validate;
 #[rocket::post("/", data = "<payload>")]
 pub async fn create_budget_category(
     pool: &State<PgPool>,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     payload: Json<BudgetCategoryRequest>,
 ) -> Result<(Status, Json<BudgetCategoryResponse>), AppError> {
     payload.validate()?;
 
     let repo = PostgresRepository { pool: pool.inner().clone() };
-    let budget_category = repo.create_budget_category(&payload).await?;
+    let budget_category = repo.create_budget_category(&payload, &current_user.id).await?;
     Ok((Status::Created, Json(BudgetCategoryResponse::from(&budget_category))))
 }
 
 #[rocket::get("/?<cursor>&<limit>")]
 pub async fn list_all_budget_categories(
     pool: &State<PgPool>,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     cursor: Option<String>,
     limit: Option<i64>,
 ) -> Result<Json<CursorPaginatedResponse<BudgetCategoryResponse>>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let params = CursorParams::from_query(cursor, limit)?;
 
-    let list = repo.list_budget_categories(&params).await?;
+    let list = repo.list_budget_categories(&params, &current_user.id).await?;
     let responses: Vec<BudgetCategoryResponse> = list.iter().map(BudgetCategoryResponse::from).collect();
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.id)))
 }
 
 #[rocket::get("/<id>")]
-pub async fn get_budget_category(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Json<BudgetCategoryResponse>, AppError> {
+pub async fn get_budget_category(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Json<BudgetCategoryResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget category id", e))?;
-    if let Some(bc) = repo.get_budget_category_by_id(&uuid).await? {
+    if let Some(bc) = repo.get_budget_category_by_id(&uuid, &current_user.id).await? {
         Ok(Json(BudgetCategoryResponse::from(&bc)))
     } else {
         Err(AppError::NotFound("Budget category not found".to_string()))
@@ -51,18 +51,18 @@ pub async fn get_budget_category(pool: &State<PgPool>, _current_user: CurrentUse
 }
 
 #[rocket::delete("/<id>")]
-pub async fn delete_budget_category(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+pub async fn delete_budget_category(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget category id", e))?;
-    repo.delete_budget_category(&uuid).await?;
+    repo.delete_budget_category(&uuid, &current_user.id).await?;
     Ok(Status::Ok)
 }
 
 #[rocket::put("/<id>", data = "<payload>")]
-pub async fn put_budget_category(pool: &State<PgPool>, _current_user: CurrentUser, id: &str, payload: Json<i32>) -> Result<Status, AppError> {
+pub async fn put_budget_category(pool: &State<PgPool>, current_user: CurrentUser, id: &str, payload: Json<i32>) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget category id", e))?;
-    repo.update_budget_category_value(&uuid, &payload).await?;
+    repo.update_budget_category_value(&uuid, &payload, &current_user.id).await?;
     Ok(Status::Ok)
 }
 

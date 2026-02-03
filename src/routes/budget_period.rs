@@ -12,54 +12,54 @@ use uuid::Uuid;
 use validator::Validate;
 
 #[rocket::post("/", data = "<payload>")]
-pub async fn create_budget_period(pool: &State<PgPool>, _current_user: CurrentUser, payload: Json<BudgetPeriodRequest>) -> Result<(Status, String), AppError> {
+pub async fn create_budget_period(pool: &State<PgPool>, current_user: CurrentUser, payload: Json<BudgetPeriodRequest>) -> Result<(Status, String), AppError> {
     payload.validate()?;
 
     let repo = PostgresRepository { pool: pool.inner().clone() };
-    let budget_period_id = repo.create_budget_period(&payload).await?;
+    let budget_period_id = repo.create_budget_period(&payload, &current_user.id).await?;
     Ok((Status::Created, budget_period_id.to_string()))
 }
 
 #[rocket::get("/?<cursor>&<limit>")]
 pub async fn list_budget_periods(
     pool: &State<PgPool>,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     cursor: Option<String>,
     limit: Option<i64>,
 ) -> Result<Json<CursorPaginatedResponse<BudgetPeriodResponse>>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let params = CursorParams::from_query(cursor, limit)?;
 
-    let list = repo.list_budget_periods(&params).await?;
+    let list = repo.list_budget_periods(&params, &current_user.id).await?;
     let responses: Vec<BudgetPeriodResponse> = list.iter().map(BudgetPeriodResponse::from).collect();
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.id)))
 }
 
 #[rocket::get("/current")]
-pub async fn get_current_budget_period(pool: &State<PgPool>, _current_user: CurrentUser) -> Result<Json<BudgetPeriodResponse>, AppError> {
+pub async fn get_current_budget_period(pool: &State<PgPool>, current_user: CurrentUser) -> Result<Json<BudgetPeriodResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
-    let budget_period = repo.get_current_budget_period().await?;
+    let budget_period = repo.get_current_budget_period(&current_user.id).await?;
     Ok(Json(BudgetPeriodResponse::from(&budget_period)))
 }
 
 #[rocket::put("/<id>", data = "<payload>")]
 pub async fn put_budget_period(
     pool: &State<PgPool>,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     id: &str,
     payload: Json<BudgetPeriodRequest>,
 ) -> Result<Json<BudgetPeriodResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget period id", e))?;
-    let budget_period = repo.update_budget_period(&uuid, &payload).await?;
+    let budget_period = repo.update_budget_period(&uuid, &payload, &current_user.id).await?;
     Ok(Json(BudgetPeriodResponse::from(&budget_period)))
 }
 
 #[rocket::delete("/<id>")]
-pub async fn delete_budget_period(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+pub async fn delete_budget_period(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget period id", e))?;
-    repo.delete_budget_period(&uuid).await?;
+    repo.delete_budget_period(&uuid, &current_user.id).await?;
     Ok(Status::Ok)
 }
 
