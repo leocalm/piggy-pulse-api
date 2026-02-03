@@ -1,40 +1,37 @@
 use crate::auth::CurrentUser;
 use crate::database::category::CategoryRepository;
 use crate::database::postgres_repository::PostgresRepository;
-use crate::db::get_client;
 use crate::error::app_error::AppError;
 use crate::models::category::{CategoryRequest, CategoryResponse};
 use crate::models::pagination::{PaginatedResponse, PaginationParams};
-use deadpool_postgres::Pool;
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{State, routes};
+use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
 
 #[rocket::post("/", data = "<payload>")]
 pub async fn create_category(
-    pool: &State<Pool>,
+    pool: &State<PgPool>,
     _current_user: CurrentUser,
     payload: Json<CategoryRequest>,
 ) -> Result<(Status, Json<CategoryResponse>), AppError> {
     payload.validate()?;
 
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+    let repo = PostgresRepository { pool: pool.inner().clone() };
     let category = repo.create_category(&payload).await?;
     Ok((Status::Created, Json(CategoryResponse::from(&category))))
 }
 
 #[rocket::get("/?<page>&<limit>")]
 pub async fn list_all_categories(
-    pool: &State<Pool>,
+    pool: &State<PgPool>,
     _current_user: CurrentUser,
     page: Option<i64>,
     limit: Option<i64>,
 ) -> Result<Json<PaginatedResponse<CategoryResponse>>, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+    let repo = PostgresRepository { pool: pool.inner().clone() };
 
     let pagination = if page.is_some() || limit.is_some() {
         Some(PaginationParams { page, limit })
@@ -57,9 +54,8 @@ pub async fn list_all_categories(
 }
 
 #[rocket::get("/<id>")]
-pub async fn get_category(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Json<CategoryResponse>, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+pub async fn get_category(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Json<CategoryResponse>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
     if let Some(category) = repo.get_category_by_id(&uuid).await? {
         Ok(Json(CategoryResponse::from(&category)))
@@ -69,9 +65,8 @@ pub async fn get_category(pool: &State<Pool>, _current_user: CurrentUser, id: &s
 }
 
 #[rocket::delete("/<id>")]
-pub async fn delete_category(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+pub async fn delete_category(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
     repo.delete_category(&uuid).await?;
     Ok(Status::Ok)
@@ -79,13 +74,12 @@ pub async fn delete_category(pool: &State<Pool>, _current_user: CurrentUser, id:
 
 #[rocket::put("/<id>", data = "<payload>")]
 pub async fn put_category(
-    pool: &State<Pool>,
+    pool: &State<PgPool>,
     _current_user: CurrentUser,
     id: &str,
     payload: Json<CategoryRequest>,
 ) -> Result<Json<CategoryResponse>, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+    let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
     let category = repo.update_category(&uuid, &payload).await?;
     Ok(Json(CategoryResponse::from(&category)))
@@ -93,13 +87,12 @@ pub async fn put_category(
 
 #[rocket::get("/not-in-budget?<page>&<limit>")]
 pub async fn list_categories_not_in_budget(
-    pool: &State<Pool>,
+    pool: &State<PgPool>,
     _current_user: CurrentUser,
     page: Option<i64>,
     limit: Option<i64>,
 ) -> Result<Json<PaginatedResponse<CategoryResponse>>, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+    let repo = PostgresRepository { pool: pool.inner().clone() };
 
     let pagination = if page.is_some() || limit.is_some() {
         Some(PaginationParams { page, limit })

@@ -8,6 +8,8 @@ pub struct Error {
     pub message: String,
 }
 
+// no DB changes required in error routes
+
 #[catch(404)]
 pub fn not_found(_: &Request) -> Json<Error> {
     Json(Error {

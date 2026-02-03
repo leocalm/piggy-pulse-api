@@ -1,7 +1,6 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::dashboard::{BudgetPerDayResponse, MonthlyBurnInResponse, SpentPerCategoryResponse};
-use tracing::error;
 
 #[async_trait::async_trait]
 pub trait DashboardRepository {
@@ -11,12 +10,17 @@ pub trait DashboardRepository {
 }
 
 #[async_trait::async_trait]
-impl<'a> DashboardRepository for PostgresRepository<'a> {
+impl DashboardRepository for PostgresRepository {
     async fn balance_per_day(&self) -> Result<Vec<BudgetPerDayResponse>, AppError> {
-        let rows = self
-            .client
-            .query(
-                r#"
+        #[derive(sqlx::FromRow)]
+        struct BalancePerDayRow {
+            account_name: String,
+            date: String,
+            balance: i32,
+        }
+
+        let rows = sqlx::query_as::<_, BalancePerDayRow>(
+            r#"
             SELECT
                 a.name as account_name,
                 to_char(t.occurred_at, 'YYYY-MM-DD') as date,
@@ -34,33 +38,30 @@ impl<'a> DashboardRepository for PostgresRepository<'a> {
             GROUP BY t.occurred_at, a.name, a.balance
             ORDER BY t.occurred_at
             "#,
-                &[],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to fetch balance per day", e))?;
+        )
+        .fetch_all(&self.pool)
+        .await?;
 
         Ok(rows
-            .iter()
-            .map(|row| {
-                let balance = row.try_get::<_, i32>("balance").unwrap_or_else(|err| {
-                    error!("Error: {:?}", err);
-                    0
-                });
-
-                BudgetPerDayResponse {
-                    account_name: row.get("account_name"),
-                    date: row.get("date"),
-                    balance,
-                }
+            .into_iter()
+            .map(|row| BudgetPerDayResponse {
+                account_name: row.account_name,
+                date: row.date,
+                balance: row.balance,
             })
             .collect())
     }
 
     async fn spent_per_category(&self) -> Result<Vec<SpentPerCategoryResponse>, AppError> {
-        let rows = self
-            .client
-            .query(
-                r#"
+        #[derive(sqlx::FromRow)]
+        struct SpentPerCategoryRow {
+            category_name: String,
+            budgeted_value: i32,
+            amount_spent: i32,
+        }
+
+        let rows = sqlx::query_as::<_, SpentPerCategoryRow>(
+            r#"
 WITH budget_settings AS (
     SELECT b.start_day
     FROM budget b
@@ -94,26 +95,23 @@ JOIN budget_category bc
     ON bc.category_id = c.id
 GROUP BY category_name, budgeted_value
             "#,
-                &[],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to fetch spent per category", e))?;
+        )
+        .fetch_all(&self.pool)
+        .await?;
 
         Ok(rows
-            .iter()
+            .into_iter()
             .map(|row| SpentPerCategoryResponse {
-                category_name: row.get("category_name"),
-                budgeted_value: row.get("budgeted_value"),
-                amount_spent: row.get("amount_spent"),
+                category_name: row.category_name,
+                budgeted_value: row.budgeted_value,
+                amount_spent: row.amount_spent,
                 percentage_spent: 0,
             })
             .collect())
     }
 
     async fn monthly_burn_in(&self) -> Result<MonthlyBurnInResponse, AppError> {
-        let rows = self
-            .client
-            .query(
+        let row = sqlx::query_as::<_, MonthlyBurnInResponse>(
             r#"
 WITH budget_settings AS (
     SELECT b.start_day
@@ -165,20 +163,10 @@ FROM total_budget
 CROSS JOIN spent_budget
 CROSS JOIN cutoff
         "#,
-                &[],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to fetch monthly burn-in", e))?;
+        )
+        .fetch_one(&self.pool)
+        .await?;
 
-        if let Some(row) = rows.first() {
-            Ok(MonthlyBurnInResponse {
-                total_budget: row.get("total_budget"),
-                spent_budget: row.get("spent_budget"),
-                current_day: row.get("current_day"),
-                days_in_period: row.get("days_in_period"),
-            })
-        } else {
-            Err(AppError::db_message("No row returned for monthly burn-in"))
-        }
+        Ok(row)
     }
 }

@@ -3,7 +3,7 @@ use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::{Validate, ValidationError};
 
-#[derive(Serialize, Debug, Default)]
+#[derive(Serialize, Debug, Default, sqlx::FromRow)]
 pub struct BudgetPeriod {
     pub id: Uuid,
     pub name: String,

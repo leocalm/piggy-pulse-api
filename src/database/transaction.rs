@@ -7,8 +7,132 @@ use crate::models::currency::Currency;
 use crate::models::pagination::PaginationParams;
 use crate::models::transaction::{Transaction, TransactionRequest};
 use crate::models::vendor::Vendor;
-use tokio_postgres::Row;
+use chrono::{DateTime, NaiveDate, Utc};
 use uuid::Uuid;
+
+// Intermediate struct for sqlx query results with all JOINed data
+#[derive(Debug, sqlx::FromRow)]
+struct TransactionRow {
+    id: Uuid,
+    amount: i32,
+    description: String,
+    occurred_at: NaiveDate,
+    // Category fields
+    category_id: Uuid,
+    category_name: String,
+    category_color: String,
+    category_icon: String,
+    category_parent_id: Option<Uuid>,
+    category_category_type: String,
+    category_created_at: DateTime<Utc>,
+    // From account fields
+    from_account_id: Uuid,
+    from_account_name: String,
+    from_account_color: String,
+    from_account_icon: String,
+    from_account_account_type: String,
+    from_account_balance: i64,
+    from_account_created_at: DateTime<Utc>,
+    from_account_spend_limit: Option<i32>,
+    from_account_currency_id: Uuid,
+    from_account_currency_name: String,
+    from_account_currency_symbol: String,
+    from_account_currency_code: String,
+    from_account_currency_decimal_places: i32,
+    from_account_currency_created_at: DateTime<Utc>,
+    // To account fields (optional)
+    to_account_id: Option<Uuid>,
+    to_account_name: Option<String>,
+    to_account_color: Option<String>,
+    to_account_icon: Option<String>,
+    to_account_account_type: Option<String>,
+    to_account_balance: Option<i64>,
+    to_account_created_at: Option<DateTime<Utc>>,
+    to_account_spend_limit: Option<i32>,
+    to_account_currency_id: Option<Uuid>,
+    to_account_currency_name: Option<String>,
+    to_account_currency_symbol: Option<String>,
+    to_account_currency_code: Option<String>,
+    to_account_currency_decimal_places: Option<i32>,
+    to_account_currency_created_at: Option<DateTime<Utc>>,
+    // Vendor fields (optional)
+    vendor_id: Option<Uuid>,
+    vendor_name: Option<String>,
+    vendor_created_at: Option<DateTime<Utc>>,
+}
+
+impl From<TransactionRow> for Transaction {
+    fn from(row: TransactionRow) -> Self {
+        let to_account = if let Some(to_account_id) = row.to_account_id {
+            Some(Account {
+                id: to_account_id,
+                name: row.to_account_name.unwrap(),
+                color: row.to_account_color.unwrap(),
+                icon: row.to_account_icon.unwrap(),
+                account_type: crate::database::account::account_type_from_db(row.to_account_account_type.unwrap()),
+                currency: Currency {
+                    id: row.to_account_currency_id.unwrap(),
+                    name: row.to_account_currency_name.unwrap(),
+                    symbol: row.to_account_currency_symbol.unwrap(),
+                    currency: row.to_account_currency_code.unwrap(),
+                    decimal_places: row.to_account_currency_decimal_places.unwrap(),
+                    created_at: row.to_account_currency_created_at.unwrap(),
+                },
+                balance: row.to_account_balance.unwrap(),
+                created_at: row.to_account_created_at.unwrap(),
+                spend_limit: row.to_account_spend_limit,
+            })
+        } else {
+            None
+        };
+
+        let vendor = if let Some(vendor_id) = row.vendor_id {
+            Some(Vendor {
+                id: vendor_id,
+                name: row.vendor_name.unwrap(),
+                created_at: row.vendor_created_at.unwrap(),
+            })
+        } else {
+            None
+        };
+
+        Transaction {
+            id: row.id,
+            amount: row.amount,
+            description: row.description,
+            occurred_at: row.occurred_at,
+            category: Category {
+                id: row.category_id,
+                name: row.category_name,
+                color: row.category_color,
+                icon: row.category_icon,
+                parent_id: row.category_parent_id,
+                category_type: category_type_from_db(&row.category_category_type),
+                created_at: row.category_created_at,
+            },
+            from_account: Account {
+                id: row.from_account_id,
+                name: row.from_account_name,
+                color: row.from_account_color,
+                icon: row.from_account_icon,
+                account_type: crate::database::account::account_type_from_db(&row.from_account_account_type),
+                currency: Currency {
+                    id: row.from_account_currency_id,
+                    name: row.from_account_currency_name,
+                    symbol: row.from_account_currency_symbol,
+                    currency: row.from_account_currency_code,
+                    decimal_places: row.from_account_currency_decimal_places,
+                    created_at: row.from_account_currency_created_at,
+                },
+                balance: row.from_account_balance,
+                created_at: row.from_account_created_at,
+                spend_limit: row.from_account_spend_limit,
+            },
+            to_account,
+            vendor,
+        }
+    }
+}
 
 // Common SELECT clause for transaction queries with all joined data
 const TRANSACTION_SELECT_FIELDS: &str = r#"
@@ -95,7 +219,7 @@ pub trait TransactionRepository {
 }
 
 #[async_trait::async_trait]
-impl<'a> TransactionRepository for PostgresRepository<'a> {
+impl TransactionRepository for PostgresRepository {
     async fn create_transaction(&self, transaction: &TransactionRequest) -> Result<Transaction, AppError> {
         let to_account_id = if let Some(acc_id) = &transaction.to_account_id { Some(acc_id) } else { None };
         let vendor_id = if let Some(v_id) = &transaction.vendor_id { Some(v_id) } else { None };
@@ -121,78 +245,68 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
             select_query
         );
 
-        let rows = self
-            .client
-            .query(
-                &query,
-                &[
-                    &transaction.amount,
-                    &transaction.description,
-                    &transaction.occurred_at,
-                    &transaction.category_id,
-                    &transaction.from_account_id,
-                    &to_account_id,
-                    &vendor_id,
-                ],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to create transaction", e))?;
+        let row = sqlx::query_as::<_, TransactionRow>(&query)
+            .bind(transaction.amount)
+            .bind(&transaction.description)
+            .bind(transaction.occurred_at)
+            .bind(transaction.category_id)
+            .bind(transaction.from_account_id)
+            .bind(to_account_id)
+            .bind(vendor_id)
+            .fetch_one(&self.pool)
+            .await?;
 
-        if let Some(row) = rows.first() {
-            Ok(map_row_to_transaction(row))
-        } else {
-            Err(AppError::db_message("Failed to create transaction"))
-        }
+        Ok(Transaction::from(row))
     }
 
     async fn get_transaction_by_id(&self, id: &Uuid) -> Result<Option<Transaction>, AppError> {
         let query = build_transaction_query("transaction t", "t.id = $1", "");
-        let rows = self
-            .client
-            .query(&query, &[id])
-            .await
-            .map_err(|e| AppError::db("Failed to fetch transaction", e))?;
+        let row = sqlx::query_as::<_, TransactionRow>(&query).bind(id).fetch_optional(&self.pool).await?;
 
-        if let Some(row) = rows.first() {
-            Ok(Some(map_row_to_transaction(row)))
-        } else {
-            Ok(None)
-        }
+        Ok(row.map(Transaction::from))
     }
 
     async fn list_transactions(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Transaction>, i64), AppError> {
         // Get total count
-        let count_row = self
-            .client
-            .query_one("SELECT COUNT(*) as total FROM transaction", &[])
-            .await
-            .map_err(|e| AppError::db("Failed to count transactions", e))?;
-        let total: i64 = count_row.get("total");
-
-        // Build query with optional pagination
-        let mut query = build_transaction_query("transaction t", "", "occurred_at DESC, t.created_at DESC");
-
-        // Add pagination if requested
-        if let Some(params) = pagination
-            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
-        {
-            query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
+        #[derive(sqlx::FromRow)]
+        struct CountRow {
+            total: i64,
         }
 
-        let rows = self
-            .client
-            .query(&query, &[])
-            .await
-            .map_err(|e| AppError::db("Failed to list transactions", e))?;
-        Ok((rows.into_iter().map(|row| map_row_to_transaction(&row)).collect(), total))
+        let count_row = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as total FROM transaction")
+            .fetch_one(&self.pool)
+            .await?;
+        let total = count_row.total;
+
+        // Build query with optional pagination
+        let base_query = build_transaction_query("transaction t", "", "occurred_at DESC, t.created_at DESC");
+
+        let rows = if let Some(params) = pagination
+            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
+        {
+            sqlx::query_as::<_, TransactionRow>(&format!("{} LIMIT $1 OFFSET $2", base_query))
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+        } else {
+            sqlx::query_as::<_, TransactionRow>(&base_query).fetch_all(&self.pool).await?
+        };
+
+        let transactions: Vec<Transaction> = rows.into_iter().map(Transaction::from).collect();
+
+        Ok((transactions, total))
     }
 
     async fn get_transactions_for_period(&self, period_id: &Uuid, pagination: Option<&PaginationParams>) -> Result<(Vec<Transaction>, i64), AppError> {
         // Get total count for this period
-        let count_row = self
-            .client
-            .query_one(
-                r#"
+        #[derive(sqlx::FromRow)]
+        struct CountRow {
+            total: i64,
+        }
+
+        let count_row = sqlx::query_as::<_, CountRow>(
+            r#"
             SELECT COUNT(*) as total
             FROM transaction t
             CROSS JOIN budget_period bp
@@ -200,44 +314,38 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
                 AND t.occurred_at >= bp.start_date
                 AND t.occurred_at <= bp.end_date
             "#,
-                &[period_id],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to count transactions for period", e))?;
-        let total: i64 = count_row.get("total");
+        )
+        .bind(period_id)
+        .fetch_one(&self.pool)
+        .await?;
+        let total = count_row.total;
 
         // Build query with budget_period cross join and WHERE clause
-        let mut query = format!(
+        let base_query = format!(
             "SELECT {} FROM transaction t CROSS JOIN budget_period bp {} WHERE bp.id = $1 AND t.occurred_at >= bp.start_date AND t.occurred_at <= bp.end_date ORDER BY occurred_at DESC, t.created_at DESC",
             TRANSACTION_SELECT_FIELDS, TRANSACTION_JOINS
         );
 
-        // Add pagination if requested
-        if let Some(params) = pagination
+        let rows = if let Some(params) = pagination
             && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
         {
-            query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-        }
+            sqlx::query_as::<_, TransactionRow>(&format!("{} LIMIT $2 OFFSET $3", base_query))
+                .bind(period_id)
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+        } else {
+            sqlx::query_as::<_, TransactionRow>(&base_query).bind(period_id).fetch_all(&self.pool).await?
+        };
 
-        let rows = self
-            .client
-            .query(&query, &[period_id])
-            .await
-            .map_err(|e| AppError::db("Failed to list transactions for period", e))?;
-        Ok((rows.into_iter().map(|row| map_row_to_transaction(&row)).collect(), total))
+        let transactions: Vec<Transaction> = rows.into_iter().map(Transaction::from).collect();
+
+        Ok((transactions, total))
     }
 
     async fn delete_transaction(&self, id: &Uuid) -> Result<(), AppError> {
-        self.client
-            .execute(
-                r#"
-            DELETE FROM transaction
-            WHERE id = $1
-            "#,
-                &[id],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to delete transaction", e))?;
+        sqlx::query("DELETE FROM transaction WHERE id = $1").bind(id).execute(&self.pool).await?;
 
         Ok(())
     }
@@ -264,101 +372,18 @@ impl<'a> TransactionRepository for PostgresRepository<'a> {
             select_query
         );
 
-        let rows = self
-            .client
-            .query(
-                &query,
-                &[
-                    &transaction.amount,
-                    &transaction.description,
-                    &transaction.occurred_at,
-                    &transaction.category_id,
-                    &transaction.from_account_id,
-                    &transaction.to_account_id,
-                    &transaction.vendor_id,
-                    &id,
-                ],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to update transaction", e))?;
+        let row = sqlx::query_as::<_, TransactionRow>(&query)
+            .bind(transaction.amount)
+            .bind(&transaction.description)
+            .bind(transaction.occurred_at)
+            .bind(transaction.category_id)
+            .bind(transaction.from_account_id)
+            .bind(transaction.to_account_id)
+            .bind(transaction.vendor_id)
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await?;
 
-        if let Some(row) = rows.first() {
-            Ok(map_row_to_transaction(row))
-        } else {
-            Err(AppError::NotFound("Transaction not found".to_string()))
-        }
-    }
-}
-
-fn map_row_to_transaction(row: &Row) -> Transaction {
-    let a: Option<Uuid> = row.get("to_account_id");
-    let to_account = if a.is_some() {
-        Some(Account {
-            id: row.get("to_account_id"),
-            name: row.get("to_account_name"),
-            color: row.get("to_account_color"),
-            icon: row.get("to_account_icon"),
-            account_type: crate::database::account::account_type_from_db(row.get::<_, &str>("to_account_account_type")),
-            currency: Currency {
-                id: row.get("to_account_currency_id"),
-                name: row.get("to_account_currency_name"),
-                symbol: row.get("to_account_currency_symbol"),
-                currency: row.get("to_account_currency_code"),
-                decimal_places: row.get("to_account_currency_decimal_places"),
-                created_at: row.get("to_account_currency_created_at"),
-            },
-            balance: row.get("to_account_balance"),
-            created_at: row.get("to_account_created_at"),
-            spend_limit: row.get("to_account_spend_limit"),
-        })
-    } else {
-        None
-    };
-
-    let vendor_id: Option<Uuid> = row.get("vendor_id");
-    let vendor = if vendor_id.is_some() {
-        Some(Vendor {
-            id: row.get("vendor_id"),
-            name: row.get("vendor_name"),
-            created_at: row.get("vendor_created_at"),
-        })
-    } else {
-        None
-    };
-
-    Transaction {
-        id: row.get("id"),
-        amount: row.get("amount"),
-        description: row.get("description"),
-        occurred_at: row.get("occurred_at"),
-        category: Category {
-            id: row.get("category_id"),
-            name: row.get("category_name"),
-            color: row.get("category_color"),
-            icon: row.get("category_icon"),
-            parent_id: row.get("category_parent_id"),
-            category_type: category_type_from_db(row.get::<_, &str>("category_category_type")),
-            created_at: row.get("category_created_at"),
-        },
-        from_account: Account {
-            id: row.get("from_account_id"),
-            name: row.get("from_account_name"),
-            color: row.get("from_account_color"),
-            icon: row.get("from_account_icon"),
-            account_type: crate::database::account::account_type_from_db(row.get::<_, &str>("from_account_account_type")),
-            currency: Currency {
-                id: row.get("from_account_currency_id"),
-                name: row.get("from_account_currency_name"),
-                symbol: row.get("from_account_currency_symbol"),
-                currency: row.get("from_account_currency_code"),
-                decimal_places: row.get("from_account_currency_decimal_places"),
-                created_at: row.get("from_account_currency_created_at"),
-            },
-            balance: row.get("from_account_balance"),
-            created_at: row.get("from_account_created_at"),
-            spend_limit: row.get("from_account_spend_limit"),
-        },
-        to_account,
-        vendor,
+        Ok(Transaction::from(row))
     }
 }

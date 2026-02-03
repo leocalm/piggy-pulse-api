@@ -17,7 +17,7 @@ pub struct SpentPerCategoryResponse {
     pub percentage_spent: i32,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, sqlx::FromRow)]
 pub struct MonthlyBurnInResponse {
     pub total_budget: i32,
     pub spent_budget: i32,
