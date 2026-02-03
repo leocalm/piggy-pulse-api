@@ -7,6 +7,7 @@ use crate::models::budget_category::BudgetCategory;
 use crate::models::budget_period::BudgetPeriod;
 use crate::models::category::CategoryType;
 use crate::models::dashboard::{BudgetPerDayResponse, DashboardResponse, MonthProgressResponse, MonthlyBurnInResponse, SpentPerCategoryResponse};
+use crate::models::pagination::CursorParams;
 use crate::models::transaction::{Transaction, TransactionResponse};
 use crate::service::service_util::{account_involved, add_transaction, balance_on_date};
 use chrono::prelude::*;
@@ -40,9 +41,17 @@ where
         }
     }
 
+    /// Params that fetch all rows — used for dashboard aggregation where we need the full set.
+    const fn all_rows() -> CursorParams {
+        CursorParams {
+            cursor: None,
+            limit: Some(CursorParams::MAX_LIMIT),
+        }
+    }
+
     async fn get_transactions(&mut self) -> Result<Arc<Vec<Transaction>>, AppError> {
         if self.transactions.is_none() {
-            let (data, _total) = self.repository.get_transactions_for_period(&self.budget_period.id, None).await?;
+            let data = self.repository.get_transactions_for_period(&self.budget_period.id, &Self::all_rows()).await?;
             self.transactions = Some(Arc::new(data));
         }
 
@@ -51,7 +60,7 @@ where
 
     async fn get_budget_categories(&mut self) -> Result<Arc<Vec<BudgetCategory>>, AppError> {
         if self.budget_categories.is_none() {
-            let (data, _total) = self.repository.list_budget_categories(None).await?;
+            let data = self.repository.list_budget_categories(&Self::all_rows()).await?;
             self.budget_categories = Some(Arc::new(data));
         }
 
@@ -60,7 +69,7 @@ where
 
     async fn get_accounts(&mut self) -> Result<Arc<Vec<Account>>, AppError> {
         if self.accounts.is_none() {
-            let (data, _total) = self.repository.list_accounts(None).await?;
+            let data = self.repository.list_accounts(&Self::all_rows()).await?;
             self.accounts = Some(Arc::new(data));
         }
 
@@ -69,7 +78,7 @@ where
 
     async fn get_all_transactions(&mut self) -> Result<Arc<Vec<Transaction>>, AppError> {
         if self.all_transactions.is_none() {
-            let (data, _total) = self.repository.list_transactions(None).await?;
+            let data = self.repository.list_transactions(&Self::all_rows()).await?;
             self.all_transactions = Some(Arc::new(data));
         }
 

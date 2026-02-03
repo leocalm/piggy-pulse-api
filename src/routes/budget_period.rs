@@ -3,7 +3,7 @@ use crate::database::budget_period::BudgetPeriodRepository;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::budget_period::{BudgetPeriodRequest, BudgetPeriodResponse};
-use crate::models::pagination::{PaginatedResponse, PaginationParams};
+use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{State, routes};
@@ -20,33 +20,19 @@ pub async fn create_budget_period(pool: &State<PgPool>, _current_user: CurrentUs
     Ok((Status::Created, budget_period_id.to_string()))
 }
 
-#[rocket::get("/?<page>&<limit>")]
+#[rocket::get("/?<cursor>&<limit>")]
 pub async fn list_budget_periods(
     pool: &State<PgPool>,
     _current_user: CurrentUser,
-    page: Option<i64>,
+    cursor: Option<String>,
     limit: Option<i64>,
-) -> Result<Json<PaginatedResponse<BudgetPeriodResponse>>, AppError> {
+) -> Result<Json<CursorPaginatedResponse<BudgetPeriodResponse>>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
+    let params = CursorParams::from_query(cursor, limit)?;
 
-    let pagination = if page.is_some() || limit.is_some() {
-        Some(PaginationParams { page, limit })
-    } else {
-        None
-    };
-
-    let (list, total) = repo.list_budget_periods(pagination.as_ref()).await?;
+    let list = repo.list_budget_periods(&params).await?;
     let responses: Vec<BudgetPeriodResponse> = list.iter().map(BudgetPeriodResponse::from).collect();
-
-    let paginated = if let Some(params) = pagination {
-        let effective_page = params.page.unwrap_or(1);
-        let effective_limit = params.effective_limit().unwrap_or(PaginationParams::DEFAULT_LIMIT);
-        PaginatedResponse::new(responses, effective_page, effective_limit, total)
-    } else {
-        PaginatedResponse::new(responses, 1, total, total)
-    };
-
-    Ok(Json(paginated))
+    Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.id)))
 }
 
 #[rocket::get("/current")]

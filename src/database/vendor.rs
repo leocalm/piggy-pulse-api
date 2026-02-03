@@ -1,6 +1,6 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
-use crate::models::pagination::PaginationParams;
+use crate::models::pagination::CursorParams;
 use crate::models::vendor::{Vendor, VendorRequest, VendorStats, VendorWithStats};
 use chrono::{DateTime, NaiveDate, Utc};
 use rocket::FromFormField;
@@ -20,7 +20,7 @@ pub enum VendorOrderBy {
 pub trait VendorRepository {
     async fn create_vendor(&self, request: &VendorRequest) -> Result<Vendor, AppError>;
     async fn get_vendor_by_id(&self, id: &Uuid) -> Result<Option<Vendor>, AppError>;
-    async fn list_vendors(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Vendor>, i64), AppError>;
+    async fn list_vendors(&self, params: &CursorParams) -> Result<Vec<Vendor>, AppError>;
     async fn list_vendors_with_status(&self, order_by: VendorOrderBy) -> Result<Vec<VendorWithStats>, AppError>;
     async fn delete_vendor(&self, id: &Uuid) -> Result<(), AppError>;
     async fn update_vendor(&self, id: &Uuid, request: &VendorRequest) -> Result<Vendor, AppError>;
@@ -58,38 +58,36 @@ impl VendorRepository for PostgresRepository {
         Ok(vendor)
     }
 
-    async fn list_vendors(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Vendor>, i64), AppError> {
-        // Get total count
-        #[derive(sqlx::FromRow)]
-        struct CountRow {
-            total: i64,
-        }
-
-        let count_row = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as total FROM vendor")
-            .fetch_one(&self.pool)
-            .await?;
-        let total = count_row.total;
-
-        // Build query with optional pagination
-        let base_query = r#"
-            SELECT id, name, created_at
-            FROM vendor
-            ORDER BY created_at DESC
-            "#;
-
-        let vendors = if let Some(params) = pagination
-            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
-        {
-            sqlx::query_as::<_, Vendor>(&format!("{} LIMIT $1 OFFSET $2", base_query))
-                .bind(limit)
-                .bind(offset)
-                .fetch_all(&self.pool)
-                .await?
+    async fn list_vendors(&self, params: &CursorParams) -> Result<Vec<Vendor>, AppError> {
+        let vendors = if let Some(cursor) = params.cursor {
+            sqlx::query_as::<_, Vendor>(
+                r#"
+                SELECT id, name, created_at
+                FROM vendor
+                WHERE (created_at, id) < (SELECT created_at, id FROM vendor WHERE id = $1)
+                ORDER BY created_at DESC, id DESC
+                LIMIT $2
+                "#,
+            )
+            .bind(cursor)
+            .bind(params.fetch_limit())
+            .fetch_all(&self.pool)
+            .await?
         } else {
-            sqlx::query_as::<_, Vendor>(base_query).fetch_all(&self.pool).await?
+            sqlx::query_as::<_, Vendor>(
+                r#"
+                SELECT id, name, created_at
+                FROM vendor
+                ORDER BY created_at DESC, id DESC
+                LIMIT $1
+                "#,
+            )
+            .bind(params.fetch_limit())
+            .fetch_all(&self.pool)
+            .await?
         };
 
-        Ok((vendors, total))
+        Ok(vendors)
     }
 
     async fn list_vendors_with_status(&self, order_by: VendorOrderBy) -> Result<Vec<VendorWithStats>, AppError> {

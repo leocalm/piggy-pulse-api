@@ -99,8 +99,8 @@ impl AccountRepository for MockRepository {
         Ok(Some(Account { id: *id, ..Account::default() }))
     }
 
-    async fn list_accounts(&self, _pagination: Option<&crate::models::pagination::PaginationParams>) -> Result<(Vec<Account>, i64), AppError> {
-        Ok((vec![Account::default()], 1))
+    async fn list_accounts(&self, _params: &crate::models::pagination::CursorParams) -> Result<Vec<Account>, AppError> {
+        Ok(vec![Account::default()])
     }
 
     async fn delete_account(&self, _id: &Uuid) -> Result<(), AppError> {
@@ -127,8 +127,8 @@ impl BudgetCategoryRepository for MockRepository {
         }))
     }
 
-    async fn list_budget_categories(&self, _pagination: Option<&crate::models::pagination::PaginationParams>) -> Result<(Vec<BudgetCategory>, i64), AppError> {
-        Ok((vec![BudgetCategory::default()], 1))
+    async fn list_budget_categories(&self, _params: &crate::models::pagination::CursorParams) -> Result<Vec<BudgetCategory>, AppError> {
+        Ok(vec![BudgetCategory::default()])
     }
 
     async fn delete_budget_category(&self, _id: &Uuid) -> Result<(), AppError> {
@@ -156,16 +156,12 @@ impl TransactionRepository for MockRepository {
         }))
     }
 
-    async fn list_transactions(&self, _pagination: Option<&crate::models::pagination::PaginationParams>) -> Result<(Vec<Transaction>, i64), AppError> {
-        Ok((vec![Transaction::default()], 1))
+    async fn list_transactions(&self, _params: &crate::models::pagination::CursorParams) -> Result<Vec<Transaction>, AppError> {
+        Ok(vec![Transaction::default()])
     }
 
-    async fn get_transactions_for_period(
-        &self,
-        _period_id: &Uuid,
-        _pagination: Option<&crate::models::pagination::PaginationParams>,
-    ) -> Result<(Vec<Transaction>, i64), AppError> {
-        Ok((vec![Transaction::default()], 1))
+    async fn get_transactions_for_period(&self, _period_id: &Uuid, _params: &crate::models::pagination::CursorParams) -> Result<Vec<Transaction>, AppError> {
+        Ok(vec![Transaction::default()])
     }
 
     async fn delete_transaction(&self, _id: &Uuid) -> Result<(), AppError> {
@@ -190,8 +186,8 @@ impl BudgetRepository for MockRepository {
         Ok(Some(Budget { id: *id, ..Budget::default() }))
     }
 
-    async fn list_budgets(&self, _pagination: Option<&crate::models::pagination::PaginationParams>) -> Result<(Vec<Budget>, i64), AppError> {
-        Ok((vec![Budget::default()], 1))
+    async fn list_budgets(&self, _params: &crate::models::pagination::CursorParams) -> Result<Vec<Budget>, AppError> {
+        Ok(vec![Budget::default()])
     }
 
     async fn delete_budget(&self, _id: &Uuid) -> Result<(), AppError> {
