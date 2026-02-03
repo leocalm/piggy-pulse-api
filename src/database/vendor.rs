@@ -129,6 +129,7 @@ impl VendorRepository for PostgresRepository {
             .map(|r| VendorWithStats {
                 vendor: Vendor {
                     id: r.id,
+                    user_id: Uuid::nil(),
                     name: r.name,
                     created_at: r.created_at,
                 },
