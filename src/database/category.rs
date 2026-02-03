@@ -113,8 +113,8 @@ impl CategoryRepository for PostgresRepository {
                     created_at
                 FROM category
                 WHERE user_id = $1
-                    AND (created_at, id) < (SELECT created_at, id FROM category WHERE id = $2)
-                ORDER BY created_at DESC, id DESC
+                    AND (user_id, created_at, id) < (SELECT user_id, created_at, id FROM category WHERE id = $2)
+                ORDER BY user_id DESC, created_at DESC, id DESC
                 LIMIT $3
                 "#,
             )

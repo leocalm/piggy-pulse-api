@@ -285,8 +285,8 @@ impl TransactionRepository for PostgresRepository {
         let rows = if let Some(cursor) = params.cursor {
             let base = build_transaction_query(
                 "transaction t",
-                "t.user_id = $1 AND (t.occurred_at, t.created_at, t.id) < (SELECT occurred_at, created_at, id FROM transaction WHERE id = $2)",
-                "t.occurred_at DESC, t.created_at DESC, t.id DESC",
+                "t.user_id = $1 AND (t.user_id, t.occurred_at, t.created_at, t.id) < (SELECT user_id, occurred_at, created_at, id FROM transaction WHERE id = $2)",
+                "t.user_id DESC, t.occurred_at DESC, t.created_at DESC, t.id DESC",
             );
             sqlx::query_as::<_, TransactionRow>(&format!("{} LIMIT $3", base))
                 .bind(user_id)

@@ -46,10 +46,10 @@ impl BudgetPeriodRepository for PostgresRepository {
                 SELECT id, user_id, name, start_date, end_date, created_at
                 FROM budget_period
                 WHERE user_id = $1
-                    AND (start_date, id) > (
-                        SELECT start_date, id FROM budget_period WHERE id = $2
+                    AND (user_id, start_date, id) > (
+                        SELECT user_id, start_date, id FROM budget_period WHERE id = $2
                     )
-                ORDER BY start_date ASC, id ASC
+                ORDER BY user_id ASC, start_date ASC, id ASC
                 LIMIT $3
                 "#,
             )

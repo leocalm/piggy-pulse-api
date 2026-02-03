@@ -128,10 +128,10 @@ impl BudgetCategoryRepository for PostgresRepository {
                 FROM budget_category bc
                 JOIN category c ON c.id = bc.category_id
                 WHERE bc.user_id = $1
-                    AND (bc.created_at, bc.id) < (
-                        SELECT created_at, id FROM budget_category WHERE id = $2
+                    AND (bc.user_id, bc.created_at, bc.id) < (
+                        SELECT user_id, created_at, id FROM budget_category WHERE id = $2
                     )
-                ORDER BY bc.created_at DESC, bc.id DESC
+                ORDER BY bc.user_id DESC, bc.created_at DESC, bc.id DESC
                 LIMIT $3
                 "#,
             )

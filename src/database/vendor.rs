@@ -67,8 +67,8 @@ impl VendorRepository for PostgresRepository {
                 SELECT id, user_id, name, created_at
                 FROM vendor
                 WHERE user_id = $1
-                    AND (created_at, id) < (SELECT created_at, id FROM vendor WHERE id = $2)
-                ORDER BY created_at DESC, id DESC
+                    AND (user_id, created_at, id) < (SELECT user_id, created_at, id FROM vendor WHERE id = $2)
+                ORDER BY user_id DESC, created_at DESC, id DESC
                 LIMIT $3
                 "#,
             )

@@ -179,10 +179,10 @@ impl AccountRepository for PostgresRepository {
                     c.created_at as currency_created_at
                 FROM account a
                 JOIN currency c ON c.id = a.currency_id
-                WHERE (a.created_at, a.id) < (
-                    SELECT created_at, id FROM account WHERE id = $1
+                WHERE (a.user_id, a.created_at, a.id) < (
+                    SELECT user_id, created_at, id FROM account WHERE id = $1
                 ) AND a.user_id = $2
-                ORDER BY a.created_at DESC, a.id DESC
+                ORDER BY user_id DESC, a.created_at DESC, a.id DESC
                 LIMIT $3
                 "#,
             )
