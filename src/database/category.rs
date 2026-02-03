@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 // Intermediate struct for sqlx query results with category_type as text
 #[derive(Debug, sqlx::FromRow)]
+#[allow(dead_code)]
 struct CategoryRow {
     id: Uuid,
     user_id: Uuid,
