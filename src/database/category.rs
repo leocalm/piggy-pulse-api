@@ -23,7 +23,7 @@ impl From<CategoryRow> for Category {
     fn from(row: CategoryRow) -> Self {
         Category {
             id: row.id,
-            user_id: Uuid::nil(),
+            user_id: row.user_id,
             name: row.name,
             color: row.color,
             icon: row.icon,
@@ -36,23 +36,24 @@ impl From<CategoryRow> for Category {
 
 #[async_trait::async_trait]
 pub trait CategoryRepository {
-    async fn create_category(&self, request: &CategoryRequest) -> Result<Category, AppError>;
-    async fn get_category_by_id(&self, id: &Uuid) -> Result<Option<Category>, AppError>;
-    async fn list_categories(&self, params: &CursorParams) -> Result<Vec<Category>, AppError>;
-    async fn delete_category(&self, id: &Uuid) -> Result<(), AppError>;
-    async fn update_category(&self, id: &Uuid, request: &CategoryRequest) -> Result<Category, AppError>;
-    async fn list_categories_not_in_budget(&self, params: &CursorParams) -> Result<Vec<Category>, AppError>;
+    async fn create_category(&self, request: &CategoryRequest, user_id: &Uuid) -> Result<Category, AppError>;
+    async fn get_category_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Category>, AppError>;
+    async fn list_categories(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Category>, AppError>;
+    async fn delete_category(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError>;
+    async fn update_category(&self, id: &Uuid, request: &CategoryRequest, user_id: &Uuid) -> Result<Category, AppError>;
+    async fn list_categories_not_in_budget(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Category>, AppError>;
 }
 
 #[async_trait::async_trait]
 impl CategoryRepository for PostgresRepository {
-    async fn create_category(&self, request: &CategoryRequest) -> Result<Category, AppError> {
+    async fn create_category(&self, request: &CategoryRequest, user_id: &Uuid) -> Result<Category, AppError> {
         let row = sqlx::query_as::<_, CategoryRow>(
             r#"
-            INSERT INTO category (name, color, icon, parent_id, category_type)
-            VALUES ($1, $2, $3, $4, $5::text::category_type)
+            INSERT INTO category (user_id, name, color, icon, parent_id, category_type)
+            VALUES ($1, $2, $3, $4, $5, $6::text::category_type)
             RETURNING
                 id,
+                user_id,
                 name,
                 COALESCE(color, '') as color,
                 COALESCE(icon, '') as icon,
@@ -61,6 +62,7 @@ impl CategoryRepository for PostgresRepository {
                 created_at
             "#,
         )
+        .bind(user_id)
         .bind(&request.name)
         .bind(&request.color)
         .bind(&request.icon)
@@ -72,11 +74,12 @@ impl CategoryRepository for PostgresRepository {
         Ok(Category::from(row))
     }
 
-    async fn get_category_by_id(&self, id: &Uuid) -> Result<Option<Category>, AppError> {
+    async fn get_category_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Category>, AppError> {
         let row = sqlx::query_as::<_, CategoryRow>(
             r#"
             SELECT
                 id,
+                user_id,
                 name,
                 COALESCE(color, '') as color,
                 COALESCE(icon, '') as icon,
@@ -84,22 +87,24 @@ impl CategoryRepository for PostgresRepository {
                 category_type::text as category_type,
                 created_at
             FROM category
-            WHERE id = $1
+            WHERE id = $1 AND user_id = $2
             "#,
         )
         .bind(id)
+        .bind(user_id)
         .fetch_optional(&self.pool)
         .await?;
 
         Ok(row.map(Category::from))
     }
 
-    async fn list_categories(&self, params: &CursorParams) -> Result<Vec<Category>, AppError> {
+    async fn list_categories(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Category>, AppError> {
         let rows = if let Some(cursor) = params.cursor {
             sqlx::query_as::<_, CategoryRow>(
                 r#"
                 SELECT
                     id,
+                    user_id,
                     name,
                     COALESCE(color, '') as color,
                     COALESCE(icon, '') as icon,
@@ -107,11 +112,13 @@ impl CategoryRepository for PostgresRepository {
                     category_type::text as category_type,
                     created_at
                 FROM category
-                WHERE (created_at, id) < (SELECT created_at, id FROM category WHERE id = $1)
+                WHERE user_id = $1
+                    AND (created_at, id) < (SELECT created_at, id FROM category WHERE id = $2)
                 ORDER BY created_at DESC, id DESC
-                LIMIT $2
+                LIMIT $3
                 "#,
             )
+            .bind(user_id)
             .bind(cursor)
             .bind(params.fetch_limit())
             .fetch_all(&self.pool)
@@ -121,6 +128,7 @@ impl CategoryRepository for PostgresRepository {
                 r#"
                 SELECT
                     id,
+                    user_id,
                     name,
                     COALESCE(color, '') as color,
                     COALESCE(icon, '') as icon,
@@ -128,10 +136,12 @@ impl CategoryRepository for PostgresRepository {
                     category_type::text as category_type,
                     created_at
                 FROM category
+                WHERE user_id = $1
                 ORDER BY created_at DESC, id DESC
-                LIMIT $1
+                LIMIT $2
                 "#,
             )
+            .bind(user_id)
             .bind(params.fetch_limit())
             .fetch_all(&self.pool)
             .await?
@@ -140,20 +150,25 @@ impl CategoryRepository for PostgresRepository {
         Ok(rows.into_iter().map(Category::from).collect())
     }
 
-    async fn delete_category(&self, id: &Uuid) -> Result<(), AppError> {
-        sqlx::query("DELETE FROM category WHERE id = $1").bind(id).execute(&self.pool).await?;
+    async fn delete_category(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
+        sqlx::query("DELETE FROM category WHERE id = $1 AND user_id = $2")
+            .bind(id)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }
 
-    async fn update_category(&self, id: &Uuid, request: &CategoryRequest) -> Result<Category, AppError> {
+    async fn update_category(&self, id: &Uuid, request: &CategoryRequest, user_id: &Uuid) -> Result<Category, AppError> {
         let row = sqlx::query_as::<_, CategoryRow>(
             r#"
             UPDATE category
             SET name = $1, color = $2, icon = $3, parent_id = $4, category_type = $5::text::category_type
-            WHERE id = $6
+            WHERE id = $6 AND user_id = $7
             RETURNING
                 id,
+                user_id,
                 name,
                 COALESCE(color, '') as color,
                 COALESCE(icon, '') as icon,
@@ -168,18 +183,20 @@ impl CategoryRepository for PostgresRepository {
         .bind(request.parent_id)
         .bind(request.category_type_to_db())
         .bind(id)
+        .bind(user_id)
         .fetch_one(&self.pool)
         .await?;
 
         Ok(Category::from(row))
     }
 
-    async fn list_categories_not_in_budget(&self, params: &CursorParams) -> Result<Vec<Category>, AppError> {
+    async fn list_categories_not_in_budget(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Category>, AppError> {
         let rows = if let Some(cursor) = params.cursor {
             sqlx::query_as::<_, CategoryRow>(
                 r#"
                 SELECT
                     c.id,
+                    c.user_id,
                     c.name,
                     COALESCE(c.color, '') as color,
                     COALESCE(c.icon, '') as icon,
@@ -190,11 +207,13 @@ impl CategoryRepository for PostgresRepository {
                 LEFT JOIN budget_category bc ON c.id = bc.category_id
                 WHERE bc.id IS NULL
                     AND c.category_type = 'Outgoing'
-                    AND (c.created_at, c.id) < (SELECT created_at, id FROM category WHERE id = $1)
+                    AND c.user_id = $1
+                    AND (c.created_at, c.id) < (SELECT created_at, id FROM category WHERE id = $2)
                 ORDER BY c.created_at DESC, c.id DESC
-                LIMIT $2
+                LIMIT $3
                 "#,
             )
+            .bind(user_id)
             .bind(cursor)
             .bind(params.fetch_limit())
             .fetch_all(&self.pool)
@@ -204,6 +223,7 @@ impl CategoryRepository for PostgresRepository {
                 r#"
                 SELECT
                     c.id,
+                    c.user_id,
                     c.name,
                     COALESCE(c.color, '') as color,
                     COALESCE(c.icon, '') as icon,
@@ -214,10 +234,12 @@ impl CategoryRepository for PostgresRepository {
                 LEFT JOIN budget_category bc ON c.id = bc.category_id
                 WHERE bc.id IS NULL
                     AND c.category_type = 'Outgoing'
+                    AND c.user_id = $1
                 ORDER BY c.created_at DESC, c.id DESC
-                LIMIT $1
+                LIMIT $2
                 "#,
             )
+            .bind(user_id)
             .bind(params.fetch_limit())
             .fetch_all(&self.pool)
             .await?

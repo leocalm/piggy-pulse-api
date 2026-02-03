@@ -50,18 +50,21 @@ where
         }
     }
 
-    async fn get_transactions(&mut self) -> Result<Arc<Vec<Transaction>>, AppError> {
+    async fn get_transactions(&mut self, user_id: &Uuid) -> Result<Arc<Vec<Transaction>>, AppError> {
         if self.transactions.is_none() {
-            let data = self.repository.get_transactions_for_period(&self.budget_period.id, &Self::all_rows()).await?;
+            let data = self
+                .repository
+                .get_transactions_for_period(&self.budget_period.id, &Self::all_rows(), user_id)
+                .await?;
             self.transactions = Some(Arc::new(data));
         }
 
         Ok(Arc::clone(self.transactions.as_ref().unwrap()))
     }
 
-    async fn get_budget_categories(&mut self) -> Result<Arc<Vec<BudgetCategory>>, AppError> {
+    async fn get_budget_categories(&mut self, user_id: &Uuid) -> Result<Arc<Vec<BudgetCategory>>, AppError> {
         if self.budget_categories.is_none() {
-            let data = self.repository.list_budget_categories(&Self::all_rows()).await?;
+            let data = self.repository.list_budget_categories(&Self::all_rows(), user_id).await?;
             self.budget_categories = Some(Arc::new(data));
         }
 
@@ -77,9 +80,9 @@ where
         Ok(Arc::clone(self.accounts.as_ref().unwrap()))
     }
 
-    async fn get_all_transactions(&mut self) -> Result<Arc<Vec<Transaction>>, AppError> {
+    async fn get_all_transactions(&mut self, user_id: &Uuid) -> Result<Arc<Vec<Transaction>>, AppError> {
         if self.all_transactions.is_none() {
-            let data = self.repository.list_transactions(&Self::all_rows()).await?;
+            let data = self.repository.list_transactions(&Self::all_rows(), user_id).await?;
             self.all_transactions = Some(Arc::new(data));
         }
 
@@ -107,15 +110,15 @@ where
         })
     }
 
-    pub async fn recent_transactions(&mut self) -> Result<Vec<TransactionResponse>, AppError> {
-        Ok(self.get_transactions().await?.iter().take(10).map(TransactionResponse::from).collect())
+    pub async fn recent_transactions(&mut self, user_id: &Uuid) -> Result<Vec<TransactionResponse>, AppError> {
+        Ok(self.get_transactions(user_id).await?.iter().take(10).map(TransactionResponse::from).collect())
     }
 
     pub async fn budget_per_day(&mut self, user_id: &Uuid) -> Result<Vec<BudgetPerDayResponse>, AppError> {
         let mut data = Vec::new();
-        let transactions = self.get_transactions().await?;
+        let transactions = self.get_transactions(user_id).await?;
         let accounts = self.get_accounts(user_id).await?;
-        let all_transactions = self.get_all_transactions().await?;
+        let all_transactions = self.get_all_transactions(user_id).await?;
         let start_date = self.budget_period.start_date;
         let end_date = self.budget_period.end_date;
 
@@ -142,9 +145,9 @@ where
         Ok(data)
     }
 
-    pub async fn spent_per_category(&mut self) -> Result<Vec<SpentPerCategoryResponse>, AppError> {
-        let transactions = self.get_transactions().await?;
-        let budget_categories = self.get_budget_categories().await?;
+    pub async fn spent_per_category(&mut self, user_id: &Uuid) -> Result<Vec<SpentPerCategoryResponse>, AppError> {
+        let transactions = self.get_transactions(user_id).await?;
+        let budget_categories = self.get_budget_categories(user_id).await?;
 
         let mut data = budget_categories
             .iter()
@@ -167,11 +170,11 @@ where
         Ok(data)
     }
 
-    pub async fn monthly_burn_in(&mut self) -> Result<MonthlyBurnInResponse, AppError> {
+    pub async fn monthly_burn_in(&mut self, user_id: &Uuid) -> Result<MonthlyBurnInResponse, AppError> {
         Ok(MonthlyBurnInResponse {
-            total_budget: self.get_budget_categories().await?.iter().fold(0, |acc, bc| acc + bc.budgeted_value),
+            total_budget: self.get_budget_categories(user_id).await?.iter().fold(0, |acc, bc| acc + bc.budgeted_value),
             spent_budget: self
-                .get_transactions()
+                .get_transactions(user_id)
                 .await?
                 .iter()
                 .filter(|tx| tx.category.category_type == CategoryType::Outgoing)
@@ -183,17 +186,17 @@ where
 
     async fn total_asset(&mut self, user_id: &Uuid) -> Result<i32, AppError> {
         let accounts = self.get_accounts(user_id).await?;
-        let transactions = self.get_all_transactions().await?;
+        let transactions = self.get_all_transactions(user_id).await?;
 
         Ok(accounts.iter().fold(0, |acc, account| acc + balance_on_date(None, account, &transactions)))
     }
 
     pub async fn dashboard_response(&mut self, user_id: &Uuid) -> Result<DashboardResponse, AppError> {
-        let recent_transactions = self.recent_transactions().await?;
+        let recent_transactions = self.recent_transactions(user_id).await?;
         let month_progress = self.month_progress().await?;
         let budget_per_day = self.budget_per_day(user_id).await?;
-        let spent_per_category = self.spent_per_category().await?;
-        let monthly_burn_in = self.monthly_burn_in().await?;
+        let spent_per_category = self.spent_per_category(user_id).await?;
+        let monthly_burn_in = self.monthly_burn_in(user_id).await?;
         let total_asset = self.total_asset(user_id).await?;
 
         Ok(DashboardResponse {
@@ -418,7 +421,7 @@ mod tests {
                 dashboard_service.budget_categories = Some(Arc::new(budget_categories));
                 dashboard_service.transactions = Some(Arc::new(vec![]));
 
-                let result = tokio::runtime::Runtime::new().unwrap().block_on(dashboard_service.monthly_burn_in()).unwrap();
+                let result = tokio::runtime::Runtime::new().unwrap().block_on(dashboard_service.monthly_burn_in(&Uuid::new_v4())).unwrap();
 
                 prop_assert_eq!(result.total_budget, expected_total);
                 prop_assert_eq!(result.spent_budget, 0);

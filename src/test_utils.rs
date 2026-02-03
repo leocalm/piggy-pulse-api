@@ -119,59 +119,64 @@ impl AccountRepository for MockRepository {
 
 #[async_trait::async_trait]
 impl BudgetCategoryRepository for MockRepository {
-    async fn create_budget_category(&self, request: &BudgetCategoryRequest) -> Result<BudgetCategory, AppError> {
+    async fn create_budget_category(&self, request: &BudgetCategoryRequest, _user_id: &Uuid) -> Result<BudgetCategory, AppError> {
         Ok(request.into())
     }
 
-    async fn get_budget_category_by_id(&self, id: &Uuid) -> Result<Option<BudgetCategory>, AppError> {
+    async fn get_budget_category_by_id(&self, id: &Uuid, _user_id: &Uuid) -> Result<Option<BudgetCategory>, AppError> {
         Ok(Some(BudgetCategory {
             id: *id,
             ..BudgetCategory::default()
         }))
     }
 
-    async fn list_budget_categories(&self, _params: &crate::models::pagination::CursorParams) -> Result<Vec<BudgetCategory>, AppError> {
+    async fn list_budget_categories(&self, _params: &crate::models::pagination::CursorParams, _user_id: &Uuid) -> Result<Vec<BudgetCategory>, AppError> {
         Ok(vec![BudgetCategory::default()])
     }
 
-    async fn delete_budget_category(&self, _id: &Uuid) -> Result<(), AppError> {
+    async fn delete_budget_category(&self, _id: &Uuid, _user_id: &Uuid) -> Result<(), AppError> {
         Ok(())
     }
 
-    async fn update_budget_category_value(&self, _id: &Uuid, _new_budget_value: &i32) -> Result<(), AppError> {
+    async fn update_budget_category_value(&self, _id: &Uuid, _new_budget_value: &i32, _user_id: &Uuid) -> Result<(), AppError> {
         Ok(())
     }
 }
 
 #[async_trait::async_trait]
 impl TransactionRepository for MockRepository {
-    async fn create_transaction(&self, transaction_request: &TransactionRequest) -> Result<Transaction, AppError> {
+    async fn create_transaction(&self, transaction_request: &TransactionRequest, _user_id: &Uuid) -> Result<Transaction, AppError> {
         Ok(Transaction {
             id: Uuid::new_v4(),
             ..transaction_request.into()
         })
     }
 
-    async fn get_transaction_by_id(&self, id: &Uuid) -> Result<Option<Transaction>, AppError> {
+    async fn get_transaction_by_id(&self, id: &Uuid, _user_id: &Uuid) -> Result<Option<Transaction>, AppError> {
         Ok(Some(Transaction {
             id: *id,
             ..Transaction::default()
         }))
     }
 
-    async fn list_transactions(&self, _params: &crate::models::pagination::CursorParams) -> Result<Vec<Transaction>, AppError> {
+    async fn list_transactions(&self, _params: &crate::models::pagination::CursorParams, _user_id: &Uuid) -> Result<Vec<Transaction>, AppError> {
         Ok(vec![Transaction::default()])
     }
 
-    async fn get_transactions_for_period(&self, _period_id: &Uuid, _params: &crate::models::pagination::CursorParams) -> Result<Vec<Transaction>, AppError> {
+    async fn get_transactions_for_period(
+        &self,
+        _period_id: &Uuid,
+        _params: &crate::models::pagination::CursorParams,
+        _user_id: &Uuid,
+    ) -> Result<Vec<Transaction>, AppError> {
         Ok(vec![Transaction::default()])
     }
 
-    async fn delete_transaction(&self, _id: &Uuid) -> Result<(), AppError> {
+    async fn delete_transaction(&self, _id: &Uuid, _user_id: &Uuid) -> Result<(), AppError> {
         Ok(())
     }
 
-    async fn update_transaction(&self, id: &Uuid, transaction_request: &TransactionRequest) -> Result<Transaction, AppError> {
+    async fn update_transaction(&self, id: &Uuid, transaction_request: &TransactionRequest, _user_id: &Uuid) -> Result<Transaction, AppError> {
         Ok(Transaction {
             id: *id,
             ..transaction_request.into()
@@ -181,23 +186,23 @@ impl TransactionRepository for MockRepository {
 
 #[async_trait::async_trait]
 impl BudgetRepository for MockRepository {
-    async fn create_budget(&self, request: &BudgetRequest) -> Result<Budget, AppError> {
+    async fn create_budget(&self, request: &BudgetRequest, _user_id: &Uuid) -> Result<Budget, AppError> {
         Ok(request.into())
     }
 
-    async fn get_budget_by_id(&self, id: &Uuid) -> Result<Option<Budget>, AppError> {
+    async fn get_budget_by_id(&self, id: &Uuid, _user_id: &Uuid) -> Result<Option<Budget>, AppError> {
         Ok(Some(Budget { id: *id, ..Budget::default() }))
     }
 
-    async fn list_budgets(&self, _params: &crate::models::pagination::CursorParams) -> Result<Vec<Budget>, AppError> {
+    async fn list_budgets(&self, _params: &crate::models::pagination::CursorParams, _user_id: &Uuid) -> Result<Vec<Budget>, AppError> {
         Ok(vec![Budget::default()])
     }
 
-    async fn delete_budget(&self, _id: &Uuid) -> Result<(), AppError> {
+    async fn delete_budget(&self, _id: &Uuid, _user_id: &Uuid) -> Result<(), AppError> {
         Ok(())
     }
 
-    async fn update_budget(&self, id: &Uuid, request: &BudgetRequest) -> Result<Budget, AppError> {
+    async fn update_budget(&self, id: &Uuid, request: &BudgetRequest, _user_id: &Uuid) -> Result<Budget, AppError> {
         let mut budget: Budget = request.into();
         budget.id = *id;
         Ok(budget)

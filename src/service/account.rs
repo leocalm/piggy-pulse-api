@@ -29,7 +29,7 @@ where
             cursor: None,
             limit: Some(CursorParams::MAX_LIMIT),
         };
-        let transactions = self.repository.list_transactions(&all_params).await?;
+        let transactions = self.repository.list_transactions(&all_params, user_id).await?;
 
         Ok(accounts
             .iter()

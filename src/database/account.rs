@@ -101,7 +101,7 @@ impl AccountRepository for PostgresRepository {
             "#,
         )
         .bind(&request.name)
-        .bind(&user_id)
+        .bind(user_id)
         .bind(&request.color)
         .bind(&request.icon)
         .bind(&account_type_str)
@@ -130,6 +130,7 @@ impl AccountRepository for PostgresRepository {
             r#"
             SELECT
                 a.id,
+                a.user_id,
                 a.name,
                 a.color,
                 a.icon,
@@ -162,6 +163,7 @@ impl AccountRepository for PostgresRepository {
                 r#"
                 SELECT
                     a.id,
+                    a.user_id,
                     a.name,
                     a.color,
                     a.icon,
@@ -181,7 +183,7 @@ impl AccountRepository for PostgresRepository {
                     SELECT created_at, id FROM account WHERE id = $1
                 ) AND a.user_id = $2
                 ORDER BY a.created_at DESC, a.id DESC
-                LIMIT $4
+                LIMIT $3
                 "#,
             )
             .bind(cursor)
@@ -194,6 +196,7 @@ impl AccountRepository for PostgresRepository {
                 r#"
                 SELECT
                     a.id,
+                    a.user_id,
                     a.name,
                     a.color,
                     a.icon,
@@ -209,10 +212,12 @@ impl AccountRepository for PostgresRepository {
                     c.created_at as currency_created_at
                 FROM account a
                 JOIN currency c ON c.id = a.currency_id
+                WHERE a.user_id = $1
                 ORDER BY a.created_at DESC, a.id DESC
-                LIMIT $1
+                LIMIT $2
                 "#,
             )
+            .bind(user_id)
             .bind(params.fetch_limit())
             .fetch_all(&self.pool)
             .await?
