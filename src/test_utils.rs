@@ -94,23 +94,23 @@ pub struct MockRepository {}
 
 #[async_trait::async_trait]
 impl AccountRepository for MockRepository {
-    async fn create_account(&self, request: &AccountRequest) -> Result<Account, AppError> {
+    async fn create_account(&self, request: &AccountRequest, _user_id: &Uuid) -> Result<Account, AppError> {
         Ok(request.into())
     }
 
-    async fn get_account_by_id(&self, id: &Uuid) -> Result<Option<Account>, AppError> {
+    async fn get_account_by_id(&self, id: &Uuid, _user_id: &Uuid) -> Result<Option<Account>, AppError> {
         Ok(Some(Account { id: *id, ..Account::default() }))
     }
 
-    async fn list_accounts(&self, _params: &crate::models::pagination::CursorParams) -> Result<Vec<Account>, AppError> {
+    async fn list_accounts(&self, _params: &crate::models::pagination::CursorParams, _user_id: &Uuid) -> Result<Vec<Account>, AppError> {
         Ok(vec![Account::default()])
     }
 
-    async fn delete_account(&self, _id: &Uuid) -> Result<(), AppError> {
+    async fn delete_account(&self, _id: &Uuid, _user_id: &Uuid) -> Result<(), AppError> {
         Ok(())
     }
 
-    async fn update_account(&self, id: &Uuid, request: &AccountRequest) -> Result<Account, AppError> {
+    async fn update_account(&self, id: &Uuid, request: &AccountRequest, _user_id: &Uuid) -> Result<Account, AppError> {
         let mut account: Account = request.into();
         account.id = *id;
         Ok(account)

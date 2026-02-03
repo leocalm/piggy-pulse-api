@@ -6,7 +6,7 @@ use crate::models::account::{AccountRequest, AccountResponse};
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use crate::service::account::AccountService;
 use rocket::serde::json::Json;
-use rocket::{State, http::Status, routes};
+use rocket::{http::Status, routes, State};
 use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
@@ -14,20 +14,20 @@ use validator::Validate;
 #[rocket::post("/", data = "<payload>")]
 pub async fn create_account(
     pool: &State<PgPool>,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     payload: Json<AccountRequest>,
 ) -> Result<(Status, Json<AccountResponse>), AppError> {
     payload.validate()?;
 
     let repo = PostgresRepository { pool: pool.inner().clone() };
-    let account = repo.create_account(&payload).await?;
+    let account = repo.create_account(&payload, &current_user.id).await?;
     Ok((Status::Created, Json(AccountResponse::from(&account))))
 }
 
 #[rocket::get("/?<cursor>&<limit>")]
 pub async fn list_all_accounts(
     pool: &State<PgPool>,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     cursor: Option<String>,
     limit: Option<i64>,
 ) -> Result<Json<CursorPaginatedResponse<AccountResponse>>, AppError> {
@@ -35,15 +35,15 @@ pub async fn list_all_accounts(
     let account_service = AccountService::new(&repo);
     let params = CursorParams::from_query(cursor, limit)?;
 
-    let responses = account_service.list_accounts(&params).await?;
+    let responses = account_service.list_accounts(&params, &current_user.id).await?;
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.id)))
 }
 
 #[rocket::get("/<id>")]
-pub async fn get_account(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Json<AccountResponse>, AppError> {
+pub async fn get_account(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Json<AccountResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
-    if let Some(account) = repo.get_account_by_id(&uuid).await? {
+    if let Some(account) = repo.get_account_by_id(&uuid, &current_user.id).await? {
         Ok(Json(AccountResponse::from(&account)))
     } else {
         Err(AppError::NotFound("Account not found".to_string()))
@@ -51,18 +51,18 @@ pub async fn get_account(pool: &State<PgPool>, _current_user: CurrentUser, id: &
 }
 
 #[rocket::delete("/<id>")]
-pub async fn delete_account(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+pub async fn delete_account(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
-    repo.delete_account(&uuid).await?;
+    repo.delete_account(&uuid, &current_user.id).await?;
     Ok(Status::Ok)
 }
 
 #[rocket::put("/<id>", data = "<payload>")]
-pub async fn put_account(pool: &State<PgPool>, _current_user: CurrentUser, id: &str, payload: Json<AccountRequest>) -> Result<Json<AccountResponse>, AppError> {
+pub async fn put_account(pool: &State<PgPool>, current_user: CurrentUser, id: &str, payload: Json<AccountRequest>) -> Result<Json<AccountResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
-    let account = repo.update_account(&uuid, &payload).await?;
+    let account = repo.update_account(&uuid, &payload, &current_user.id).await?;
     Ok(Json(AccountResponse::from(&account)))
 }
 
@@ -72,7 +72,7 @@ pub fn routes() -> Vec<rocket::Route> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Config, build_rocket};
+    use crate::{build_rocket, Config};
     use rocket::http::{ContentType, Status};
     use rocket::local::asynchronous::Client;
 

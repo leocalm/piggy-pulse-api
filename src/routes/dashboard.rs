@@ -7,7 +7,7 @@ use crate::models::dashboard::{BudgetPerDayResponse, DashboardResponse, MonthPro
 use crate::models::transaction::TransactionResponse;
 use crate::service::dashboard::DashboardService;
 use rocket::serde::json::Json;
-use rocket::{State, routes};
+use rocket::{routes, State};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -47,12 +47,12 @@ pub async fn get_recent_transactions(pool: &State<PgPool>, _current_user: Curren
 }
 
 #[rocket::get("/dashboard?<period_id>")]
-pub async fn get_dashboard(pool: &State<PgPool>, _current_user: CurrentUser, period_id: String) -> Result<Json<DashboardResponse>, AppError> {
+pub async fn get_dashboard(pool: &State<PgPool>, current_user: CurrentUser, period_id: String) -> Result<Json<DashboardResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let budget_period_uuid = Uuid::parse_str(&period_id).map_err(|e| AppError::uuid("Invalid budget period id", e))?;
     let budget_period = repo.get_budget_period(&budget_period_uuid).await?;
     let mut dashboard_service = DashboardService::new(&repo, &budget_period);
-    Ok(Json(dashboard_service.dashboard_response().await?))
+    Ok(Json(dashboard_service.dashboard_response(&current_user.id).await?))
 }
 
 pub fn routes() -> Vec<rocket::Route> {

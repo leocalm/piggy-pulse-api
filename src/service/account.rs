@@ -6,6 +6,7 @@ use crate::models::currency::CurrencyResponse;
 use crate::models::pagination::CursorParams;
 use crate::service::service_util::balance_on_date;
 use chrono::Utc;
+use uuid::Uuid;
 
 pub struct AccountService<'a, R>
 where
@@ -22,8 +23,8 @@ where
         AccountService { repository }
     }
 
-    pub async fn list_accounts(&self, params: &CursorParams) -> Result<Vec<AccountResponse>, AppError> {
-        let accounts = self.repository.list_accounts(params).await?;
+    pub async fn list_accounts(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<AccountResponse>, AppError> {
+        let accounts = self.repository.list_accounts(params, user_id).await?;
         let all_params = CursorParams {
             cursor: None,
             limit: Some(CursorParams::MAX_LIMIT),
@@ -57,7 +58,7 @@ mod tests {
         let service = AccountService::new(&repo);
         let params = CursorParams { cursor: None, limit: None };
 
-        let result = service.list_accounts(&params).await;
+        let result = service.list_accounts(&params, &Uuid::new_v4()).await;
         assert!(result.is_ok());
 
         let accounts = result.unwrap();
@@ -70,7 +71,7 @@ mod tests {
         let service = AccountService::new(&repo);
         let params = CursorParams { cursor: None, limit: Some(10) };
 
-        let result = service.list_accounts(&params).await;
+        let result = service.list_accounts(&params, &Uuid::new_v4()).await;
         assert!(result.is_ok());
     }
 }
