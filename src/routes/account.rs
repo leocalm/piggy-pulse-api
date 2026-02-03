@@ -1,40 +1,37 @@
 use crate::auth::CurrentUser;
 use crate::database::account::AccountRepository;
 use crate::database::postgres_repository::PostgresRepository;
-use crate::db::get_client;
 use crate::error::app_error::AppError;
 use crate::models::account::{AccountRequest, AccountResponse};
 use crate::models::pagination::{PaginatedResponse, PaginationParams};
 use crate::service::account::AccountService;
-use deadpool_postgres::Pool;
 use rocket::serde::json::Json;
 use rocket::{State, http::Status, routes};
+use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
 
 #[rocket::post("/", data = "<payload>")]
 pub async fn create_account(
-    pool: &State<Pool>,
+    pool: &State<PgPool>,
     _current_user: CurrentUser,
     payload: Json<AccountRequest>,
 ) -> Result<(Status, Json<AccountResponse>), AppError> {
     payload.validate()?;
 
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+    let repo = PostgresRepository { pool: pool.inner().clone() };
     let account = repo.create_account(&payload).await?;
     Ok((Status::Created, Json(AccountResponse::from(&account))))
 }
 
 #[rocket::get("/?<page>&<limit>")]
 pub async fn list_all_accounts(
-    pool: &State<Pool>,
+    pool: &State<PgPool>,
     _current_user: CurrentUser,
     page: Option<i64>,
     limit: Option<i64>,
 ) -> Result<Json<PaginatedResponse<AccountResponse>>, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+    let repo = PostgresRepository { pool: pool.inner().clone() };
     let account_service = AccountService::new(&repo);
 
     let pagination = if page.is_some() || limit.is_some() {
@@ -58,9 +55,8 @@ pub async fn list_all_accounts(
 }
 
 #[rocket::get("/<id>")]
-pub async fn get_account(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Json<AccountResponse>, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+pub async fn get_account(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Json<AccountResponse>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
     if let Some(account) = repo.get_account_by_id(&uuid).await? {
         Ok(Json(AccountResponse::from(&account)))
@@ -70,18 +66,16 @@ pub async fn get_account(pool: &State<Pool>, _current_user: CurrentUser, id: &st
 }
 
 #[rocket::delete("/<id>")]
-pub async fn delete_account(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+pub async fn delete_account(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
     repo.delete_account(&uuid).await?;
     Ok(Status::Ok)
 }
 
 #[rocket::put("/<id>", data = "<payload>")]
-pub async fn put_account(pool: &State<Pool>, _current_user: CurrentUser, id: &str, payload: Json<AccountRequest>) -> Result<Json<AccountResponse>, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+pub async fn put_account(pool: &State<PgPool>, _current_user: CurrentUser, id: &str, payload: Json<AccountRequest>) -> Result<Json<AccountResponse>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
     let account = repo.update_account(&uuid, &payload).await?;
     Ok(Json(AccountResponse::from(&account)))

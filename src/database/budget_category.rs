@@ -3,8 +3,43 @@ use crate::error::app_error::AppError;
 use crate::models::budget_category::{BudgetCategory, BudgetCategoryRequest};
 use crate::models::category::Category;
 use crate::models::pagination::PaginationParams;
-use tokio_postgres::Row;
+use chrono::{DateTime, Utc};
 use uuid::Uuid;
+
+// Intermediate struct for sqlx query results with JOINed category data
+#[derive(Debug, sqlx::FromRow)]
+struct BudgetCategoryRow {
+    id: Uuid,
+    category_id: Uuid,
+    budgeted_value: i32,
+    created_at: DateTime<Utc>,
+    category_name: String,
+    category_color: String,
+    category_icon: String,
+    category_parent_id: Option<Uuid>,
+    category_category_type: String,
+    category_created_at: DateTime<Utc>,
+}
+
+impl From<BudgetCategoryRow> for BudgetCategory {
+    fn from(row: BudgetCategoryRow) -> Self {
+        BudgetCategory {
+            id: row.id,
+            category_id: row.category_id,
+            budgeted_value: row.budgeted_value,
+            created_at: row.created_at,
+            category: Category {
+                id: row.category_id,
+                name: row.category_name,
+                color: row.category_color,
+                icon: row.category_icon,
+                parent_id: row.category_parent_id,
+                category_type: crate::database::category::category_type_from_db(&row.category_category_type),
+                created_at: row.category_created_at,
+            },
+        }
+    }
+}
 
 #[async_trait::async_trait]
 pub trait BudgetCategoryRepository {
@@ -16,42 +51,39 @@ pub trait BudgetCategoryRepository {
 }
 
 #[async_trait::async_trait]
-impl<'a> BudgetCategoryRepository for PostgresRepository<'a> {
+impl BudgetCategoryRepository for PostgresRepository {
     async fn create_budget_category(&self, request: &BudgetCategoryRequest) -> Result<BudgetCategory, AppError> {
-        let rows = self
-            .client
-            .query(
-                r#"
+        #[derive(sqlx::FromRow)]
+        struct IdRow {
+            id: Uuid,
+        }
+
+        let row = sqlx::query_as::<_, IdRow>(
+            r#"
             INSERT INTO budget_category (category_id, budgeted_value)
             VALUES ($1, $2)
             RETURNING id
             "#,
-                &[&request.category_id, &{ request.budgeted_value }],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to create budget category", e))?;
+        )
+        .bind(request.category_id)
+        .bind(request.budgeted_value)
+        .fetch_one(&self.pool)
+        .await?;
 
-        if let Some(row) = rows.first() {
-            match self.get_budget_category_by_id(&row.get("id")).await? {
-                None => Err(AppError::db_message("Error getting created budget category")),
-                Some(new_budget_category) => Ok(new_budget_category),
-            }
-        } else {
-            Err(AppError::db_message("Error mapping created budget category"))
+        match self.get_budget_category_by_id(&row.id).await? {
+            None => Err(AppError::BadRequest("Failed to retrieve newly created budget category".to_string())),
+            Some(new_budget_category) => Ok(new_budget_category),
         }
     }
 
     async fn get_budget_category_by_id(&self, id: &Uuid) -> Result<Option<BudgetCategory>, AppError> {
-        let rows = self
-            .client
-            .query(
-                r#"
+        let row = sqlx::query_as::<_, BudgetCategoryRow>(
+            r#"
             SELECT
                 bc.id,
                 bc.category_id,
                 bc.budgeted_value,
                 bc.created_at,
-                c.id as category_id,
                 c.name as category_name,
                 COALESCE(c.color, '') as category_color,
                 COALESCE(c.icon, '') as category_icon,
@@ -63,36 +95,33 @@ impl<'a> BudgetCategoryRepository for PostgresRepository<'a> {
                 ON c.id = bc.category_id
             WHERE bc.id = $1
             "#,
-                &[id],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to fetch budget category", e))?;
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
 
-        if let Some(row) = rows.first() {
-            Ok(Some(map_row_to_budget_category(row)))
-        } else {
-            Ok(None)
-        }
+        Ok(row.map(BudgetCategory::from))
     }
 
     async fn list_budget_categories(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<BudgetCategory>, i64), AppError> {
         // Get total count
-        let count_row = self
-            .client
-            .query_one("SELECT COUNT(*) as total FROM budget_category", &[])
-            .await
-            .map_err(|e| AppError::db("Failed to count budget categories", e))?;
-        let total: i64 = count_row.get("total");
+        #[derive(sqlx::FromRow)]
+        struct CountRow {
+            total: i64,
+        }
+
+        let count_row = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as total FROM budget_category")
+            .fetch_one(&self.pool)
+            .await?;
+        let total = count_row.total;
 
         // Build query with optional pagination
-        let mut query = String::from(
-            r#"
+        let base_query = r#"
             SELECT
                 bc.id,
                 bc.category_id,
                 bc.budgeted_value,
                 bc.created_at,
-                c.id as category_id,
                 c.name as category_name,
                 COALESCE(c.color, '') as category_color,
                 COALESCE(c.icon, '') as category_icon,
@@ -103,64 +132,38 @@ impl<'a> BudgetCategoryRepository for PostgresRepository<'a> {
             JOIN category c
                 ON c.id = bc.category_id
             ORDER BY bc.created_at DESC
-            "#,
-        );
+            "#;
 
-        // Add pagination if requested
-        let rows = if let Some(params) = pagination {
-            if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
-                query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-                self.client
-                    .query(&query, &[])
-                    .await
-                    .map_err(|e| AppError::db("Failed to list budget categories", e))?
-            } else {
-                self.client
-                    .query(&query, &[])
-                    .await
-                    .map_err(|e| AppError::db("Failed to list budget categories", e))?
-            }
+        let rows = if let Some(params) = pagination
+            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
+        {
+            sqlx::query_as::<_, BudgetCategoryRow>(&format!("{} LIMIT $1 OFFSET $2", base_query))
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
         } else {
-            self.client
-                .query(&query, &[])
-                .await
-                .map_err(|e| AppError::db("Failed to list budget categories", e))?
+            sqlx::query_as::<_, BudgetCategoryRow>(base_query).fetch_all(&self.pool).await?
         };
 
-        Ok((rows.into_iter().map(|r| map_row_to_budget_category(&r)).collect(), total))
+        let budget_categories: Vec<BudgetCategory> = rows.into_iter().map(BudgetCategory::from).collect();
+
+        Ok((budget_categories, total))
     }
 
     async fn delete_budget_category(&self, id: &Uuid) -> Result<(), AppError> {
-        self.client
-            .execute(r#"DELETE FROM budget_category WHERE id = $1"#, &[id])
-            .await
-            .map_err(|e| AppError::db("Failed to delete budget category", e))?;
+        sqlx::query("DELETE FROM budget_category WHERE id = $1").bind(id).execute(&self.pool).await?;
+
         Ok(())
     }
 
     async fn update_budget_category_value(&self, id: &Uuid, new_budget_value: &i32) -> Result<(), AppError> {
-        self.client
-            .execute(r#"UPDATE budget_category SET budgeted_value = $2 WHERE id = $1"#, &[id, &new_budget_value])
-            .await
-            .map_err(|e| AppError::db("Failed to update budget category", e))?;
-        Ok(())
-    }
-}
+        sqlx::query("UPDATE budget_category SET budgeted_value = $2 WHERE id = $1")
+            .bind(id)
+            .bind(new_budget_value)
+            .execute(&self.pool)
+            .await?;
 
-fn map_row_to_budget_category(row: &Row) -> BudgetCategory {
-    BudgetCategory {
-        id: row.get("id"),
-        category_id: row.get("category_id"),
-        budgeted_value: row.get::<_, i32>("budgeted_value"),
-        created_at: row.get("created_at"),
-        category: Category {
-            id: row.get("category_id"),
-            name: row.get("category_name"),
-            color: row.get("category_color"),
-            icon: row.get("category_icon"),
-            parent_id: row.get("category_parent_id"),
-            category_type: crate::database::category::category_type_from_db(row.get::<_, &str>("category_category_type")),
-            created_at: row.get("category_created_at"),
-        },
+        Ok(())
     }
 }

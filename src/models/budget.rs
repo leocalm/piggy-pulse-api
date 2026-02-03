@@ -3,7 +3,7 @@ use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
-#[derive(Serialize, Debug, Default)]
+#[derive(Serialize, Debug, Default, sqlx::FromRow)]
 pub struct Budget {
     #[serde(default)]
     pub id: Uuid,

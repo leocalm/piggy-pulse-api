@@ -1,5 +1,6 @@
-use deadpool_postgres::Client;
+use sqlx::PgPool;
 
-pub struct PostgresRepository<'a> {
-    pub client: &'a Client,
+#[derive(Clone)]
+pub struct PostgresRepository {
+    pub pool: PgPool,
 }

@@ -2,8 +2,34 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::category::{Category, CategoryRequest, CategoryType};
 use crate::models::pagination::PaginationParams;
-use tokio_postgres::Row;
+use chrono::{DateTime, Utc};
 use uuid::Uuid;
+
+// Intermediate struct for sqlx query results with category_type as text
+#[derive(Debug, sqlx::FromRow)]
+struct CategoryRow {
+    id: Uuid,
+    name: String,
+    color: String,
+    icon: String,
+    parent_id: Option<Uuid>,
+    category_type: String,
+    created_at: DateTime<Utc>,
+}
+
+impl From<CategoryRow> for Category {
+    fn from(row: CategoryRow) -> Self {
+        Category {
+            id: row.id,
+            name: row.name,
+            color: row.color,
+            icon: row.icon,
+            parent_id: row.parent_id,
+            category_type: category_type_from_db(&row.category_type),
+            created_at: row.created_at,
+        }
+    }
+}
 
 #[async_trait::async_trait]
 pub trait CategoryRepository {
@@ -16,12 +42,10 @@ pub trait CategoryRepository {
 }
 
 #[async_trait::async_trait]
-impl<'a> CategoryRepository for PostgresRepository<'a> {
+impl CategoryRepository for PostgresRepository {
     async fn create_category(&self, request: &CategoryRequest) -> Result<Category, AppError> {
-        let rows = self
-            .client
-            .query(
-                r#"
+        let row = sqlx::query_as::<_, CategoryRow>(
+            r#"
             INSERT INTO category (name, color, icon, parent_id, category_type)
             VALUES ($1, $2, $3, $4, $5::text::category_type)
             RETURNING
@@ -33,57 +57,20 @@ impl<'a> CategoryRepository for PostgresRepository<'a> {
                 category_type::text as category_type,
                 created_at
             "#,
-                &[&request.name, &request.color, &request.icon, &request.parent_id, &request.category_type_to_db()],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to create category", e))?;
+        )
+        .bind(&request.name)
+        .bind(&request.color)
+        .bind(&request.icon)
+        .bind(request.parent_id)
+        .bind(request.category_type_to_db())
+        .fetch_one(&self.pool)
+        .await?;
 
-        if let Some(row) = rows.first() {
-            Ok(map_row_to_category(row))
-        } else {
-            Err(AppError::db_message("Error mapping created category"))
-        }
+        Ok(Category::from(row))
     }
 
     async fn get_category_by_id(&self, id: &Uuid) -> Result<Option<Category>, AppError> {
-        let rows = self
-            .client
-            .query(
-                r#"
-            SELECT
-                id,
-                name,
-                COALESCE(color, '') as color,
-                COALESCE(icon, '') as icon,
-                parent_id,
-                category_type::text as category_type,
-                created_at
-            FROM category
-            WHERE id = $1
-            "#,
-                &[id],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to fetch category", e))?;
-
-        if let Some(row) = rows.first() {
-            Ok(Some(map_row_to_category(row)))
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn list_categories(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Category>, i64), AppError> {
-        // Get total count
-        let count_row = self
-            .client
-            .query_one("SELECT COUNT(*) as total FROM category", &[])
-            .await
-            .map_err(|e| AppError::db("Failed to count categories", e))?;
-        let total: i64 = count_row.get("total");
-
-        // Build query with optional pagination
-        let mut query = String::from(
+        let row = sqlx::query_as::<_, CategoryRow>(
             r#"
             SELECT
                 id,
@@ -94,44 +81,68 @@ impl<'a> CategoryRepository for PostgresRepository<'a> {
                 category_type::text as category_type,
                 created_at
             FROM category
-            ORDER BY created_at DESC
+            WHERE id = $1
             "#,
-        );
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
 
-        // Add pagination if requested
-        let rows = if let Some(params) = pagination {
-            if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
-                query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-                self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list categories", e))?
-            } else {
-                self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list categories", e))?
-            }
+        Ok(row.map(Category::from))
+    }
+
+    async fn list_categories(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Category>, i64), AppError> {
+        // Get total count
+        #[derive(sqlx::FromRow)]
+        struct CountRow {
+            total: i64,
+        }
+
+        let count_row = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as total FROM category")
+            .fetch_one(&self.pool)
+            .await?;
+        let total = count_row.total;
+
+        // Build query with optional pagination
+        let base_query = r#"
+            SELECT
+                id,
+                name,
+                COALESCE(color, '') as color,
+                COALESCE(icon, '') as icon,
+                parent_id,
+                category_type::text as category_type,
+                created_at
+            FROM category
+            ORDER BY created_at DESC
+            "#;
+
+        let rows = if let Some(params) = pagination
+            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
+        {
+            sqlx::query_as::<_, CategoryRow>(&format!("{} LIMIT $1 OFFSET $2", base_query))
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
         } else {
-            self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list categories", e))?
+            sqlx::query_as::<_, CategoryRow>(base_query).fetch_all(&self.pool).await?
         };
 
-        Ok((rows.into_iter().map(|r| map_row_to_category(&r)).collect(), total))
+        let categories: Vec<Category> = rows.into_iter().map(Category::from).collect();
+
+        Ok((categories, total))
     }
 
     async fn delete_category(&self, id: &Uuid) -> Result<(), AppError> {
-        self.client
-            .execute(
-                r#"
-            DELETE FROM category
-            WHERE id = $1
-            "#,
-                &[id],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to delete category", e))?;
+        sqlx::query("DELETE FROM category WHERE id = $1").bind(id).execute(&self.pool).await?;
+
         Ok(())
     }
 
     async fn update_category(&self, id: &Uuid, request: &CategoryRequest) -> Result<Category, AppError> {
-        let rows = self
-            .client
-            .query(
-                r#"
+        let row = sqlx::query_as::<_, CategoryRow>(
+            r#"
             UPDATE category
             SET name = $1, color = $2, icon = $3, parent_id = $4, category_type = $5::text::category_type
             WHERE id = $6
@@ -144,31 +155,28 @@ impl<'a> CategoryRepository for PostgresRepository<'a> {
                 category_type::text as category_type,
                 created_at
             "#,
-                &[
-                    &request.name,
-                    &request.color,
-                    &request.icon,
-                    &request.parent_id,
-                    &request.category_type_to_db(),
-                    &id,
-                ],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to update category", e))?;
+        )
+        .bind(&request.name)
+        .bind(&request.color)
+        .bind(&request.icon)
+        .bind(request.parent_id)
+        .bind(request.category_type_to_db())
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?;
 
-        if let Some(row) = rows.first() {
-            Ok(map_row_to_category(row))
-        } else {
-            Err(AppError::NotFound("Category not found".to_string()))
-        }
+        Ok(Category::from(row))
     }
 
     async fn list_categories_not_in_budget(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Category>, i64), AppError> {
         // Get total count
-        let count_row = self
-            .client
-            .query_one(
-                r#"
+        #[derive(sqlx::FromRow)]
+        struct CountRow {
+            total: i64,
+        }
+
+        let count_row = sqlx::query_as::<_, CountRow>(
+            r#"
             SELECT COUNT(*) as total
             FROM category c
             LEFT JOIN budget_category bc
@@ -176,15 +184,13 @@ impl<'a> CategoryRepository for PostgresRepository<'a> {
             WHERE bc.id is null
                 AND c.category_type = 'Outgoing'
             "#,
-                &[],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to count categories not in budget", e))?;
-        let total: i64 = count_row.get("total");
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        let total = count_row.total;
 
         // Build query with optional pagination
-        let mut query = String::from(
-            r#"
+        let base_query = r#"
             SELECT
                 c.id,
                 c.name,
@@ -199,43 +205,23 @@ impl<'a> CategoryRepository for PostgresRepository<'a> {
             WHERE bc.id is null
                 AND c.category_type = 'Outgoing'
             ORDER BY created_at DESC
-            "#,
-        );
+            "#;
 
-        // Add pagination if requested
-        let rows = if let Some(params) = pagination {
-            if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
-                query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-                self.client
-                    .query(&query, &[])
-                    .await
-                    .map_err(|e| AppError::db("Failed to list categories not in budget", e))?
-            } else {
-                self.client
-                    .query(&query, &[])
-                    .await
-                    .map_err(|e| AppError::db("Failed to list categories not in budget", e))?
-            }
+        let rows = if let Some(params) = pagination
+            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
+        {
+            sqlx::query_as::<_, CategoryRow>(&format!("{} LIMIT $1 OFFSET $2", base_query))
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
         } else {
-            self.client
-                .query(&query, &[])
-                .await
-                .map_err(|e| AppError::db("Failed to list categories not in budget", e))?
+            sqlx::query_as::<_, CategoryRow>(base_query).fetch_all(&self.pool).await?
         };
 
-        Ok((rows.into_iter().map(|r| map_row_to_category(&r)).collect(), total))
-    }
-}
+        let categories: Vec<Category> = rows.into_iter().map(Category::from).collect();
 
-fn map_row_to_category(row: &Row) -> Category {
-    Category {
-        id: row.get("id"),
-        name: row.get("name"),
-        color: row.get("color"),
-        icon: row.get("icon"),
-        parent_id: row.get("parent_id"),
-        category_type: category_type_from_db(row.get::<_, &str>("category_type")),
-        created_at: row.get("created_at"),
+        Ok((categories, total))
     }
 }
 

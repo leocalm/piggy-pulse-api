@@ -1,36 +1,33 @@
 use crate::auth::CurrentUser;
 use crate::database::budget::BudgetRepository;
 use crate::database::postgres_repository::PostgresRepository;
-use crate::db::get_client;
 use crate::error::app_error::AppError;
 use crate::models::budget::{BudgetRequest, BudgetResponse};
 use crate::models::pagination::{PaginatedResponse, PaginationParams};
-use deadpool_postgres::Pool;
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{State, routes};
+use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
 
 #[rocket::post("/", data = "<payload>")]
-pub async fn create_budget(pool: &State<Pool>, _current_user: CurrentUser, payload: Json<BudgetRequest>) -> Result<(Status, Json<BudgetResponse>), AppError> {
+pub async fn create_budget(pool: &State<PgPool>, _current_user: CurrentUser, payload: Json<BudgetRequest>) -> Result<(Status, Json<BudgetResponse>), AppError> {
     payload.validate()?;
 
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+    let repo = PostgresRepository { pool: pool.inner().clone() };
     let budget = repo.create_budget(&payload).await?;
     Ok((Status::Created, Json(BudgetResponse::from(&budget))))
 }
 
 #[rocket::get("/?<page>&<limit>")]
 pub async fn list_all_budgets(
-    pool: &State<Pool>,
+    pool: &State<PgPool>,
     _current_user: CurrentUser,
     page: Option<i64>,
     limit: Option<i64>,
 ) -> Result<Json<PaginatedResponse<BudgetResponse>>, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+    let repo = PostgresRepository { pool: pool.inner().clone() };
 
     let pagination = if page.is_some() || limit.is_some() {
         Some(PaginationParams { page, limit })
@@ -53,9 +50,8 @@ pub async fn list_all_budgets(
 }
 
 #[rocket::get("/<id>")]
-pub async fn get_budget(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Json<BudgetResponse>, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+pub async fn get_budget(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Json<BudgetResponse>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget id", e))?;
     if let Some(budget) = repo.get_budget_by_id(&uuid).await? {
         Ok(Json(BudgetResponse::from(&budget)))
@@ -66,22 +62,20 @@ pub async fn get_budget(pool: &State<Pool>, _current_user: CurrentUser, id: &str
 
 #[rocket::put("/<id>", data = "<payload>")]
 pub async fn put_budget(
-    pool: &State<Pool>,
+    pool: &State<PgPool>,
     _current_user: CurrentUser,
     id: &str,
     payload: Json<BudgetRequest>,
 ) -> Result<(Status, Json<BudgetResponse>), AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+    let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget id", e))?;
     let budget = repo.update_budget(&uuid, &payload).await?;
     Ok((Status::Ok, Json(BudgetResponse::from(&budget))))
 }
 
 #[rocket::delete("/<id>")]
-pub async fn delete_budget(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+pub async fn delete_budget(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget id", e))?;
     repo.delete_budget(&uuid).await?;
     Ok(Status::Ok)

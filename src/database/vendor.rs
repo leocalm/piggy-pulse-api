@@ -2,8 +2,8 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::pagination::PaginationParams;
 use crate::models::vendor::{Vendor, VendorRequest, VendorStats, VendorWithStats};
+use chrono::{DateTime, NaiveDate, Utc};
 use rocket::FromFormField;
-use tokio_postgres::Row;
 use uuid::Uuid;
 
 #[derive(FromFormField, Debug, Clone, Copy)]
@@ -27,80 +27,69 @@ pub trait VendorRepository {
 }
 
 #[async_trait::async_trait]
-impl<'a> VendorRepository for PostgresRepository<'a> {
+impl VendorRepository for PostgresRepository {
     async fn create_vendor(&self, request: &VendorRequest) -> Result<Vendor, AppError> {
-        let rows = self
-            .client
-            .query(
-                r#"
+        let vendor = sqlx::query_as::<_, Vendor>(
+            r#"
             INSERT INTO vendor (name)
             VALUES ($1)
             RETURNING id, name, created_at
             "#,
-                &[&request.name],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to create vendor", e))?;
+        )
+        .bind(&request.name)
+        .fetch_one(&self.pool)
+        .await?;
 
-        if let Some(row) = rows.first() {
-            Ok(map_row_to_vendor(row))
-        } else {
-            Err(AppError::db_message("Error mapping created vendor"))
-        }
+        Ok(vendor)
     }
 
     async fn get_vendor_by_id(&self, id: &Uuid) -> Result<Option<Vendor>, AppError> {
-        let rows = self
-            .client
-            .query(
-                r#"
+        let vendor = sqlx::query_as::<_, Vendor>(
+            r#"
             SELECT id, name, created_at
             FROM vendor
             WHERE id = $1
             "#,
-                &[id],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to fetch vendor", e))?;
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
 
-        if let Some(row) = rows.first() {
-            Ok(Some(map_row_to_vendor(row)))
-        } else {
-            Ok(None)
-        }
+        Ok(vendor)
     }
 
     async fn list_vendors(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Vendor>, i64), AppError> {
         // Get total count
-        let count_row = self
-            .client
-            .query_one("SELECT COUNT(*) as total FROM vendor", &[])
-            .await
-            .map_err(|e| AppError::db("Failed to count vendors", e))?;
-        let total: i64 = count_row.get("total");
+        #[derive(sqlx::FromRow)]
+        struct CountRow {
+            total: i64,
+        }
+
+        let count_row = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as total FROM vendor")
+            .fetch_one(&self.pool)
+            .await?;
+        let total = count_row.total;
 
         // Build query with optional pagination
-        let mut query = String::from(
-            r#"
+        let base_query = r#"
             SELECT id, name, created_at
             FROM vendor
             ORDER BY created_at DESC
-            "#,
-        );
+            "#;
 
-        // Add pagination if requested
-        let rows = if let Some(params) = pagination {
-            if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
-                query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-                self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list vendors", e))?
-            } else {
-                self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list vendors", e))?
-            }
+        let vendors = if let Some(params) = pagination
+            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
+        {
+            sqlx::query_as::<_, Vendor>(&format!("{} LIMIT $1 OFFSET $2", base_query))
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
         } else {
-            self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list vendors", e))?
+            sqlx::query_as::<_, Vendor>(base_query).fetch_all(&self.pool).await?
         };
 
-        Ok((rows.into_iter().map(|r| map_row_to_vendor(&r)).collect(), total))
+        Ok((vendors, total))
     }
 
     async fn list_vendors_with_status(&self, order_by: VendorOrderBy) -> Result<Vec<VendorWithStats>, AppError> {
@@ -110,6 +99,15 @@ impl<'a> VendorRepository for PostgresRepository<'a> {
             VendorOrderBy::MostUsed => "transaction_count",
             VendorOrderBy::MoreRecent => "last_used_at",
         };
+
+        #[derive(sqlx::FromRow)]
+        struct VendorWithStatsRow {
+            id: Uuid,
+            name: String,
+            created_at: DateTime<Utc>,
+            transaction_count: i64,
+            last_used_at: Option<NaiveDate>,
+        }
 
         let query = format!(
             r#"
@@ -126,70 +124,43 @@ impl<'a> VendorRepository for PostgresRepository<'a> {
             order_by_clause
         );
 
-        let rows = self
-            .client
-            .query(&query, &[])
-            .await
-            .map_err(|e| AppError::db("Failed to list vendors with status", e))?;
+        let rows = sqlx::query_as::<_, VendorWithStatsRow>(&query).fetch_all(&self.pool).await?;
 
-        Ok(rows.into_iter().map(|r| map_row_to_vendor_with_status(&r)).collect())
+        Ok(rows
+            .into_iter()
+            .map(|r| VendorWithStats {
+                vendor: Vendor {
+                    id: r.id,
+                    name: r.name,
+                    created_at: r.created_at,
+                },
+                stats: VendorStats {
+                    transaction_count: r.transaction_count,
+                    last_used_at: r.last_used_at,
+                },
+            })
+            .collect())
     }
 
     async fn delete_vendor(&self, id: &Uuid) -> Result<(), AppError> {
-        self.client
-            .execute(
-                r#"
-            DELETE FROM vendor
-            WHERE id = $1
-            "#,
-                &[id],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to delete vendor", e))?;
+        sqlx::query("DELETE FROM vendor WHERE id = $1").bind(id).execute(&self.pool).await?;
         Ok(())
     }
 
     async fn update_vendor(&self, id: &Uuid, request: &VendorRequest) -> Result<Vendor, AppError> {
-        let rows = self
-            .client
-            .query(
-                r#"
+        let vendor = sqlx::query_as::<_, Vendor>(
+            r#"
             UPDATE vendor
             SET name = $1
             WHERE id = $2
             RETURNING id, name, created_at
             "#,
-                &[&request.name, &id],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to update vendor", e))?;
+        )
+        .bind(&request.name)
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?;
 
-        if let Some(row) = rows.first() {
-            Ok(map_row_to_vendor(row))
-        } else {
-            Err(AppError::NotFound("Vendor not found".to_string()))
-        }
-    }
-}
-
-fn map_row_to_vendor(row: &Row) -> Vendor {
-    Vendor {
-        id: row.get("id"),
-        name: row.get("name"),
-        created_at: row.get("created_at"),
-    }
-}
-
-fn map_row_to_vendor_with_status(row: &Row) -> VendorWithStats {
-    VendorWithStats {
-        vendor: Vendor {
-            id: row.get("id"),
-            name: row.get("name"),
-            created_at: row.get("created_at"),
-        },
-        stats: VendorStats {
-            transaction_count: row.get("transaction_count"),
-            last_used_at: row.get("last_used_at"),
-        },
+        Ok(vendor)
     }
 }

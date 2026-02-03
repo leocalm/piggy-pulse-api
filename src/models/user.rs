@@ -3,7 +3,7 @@ use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, sqlx::FromRow)]
 pub struct User {
     pub id: Uuid,
     pub name: String,

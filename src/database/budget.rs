@@ -2,7 +2,6 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::budget::{Budget, BudgetRequest};
 use crate::models::pagination::PaginationParams;
-use tokio_postgres::Row;
 use uuid::Uuid;
 
 #[async_trait::async_trait]
@@ -15,125 +14,94 @@ pub trait BudgetRepository {
 }
 
 #[async_trait::async_trait]
-impl<'a> BudgetRepository for PostgresRepository<'a> {
+impl BudgetRepository for PostgresRepository {
     async fn create_budget(&self, request: &BudgetRequest) -> Result<Budget, AppError> {
-        let rows = self
-            .client
-            .query(
-                r#"
+        let budget = sqlx::query_as::<_, Budget>(
+            r#"
             INSERT INTO budget (name, start_day)
             VALUES ($1, $2)
             RETURNING id, name, start_day, created_at
             "#,
-                &[&request.name, &{ request.start_day }],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to create budget", e))?;
+        )
+        .bind(&request.name)
+        .bind(request.start_day)
+        .fetch_one(&self.pool)
+        .await?;
 
-        if let Some(row) = rows.first() {
-            Ok(map_row_to_budget(row))
-        } else {
-            Err(AppError::db_message("Error mapping created budget"))
-        }
+        Ok(budget)
     }
 
     async fn get_budget_by_id(&self, id: &Uuid) -> Result<Option<Budget>, AppError> {
-        let rows = self
-            .client
-            .query(
-                r#"
+        let budget = sqlx::query_as::<_, Budget>(
+            r#"
             SELECT id, name, start_day, created_at
             FROM budget
             WHERE id = $1
             "#,
-                &[id],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to fetch budget", e))?;
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
 
-        if let Some(row) = rows.first() {
-            Ok(Some(map_row_to_budget(row)))
-        } else {
-            Ok(None)
-        }
+        Ok(budget)
     }
 
     async fn list_budgets(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Budget>, i64), AppError> {
         // Get total count
-        let count_row = self
-            .client
-            .query_one("SELECT COUNT(*) as total FROM budget", &[])
-            .await
-            .map_err(|e| AppError::db("Failed to count budgets", e))?;
-        let total: i64 = count_row.get("total");
+        #[derive(sqlx::FromRow)]
+        struct CountRow {
+            total: i64,
+        }
+
+        let count_row = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as total FROM budget")
+            .fetch_one(&self.pool)
+            .await?;
+        let total = count_row.total;
 
         // Build query with optional pagination
-        let mut query = String::from(
-            r#"
+        let base_query = r#"
             SELECT id, name, start_day, created_at
             FROM budget
             ORDER BY created_at DESC
-            "#,
-        );
+            "#;
 
-        // Add pagination if requested
-        let rows = if let Some(params) = pagination {
-            if let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset()) {
-                query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-                self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list budgets", e))?
-            } else {
-                self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list budgets", e))?
-            }
+        let budgets = if let Some(params) = pagination
+            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
+        {
+            sqlx::query_as::<_, Budget>(&format!("{} LIMIT $1 OFFSET $2", base_query))
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
         } else {
-            self.client.query(&query, &[]).await.map_err(|e| AppError::db("Failed to list budgets", e))?
+            sqlx::query_as::<_, Budget>(base_query).fetch_all(&self.pool).await?
         };
 
-        Ok((rows.into_iter().map(|r| map_row_to_budget(&r)).collect(), total))
+        Ok((budgets, total))
     }
 
     async fn delete_budget(&self, id: &Uuid) -> Result<(), AppError> {
-        self.client
-            .execute(
-                r#"
-            DELETE FROM budget
-            WHERE id = $1
-            "#,
-                &[id],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to delete budget", e))?;
+        sqlx::query("DELETE FROM budget WHERE id = $1").bind(id).execute(&self.pool).await?;
+
         Ok(())
     }
 
     async fn update_budget(&self, id: &Uuid, budget: &BudgetRequest) -> Result<Budget, AppError> {
-        let rows = self
-            .client
-            .query(
-                r#"
+        let updated_budget = sqlx::query_as::<_, Budget>(
+            r#"
             UPDATE budget
             SET name = $1, start_day = $2
             WHERE id = $3
             RETURNING id, name, start_day, created_at
             "#,
-                &[&budget.name, &{ budget.start_day }, &id],
-            )
-            .await
-            .map_err(|e| AppError::db("Failed to update budget", e))?;
+        )
+        .bind(&budget.name)
+        .bind(budget.start_day)
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?;
 
-        if let Some(row) = rows.first() {
-            Ok(map_row_to_budget(row))
-        } else {
-            Err(AppError::db_message("Error mapping created budget"))
-        }
-    }
-}
-
-fn map_row_to_budget(row: &Row) -> Budget {
-    Budget {
-        id: row.get("id"),
-        name: row.get("name"),
-        start_day: row.get::<_, i32>("start_day"),
-        created_at: row.get("created_at"),
+        Ok(updated_budget)
     }
 }
 

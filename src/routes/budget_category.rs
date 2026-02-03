@@ -1,40 +1,37 @@
 use crate::auth::CurrentUser;
 use crate::database::budget_category::BudgetCategoryRepository;
 use crate::database::postgres_repository::PostgresRepository;
-use crate::db::get_client;
 use crate::error::app_error::AppError;
 use crate::models::budget_category::{BudgetCategoryRequest, BudgetCategoryResponse};
 use crate::models::pagination::{PaginatedResponse, PaginationParams};
-use deadpool_postgres::Pool;
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{State, routes};
+use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
 
 #[rocket::post("/", data = "<payload>")]
 pub async fn create_budget_category(
-    pool: &State<Pool>,
+    pool: &State<PgPool>,
     _current_user: CurrentUser,
     payload: Json<BudgetCategoryRequest>,
 ) -> Result<(Status, Json<BudgetCategoryResponse>), AppError> {
     payload.validate()?;
 
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
-    let bc = repo.create_budget_category(&payload).await?;
-    Ok((Status::Created, Json(BudgetCategoryResponse::from(&bc))))
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let budget_category = repo.create_budget_category(&payload).await?;
+    Ok((Status::Created, Json(BudgetCategoryResponse::from(&budget_category))))
 }
 
 #[rocket::get("/?<page>&<limit>")]
 pub async fn list_all_budget_categories(
-    pool: &State<Pool>,
+    pool: &State<PgPool>,
     _current_user: CurrentUser,
     page: Option<i64>,
     limit: Option<i64>,
 ) -> Result<Json<PaginatedResponse<BudgetCategoryResponse>>, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+    let repo = PostgresRepository { pool: pool.inner().clone() };
 
     let pagination = if page.is_some() || limit.is_some() {
         Some(PaginationParams { page, limit })
@@ -57,9 +54,8 @@ pub async fn list_all_budget_categories(
 }
 
 #[rocket::get("/<id>")]
-pub async fn get_budget_category(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Json<BudgetCategoryResponse>, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+pub async fn get_budget_category(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Json<BudgetCategoryResponse>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget category id", e))?;
     if let Some(bc) = repo.get_budget_category_by_id(&uuid).await? {
         Ok(Json(BudgetCategoryResponse::from(&bc)))
@@ -69,18 +65,16 @@ pub async fn get_budget_category(pool: &State<Pool>, _current_user: CurrentUser,
 }
 
 #[rocket::delete("/<id>")]
-pub async fn delete_budget_category(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+pub async fn delete_budget_category(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget category id", e))?;
     repo.delete_budget_category(&uuid).await?;
     Ok(Status::Ok)
 }
 
 #[rocket::put("/<id>", data = "<payload>")]
-pub async fn put_budget_category(pool: &State<Pool>, _current_user: CurrentUser, id: &str, payload: Json<i32>) -> Result<Status, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+pub async fn put_budget_category(pool: &State<PgPool>, _current_user: CurrentUser, id: &str, payload: Json<i32>) -> Result<Status, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget category id", e))?;
     repo.update_budget_category_value(&uuid, &payload).await?;
     Ok(Status::Ok)

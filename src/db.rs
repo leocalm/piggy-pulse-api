@@ -1,37 +1,31 @@
 use crate::config::DatabaseConfig;
-use crate::error::app_error::AppError;
-use deadpool_postgres::{Client, Manager, ManagerConfig, Pool, RecyclingMethod, Runtime};
 use rocket::fairing::AdHoc;
-use std::str::FromStr;
+use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use std::time::Duration;
-use tokio_postgres::{Config, NoTls};
 
-async fn init_pool(db_config: &DatabaseConfig) -> Pool {
-    let mgr = Manager::from_config(
-        Config::from_str(&db_config.url).expect("Error parsing DATABASE_URL"),
-        NoTls,
-        ManagerConfig {
-            recycling_method: RecyclingMethod::Fast,
-        },
-    );
-
-    Pool::builder(mgr)
-        .max_size(db_config.max_connections as usize)
-        .wait_timeout(Some(Duration::from_secs(db_config.connection_timeout)))
-        .create_timeout(Some(Duration::from_secs(db_config.connection_timeout)))
-        .recycle_timeout(Some(Duration::from_secs(db_config.acquire_timeout)))
-        .runtime(Runtime::Tokio1)
-        .build()
-        .expect("failed to build Postgres pool")
+async fn init_pool(db_config: &DatabaseConfig) -> Result<PgPool, sqlx::Error> {
+    PgPoolOptions::new()
+        .max_connections(db_config.max_connections)
+        .min_connections(db_config.min_connections)
+        .acquire_timeout(Duration::from_secs(db_config.acquire_timeout))
+        .idle_timeout(Duration::from_secs(30))
+        .max_lifetime(Duration::from_secs(1800))
+        .connect(&db_config.url)
+        .await
 }
 
 pub fn stage_db(db_config: DatabaseConfig) -> AdHoc {
-    AdHoc::try_on_ignite("Postgres", |rocket| async move {
-        let client = init_pool(&db_config).await;
-        Ok(rocket.manage(client))
+    AdHoc::try_on_ignite("Postgres (sqlx)", |rocket| async move {
+        match init_pool(&db_config).await {
+            Ok(pool) => {
+                tracing::info!("Database pool initialized successfully");
+                Ok(rocket.manage(pool))
+            }
+            Err(e) => {
+                tracing::error!("Failed to initialize database pool: {}", e);
+                Err(rocket)
+            }
+        }
     })
-}
-
-pub async fn get_client(pool: &Pool) -> Result<Client, AppError> {
-    pool.get().await.map_err(|e| AppError::pool("Failed to acquire database connection", e))
 }

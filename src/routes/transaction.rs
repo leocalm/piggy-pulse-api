@@ -1,21 +1,20 @@
 use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::database::transaction::TransactionRepository;
-use crate::db::get_client;
 use crate::error::app_error::AppError;
 use crate::error::json::JsonBody;
 use crate::models::pagination::{PaginatedResponse, PaginationParams};
 use crate::models::transaction::{TransactionRequest, TransactionResponse};
-use deadpool_postgres::Pool;
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{State, routes};
+use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
 
 #[rocket::post("/", data = "<payload>")]
 pub async fn create_transaction(
-    pool: &State<Pool>,
+    pool: &State<PgPool>,
     _current_user: CurrentUser,
     payload: JsonBody<TransactionRequest>,
 ) -> Result<(Status, Json<TransactionResponse>), AppError> {
@@ -24,10 +23,9 @@ pub async fn create_transaction(
     let start = std::time::Instant::now();
 
     let client_start = std::time::Instant::now();
-    let client = get_client(pool).await?;
-    tracing::trace!("Got DB client in {:?}", client_start.elapsed());
-
-    let repo = PostgresRepository { client: &client };
+    // No longer acquiring deadpool client; use PostgresRepository with PgPool
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    tracing::trace!("Using PgPool in {:?}", client_start.elapsed());
 
     let query_start = std::time::Instant::now();
     let tx = repo.create_transaction(&payload).await?;
@@ -39,14 +37,13 @@ pub async fn create_transaction(
 
 #[rocket::get("/?<period_id>&<page>&<limit>")]
 pub async fn list_all_transactions(
-    pool: &State<Pool>,
+    pool: &State<PgPool>,
     _current_user: CurrentUser,
     period_id: Option<String>,
     page: Option<i64>,
     limit: Option<i64>,
 ) -> Result<Json<PaginatedResponse<TransactionResponse>>, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+    let repo = PostgresRepository { pool: pool.inner().clone() };
 
     let pagination = if page.is_some() || limit.is_some() {
         Some(PaginationParams { page, limit })
@@ -76,9 +73,8 @@ pub async fn list_all_transactions(
 }
 
 #[rocket::get("/<id>")]
-pub async fn get_transaction(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Json<TransactionResponse>, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+pub async fn get_transaction(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Json<TransactionResponse>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid transaction id", e))?;
     if let Some(tx) = repo.get_transaction_by_id(&uuid).await? {
         Ok(Json(TransactionResponse::from(&tx)))
@@ -88,9 +84,8 @@ pub async fn get_transaction(pool: &State<Pool>, _current_user: CurrentUser, id:
 }
 
 #[rocket::delete("/<id>")]
-pub async fn delete_transaction(pool: &State<Pool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+pub async fn delete_transaction(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid transaction id", e))?;
     repo.delete_transaction(&uuid).await?;
     Ok(Status::Ok)
@@ -98,13 +93,12 @@ pub async fn delete_transaction(pool: &State<Pool>, _current_user: CurrentUser, 
 
 #[rocket::put("/<id>", data = "<payload>")]
 pub async fn put_transaction(
-    pool: &State<Pool>,
+    pool: &State<PgPool>,
     _current_user: CurrentUser,
     id: &str,
     payload: JsonBody<TransactionRequest>,
 ) -> Result<Json<TransactionResponse>, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
+    let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid transaction id", e))?;
     let tx = repo.update_transaction(&uuid, &payload).await?;
     Ok(Json(TransactionResponse::from(&tx)))
