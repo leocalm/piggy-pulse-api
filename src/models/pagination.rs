@@ -1,70 +1,121 @@
+use crate::error::app_error::AppError;
 use rocket::serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-/// Pagination parameters for list queries
-/// Both page and limit are optional to maintain backwards compatibility
-/// When not provided, returns all results (no pagination)
+/// Cursor-based pagination parameters.
+/// `cursor` is the `id` of the last item seen on the previous page.
+/// When `None`, the query starts from the beginning of the result set.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(crate = "rocket::serde")]
-pub struct PaginationParams {
-    /// Page number (1-indexed). When None, returns all results.
-    pub page: Option<i64>,
-    /// Number of items per page. When None, uses default or returns all.
+pub struct CursorParams {
+    pub cursor: Option<Uuid>,
     pub limit: Option<i64>,
 }
 
-impl PaginationParams {
-    /// Default limit when limit is provided but not specified
+impl CursorParams {
     pub const DEFAULT_LIMIT: i64 = 50;
-    /// Maximum allowed limit
     pub const MAX_LIMIT: i64 = 200;
 
-    /// Calculate the SQL OFFSET value based on page and limit
-    /// Uses the effective (capped) limit to ensure consistent page boundaries
-    pub fn offset(&self) -> Option<i64> {
-        if let Some(effective_limit) = self.effective_limit() {
-            let page = self.page.unwrap_or(1); // Default to page 1 if not specified
-            Some((page - 1) * effective_limit)
-        } else {
-            None
-        }
+    /// Parse a cursor from the raw query-string value (which Rocket gives us as `Option<String>`).
+    #[allow(clippy::result_large_err)] // AppError is the project-wide error type; boxing it here would be inconsistent
+    pub fn from_query(cursor: Option<String>, limit: Option<i64>) -> Result<Self, AppError> {
+        let cursor = match cursor {
+            Some(s) if s.is_empty() => None,
+            Some(s) => Some(Uuid::parse_str(&s).map_err(|e| AppError::uuid("Invalid cursor", e))?),
+            None => None,
+        };
+        Ok(Self { cursor, limit })
     }
 
-    /// Get the effective limit, applying defaults and max constraints
-    pub fn effective_limit(&self) -> Option<i64> {
-        match self.limit {
-            Some(limit) => Some(limit.min(Self::MAX_LIMIT)),
-            None if self.page.is_some() => Some(Self::DEFAULT_LIMIT),
-            None => None, // No pagination when both are None
-        }
+    /// The number of rows to actually fetch from the database.
+    /// One extra row is requested so we can determine whether a next page exists.
+    pub fn fetch_limit(&self) -> i64 {
+        self.effective_limit() + 1
+    }
+
+    /// The limit that will be reported back to the caller (capped at MAX_LIMIT).
+    pub fn effective_limit(&self) -> i64 {
+        self.limit.unwrap_or(Self::DEFAULT_LIMIT).min(Self::MAX_LIMIT)
     }
 }
 
-/// Paginated response wrapper with metadata
+/// Cursor-paginated response wrapper.
+/// `next_cursor` is `Some(id)` when there is another page, `None` on the last page.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(crate = "rocket::serde")]
-pub struct PaginatedResponse<T> {
-    /// The actual data items
+pub struct CursorPaginatedResponse<T> {
     pub data: Vec<T>,
-    /// Current page number (1-indexed)
-    pub page: i64,
-    /// Number of items per page
-    pub limit: i64,
-    /// Total number of items across all pages
-    pub total_items: i64,
-    /// Total number of pages
-    pub total_pages: i64,
+    pub next_cursor: Option<Uuid>,
 }
 
-impl<T> PaginatedResponse<T> {
-    pub fn new(data: Vec<T>, page: i64, limit: i64, total_items: i64) -> Self {
-        let total_pages = if limit > 0 { (total_items + limit - 1) / limit } else { 1 };
-
-        Self {
-            data,
-            page,
-            limit,
-            total_items,
-            total_pages,
+impl<T> CursorPaginatedResponse<T> {
+    /// Build the response from a raw result set that was fetched with `limit + 1` rows.
+    /// If `rows` contains more than `limit` items the extra trailing row is dropped and
+    /// `next_cursor` is set to the `id` of the last item that *is* included.
+    pub fn from_rows<F>(mut rows: Vec<T>, limit: i64, id_of: F) -> Self
+    where
+        F: Fn(&T) -> Uuid,
+    {
+        if rows.len() as i64 > limit {
+            rows.truncate(limit as usize);
+            let next_cursor = Some(id_of(rows.last().unwrap()));
+            Self { data: rows, next_cursor }
+        } else {
+            Self { data: rows, next_cursor: None }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_effective_limit_default() {
+        let params = CursorParams { cursor: None, limit: None };
+        assert_eq!(params.effective_limit(), 50);
+        assert_eq!(params.fetch_limit(), 51);
+    }
+
+    #[test]
+    fn test_effective_limit_capped() {
+        let params = CursorParams {
+            cursor: None,
+            limit: Some(500),
+        };
+        assert_eq!(params.effective_limit(), 200);
+        assert_eq!(params.fetch_limit(), 201);
+    }
+
+    #[test]
+    fn test_effective_limit_explicit() {
+        let params = CursorParams { cursor: None, limit: Some(10) };
+        assert_eq!(params.effective_limit(), 10);
+        assert_eq!(params.fetch_limit(), 11);
+    }
+
+    #[test]
+    fn test_from_rows_no_next_page() {
+        let ids: Vec<Uuid> = (0..3).map(|_| Uuid::new_v4()).collect();
+        let resp = CursorPaginatedResponse::from_rows(ids.clone(), 5, |id| *id);
+        assert_eq!(resp.data.len(), 3);
+        assert!(resp.next_cursor.is_none());
+    }
+
+    #[test]
+    fn test_from_rows_has_next_page() {
+        let ids: Vec<Uuid> = (0..6).map(|_| Uuid::new_v4()).collect();
+        let resp = CursorPaginatedResponse::from_rows(ids.clone(), 5, |id| *id);
+        assert_eq!(resp.data.len(), 5);
+        assert_eq!(resp.next_cursor, Some(ids[4]));
+    }
+
+    #[test]
+    fn test_from_rows_exact_page_boundary() {
+        // Exactly limit rows returned → no next page (the extra row wasn't there)
+        let ids: Vec<Uuid> = (0..5).map(|_| Uuid::new_v4()).collect();
+        let resp = CursorPaginatedResponse::from_rows(ids.clone(), 5, |id| *id);
+        assert_eq!(resp.data.len(), 5);
+        assert!(resp.next_cursor.is_none());
     }
 }

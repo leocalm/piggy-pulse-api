@@ -3,7 +3,7 @@ use crate::database::transaction::TransactionRepository;
 use crate::error::app_error::AppError;
 use crate::models::account::AccountResponse;
 use crate::models::currency::CurrencyResponse;
-use crate::models::pagination::PaginationParams;
+use crate::models::pagination::CursorParams;
 use crate::service::service_util::balance_on_date;
 use chrono::Utc;
 
@@ -22,9 +22,13 @@ where
         AccountService { repository }
     }
 
-    pub async fn list_accounts(&self, pagination: Option<&PaginationParams>) -> Result<Vec<AccountResponse>, AppError> {
-        let (accounts, _total) = self.repository.list_accounts(pagination).await?;
-        let (transactions, _tx_total) = self.repository.list_transactions(None).await?;
+    pub async fn list_accounts(&self, params: &CursorParams) -> Result<Vec<AccountResponse>, AppError> {
+        let accounts = self.repository.list_accounts(params).await?;
+        let all_params = CursorParams {
+            cursor: None,
+            limit: Some(CursorParams::MAX_LIMIT),
+        };
+        let transactions = self.repository.list_transactions(&all_params).await?;
 
         Ok(accounts
             .iter()
@@ -51,8 +55,9 @@ mod tests {
     async fn test_list_accounts() {
         let repo = MockRepository {};
         let service = AccountService::new(&repo);
+        let params = CursorParams { cursor: None, limit: None };
 
-        let result = service.list_accounts(None).await;
+        let result = service.list_accounts(&params).await;
         assert!(result.is_ok());
 
         let accounts = result.unwrap();
@@ -60,15 +65,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_list_accounts_with_pagination() {
+    async fn test_list_accounts_with_cursor() {
         let repo = MockRepository {};
         let service = AccountService::new(&repo);
-        let pagination = PaginationParams {
-            page: Some(1),
-            limit: Some(10),
-        };
+        let params = CursorParams { cursor: None, limit: Some(10) };
 
-        let result = service.list_accounts(Some(&pagination)).await;
+        let result = service.list_accounts(&params).await;
         assert!(result.is_ok());
     }
 }

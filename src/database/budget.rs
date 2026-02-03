@@ -1,14 +1,14 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::budget::{Budget, BudgetRequest};
-use crate::models::pagination::PaginationParams;
+use crate::models::pagination::CursorParams;
 use uuid::Uuid;
 
 #[async_trait::async_trait]
 pub trait BudgetRepository {
     async fn create_budget(&self, request: &BudgetRequest) -> Result<Budget, AppError>;
     async fn get_budget_by_id(&self, id: &Uuid) -> Result<Option<Budget>, AppError>;
-    async fn list_budgets(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Budget>, i64), AppError>;
+    async fn list_budgets(&self, params: &CursorParams) -> Result<Vec<Budget>, AppError>;
     async fn delete_budget(&self, id: &Uuid) -> Result<(), AppError>;
     async fn update_budget(&self, id: &Uuid, budget: &BudgetRequest) -> Result<Budget, AppError>;
 }
@@ -46,38 +46,36 @@ impl BudgetRepository for PostgresRepository {
         Ok(budget)
     }
 
-    async fn list_budgets(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Budget>, i64), AppError> {
-        // Get total count
-        #[derive(sqlx::FromRow)]
-        struct CountRow {
-            total: i64,
-        }
-
-        let count_row = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as total FROM budget")
-            .fetch_one(&self.pool)
-            .await?;
-        let total = count_row.total;
-
-        // Build query with optional pagination
-        let base_query = r#"
-            SELECT id, name, start_day, created_at
-            FROM budget
-            ORDER BY created_at DESC
-            "#;
-
-        let budgets = if let Some(params) = pagination
-            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
-        {
-            sqlx::query_as::<_, Budget>(&format!("{} LIMIT $1 OFFSET $2", base_query))
-                .bind(limit)
-                .bind(offset)
-                .fetch_all(&self.pool)
-                .await?
+    async fn list_budgets(&self, params: &CursorParams) -> Result<Vec<Budget>, AppError> {
+        let budgets = if let Some(cursor) = params.cursor {
+            sqlx::query_as::<_, Budget>(
+                r#"
+                SELECT id, name, start_day, created_at
+                FROM budget
+                WHERE (created_at, id) < (SELECT created_at, id FROM budget WHERE id = $1)
+                ORDER BY created_at DESC, id DESC
+                LIMIT $2
+                "#,
+            )
+            .bind(cursor)
+            .bind(params.fetch_limit())
+            .fetch_all(&self.pool)
+            .await?
         } else {
-            sqlx::query_as::<_, Budget>(base_query).fetch_all(&self.pool).await?
+            sqlx::query_as::<_, Budget>(
+                r#"
+                SELECT id, name, start_day, created_at
+                FROM budget
+                ORDER BY created_at DESC, id DESC
+                LIMIT $1
+                "#,
+            )
+            .bind(params.fetch_limit())
+            .fetch_all(&self.pool)
+            .await?
         };
 
-        Ok((budgets, total))
+        Ok(budgets)
     }
 
     async fn delete_budget(&self, id: &Uuid) -> Result<(), AppError> {
@@ -138,10 +136,10 @@ mod tests {
     #[tokio::test]
     async fn test_mock_list_budgets() {
         let repo = MockRepository {};
-        let result = repo.list_budgets(None).await;
+        let params = crate::models::pagination::CursorParams { cursor: None, limit: None };
+        let result = repo.list_budgets(&params).await;
         assert!(result.is_ok());
-        let (budgets, total) = result.unwrap();
-        assert_eq!(total, 1);
+        let budgets = result.unwrap();
         assert_eq!(budgets.len(), 1);
     }
 

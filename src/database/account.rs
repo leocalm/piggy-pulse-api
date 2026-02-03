@@ -3,7 +3,7 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::account::{Account, AccountRequest, AccountType};
 use crate::models::currency::Currency;
-use crate::models::pagination::PaginationParams;
+use crate::models::pagination::CursorParams;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
@@ -53,7 +53,7 @@ impl From<AccountRow> for Account {
 pub trait AccountRepository {
     async fn create_account(&self, request: &AccountRequest) -> Result<Account, AppError>;
     async fn get_account_by_id(&self, id: &Uuid) -> Result<Option<Account>, AppError>;
-    async fn list_accounts(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Account>, i64), AppError>;
+    async fn list_accounts(&self, params: &CursorParams) -> Result<Vec<Account>, AppError>;
     async fn delete_account(&self, id: &Uuid) -> Result<(), AppError>;
     async fn update_account(&self, id: &Uuid, request: &AccountRequest) -> Result<Account, AppError>;
 }
@@ -149,55 +149,68 @@ impl AccountRepository for PostgresRepository {
         Ok(row.map(Account::from))
     }
 
-    async fn list_accounts(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Account>, i64), AppError> {
-        // Get total count
-        #[derive(sqlx::FromRow)]
-        struct CountRow {
-            total: i64,
-        }
-
-        let count_row = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as total FROM account")
-            .fetch_one(&self.pool)
-            .await?;
-        let total = count_row.total;
-
-        // Build query with optional pagination
-        let base_query = r#"
-            SELECT
-                a.id,
-                a.name,
-                a.color,
-                a.icon,
-                a.account_type::text as account_type,
-                a.balance,
-                a.created_at,
-                a.spend_limit,
-                c.id as currency_id,
-                c.name as currency_name,
-                c.symbol as currency_symbol,
-                c.currency as currency_code,
-                c.decimal_places as currency_decimal_places,
-                c.created_at as currency_created_at
-            FROM account a
-            JOIN currency c ON c.id = a.currency_id
-            ORDER BY a.created_at DESC
-        "#;
-
-        let rows = if let Some(params) = pagination
-            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
-        {
-            sqlx::query_as::<_, AccountRow>(&format!("{} LIMIT $1 OFFSET $2", base_query))
-                .bind(limit)
-                .bind(offset)
-                .fetch_all(&self.pool)
-                .await?
+    async fn list_accounts(&self, params: &CursorParams) -> Result<Vec<Account>, AppError> {
+        let rows = if let Some(cursor) = params.cursor {
+            sqlx::query_as::<_, AccountRow>(
+                r#"
+                SELECT
+                    a.id,
+                    a.name,
+                    a.color,
+                    a.icon,
+                    a.account_type::text as account_type,
+                    a.balance,
+                    a.created_at,
+                    a.spend_limit,
+                    c.id as currency_id,
+                    c.name as currency_name,
+                    c.symbol as currency_symbol,
+                    c.currency as currency_code,
+                    c.decimal_places as currency_decimal_places,
+                    c.created_at as currency_created_at
+                FROM account a
+                JOIN currency c ON c.id = a.currency_id
+                WHERE (a.created_at, a.id) < (
+                    SELECT created_at, id FROM account WHERE id = $1
+                )
+                ORDER BY a.created_at DESC, a.id DESC
+                LIMIT $2
+                "#,
+            )
+            .bind(cursor)
+            .bind(params.fetch_limit())
+            .fetch_all(&self.pool)
+            .await?
         } else {
-            sqlx::query_as::<_, AccountRow>(base_query).fetch_all(&self.pool).await?
+            sqlx::query_as::<_, AccountRow>(
+                r#"
+                SELECT
+                    a.id,
+                    a.name,
+                    a.color,
+                    a.icon,
+                    a.account_type::text as account_type,
+                    a.balance,
+                    a.created_at,
+                    a.spend_limit,
+                    c.id as currency_id,
+                    c.name as currency_name,
+                    c.symbol as currency_symbol,
+                    c.currency as currency_code,
+                    c.decimal_places as currency_decimal_places,
+                    c.created_at as currency_created_at
+                FROM account a
+                JOIN currency c ON c.id = a.currency_id
+                ORDER BY a.created_at DESC, a.id DESC
+                LIMIT $1
+                "#,
+            )
+            .bind(params.fetch_limit())
+            .fetch_all(&self.pool)
+            .await?
         };
 
-        let accounts: Vec<Account> = rows.into_iter().map(Account::from).collect();
-
-        Ok((accounts, total))
+        Ok(rows.into_iter().map(Account::from).collect())
     }
 
     async fn delete_account(&self, id: &Uuid) -> Result<(), AppError> {

@@ -4,7 +4,7 @@ use crate::error::app_error::AppError;
 use crate::models::account::Account;
 use crate::models::category::Category;
 use crate::models::currency::Currency;
-use crate::models::pagination::PaginationParams;
+use crate::models::pagination::CursorParams;
 use crate::models::transaction::{Transaction, TransactionRequest};
 use crate::models::vendor::Vendor;
 use chrono::{DateTime, NaiveDate, Utc};
@@ -212,8 +212,8 @@ pub trait TransactionRepository {
     async fn create_transaction(&self, transaction: &TransactionRequest) -> Result<Transaction, AppError>;
 
     async fn get_transaction_by_id(&self, id: &Uuid) -> Result<Option<Transaction>, AppError>;
-    async fn list_transactions(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Transaction>, i64), AppError>;
-    async fn get_transactions_for_period(&self, period_id: &Uuid, pagination: Option<&PaginationParams>) -> Result<(Vec<Transaction>, i64), AppError>;
+    async fn list_transactions(&self, params: &CursorParams) -> Result<Vec<Transaction>, AppError>;
+    async fn get_transactions_for_period(&self, period_id: &Uuid, params: &CursorParams) -> Result<Vec<Transaction>, AppError>;
     async fn delete_transaction(&self, id: &Uuid) -> Result<(), AppError>;
     async fn update_transaction(&self, id: &Uuid, transaction: &TransactionRequest) -> Result<Transaction, AppError>;
 }
@@ -266,82 +266,65 @@ impl TransactionRepository for PostgresRepository {
         Ok(row.map(Transaction::from))
     }
 
-    async fn list_transactions(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<Transaction>, i64), AppError> {
-        // Get total count
-        #[derive(sqlx::FromRow)]
-        struct CountRow {
-            total: i64,
-        }
-
-        let count_row = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as total FROM transaction")
-            .fetch_one(&self.pool)
-            .await?;
-        let total = count_row.total;
-
-        // Build query with optional pagination
-        let base_query = build_transaction_query("transaction t", "", "occurred_at DESC, t.created_at DESC");
-
-        let rows = if let Some(params) = pagination
-            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
-        {
-            sqlx::query_as::<_, TransactionRow>(&format!("{} LIMIT $1 OFFSET $2", base_query))
-                .bind(limit)
-                .bind(offset)
+    async fn list_transactions(&self, params: &CursorParams) -> Result<Vec<Transaction>, AppError> {
+        let rows = if let Some(cursor) = params.cursor {
+            let base = build_transaction_query(
+                "transaction t",
+                "(t.occurred_at, t.created_at, t.id) < (SELECT occurred_at, created_at, id FROM transaction WHERE id = $1)",
+                "t.occurred_at DESC, t.created_at DESC, t.id DESC",
+            );
+            sqlx::query_as::<_, TransactionRow>(&format!("{} LIMIT $2", base))
+                .bind(cursor)
+                .bind(params.fetch_limit())
                 .fetch_all(&self.pool)
                 .await?
         } else {
-            sqlx::query_as::<_, TransactionRow>(&base_query).fetch_all(&self.pool).await?
+            let base = build_transaction_query("transaction t", "", "t.occurred_at DESC, t.created_at DESC, t.id DESC");
+            sqlx::query_as::<_, TransactionRow>(&format!("{} LIMIT $1", base))
+                .bind(params.fetch_limit())
+                .fetch_all(&self.pool)
+                .await?
         };
 
-        let transactions: Vec<Transaction> = rows.into_iter().map(Transaction::from).collect();
-
-        Ok((transactions, total))
+        Ok(rows.into_iter().map(Transaction::from).collect())
     }
 
-    async fn get_transactions_for_period(&self, period_id: &Uuid, pagination: Option<&PaginationParams>) -> Result<(Vec<Transaction>, i64), AppError> {
-        // Get total count for this period
-        #[derive(sqlx::FromRow)]
-        struct CountRow {
-            total: i64,
-        }
-
-        let count_row = sqlx::query_as::<_, CountRow>(
-            r#"
-            SELECT COUNT(*) as total
-            FROM transaction t
-            CROSS JOIN budget_period bp
-            WHERE bp.id = $1
-                AND t.occurred_at >= bp.start_date
-                AND t.occurred_at <= bp.end_date
-            "#,
-        )
-        .bind(period_id)
-        .fetch_one(&self.pool)
-        .await?;
-        let total = count_row.total;
-
-        // Build query with budget_period cross join and WHERE clause
-        let base_query = format!(
-            "SELECT {} FROM transaction t CROSS JOIN budget_period bp {} WHERE bp.id = $1 AND t.occurred_at >= bp.start_date AND t.occurred_at <= bp.end_date ORDER BY occurred_at DESC, t.created_at DESC",
-            TRANSACTION_SELECT_FIELDS, TRANSACTION_JOINS
-        );
-
-        let rows = if let Some(params) = pagination
-            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
-        {
-            sqlx::query_as::<_, TransactionRow>(&format!("{} LIMIT $2 OFFSET $3", base_query))
+    async fn get_transactions_for_period(&self, period_id: &Uuid, params: &CursorParams) -> Result<Vec<Transaction>, AppError> {
+        let rows = if let Some(cursor) = params.cursor {
+            let query = format!(
+                "SELECT {} FROM transaction t CROSS JOIN budget_period bp {} \
+                 WHERE bp.id = $1 \
+                   AND t.occurred_at >= bp.start_date \
+                   AND t.occurred_at <= bp.end_date \
+                   AND (t.occurred_at, t.created_at, t.id) < (SELECT occurred_at, created_at, id FROM transaction WHERE id = $2) \
+                 ORDER BY t.occurred_at DESC, t.created_at DESC, t.id DESC \
+                 LIMIT $3",
+                TRANSACTION_SELECT_FIELDS, TRANSACTION_JOINS
+            );
+            sqlx::query_as::<_, TransactionRow>(&query)
                 .bind(period_id)
-                .bind(limit)
-                .bind(offset)
+                .bind(cursor)
+                .bind(params.fetch_limit())
                 .fetch_all(&self.pool)
                 .await?
         } else {
-            sqlx::query_as::<_, TransactionRow>(&base_query).bind(period_id).fetch_all(&self.pool).await?
+            let query = format!(
+                "SELECT {} FROM transaction t CROSS JOIN budget_period bp {} \
+                 WHERE bp.id = $1 \
+                   AND t.occurred_at >= bp.start_date \
+                   AND t.occurred_at <= bp.end_date \
+                 ORDER BY t.occurred_at DESC, t.created_at DESC, t.id DESC \
+                 LIMIT $2",
+                TRANSACTION_SELECT_FIELDS, TRANSACTION_JOINS
+            );
+            sqlx::query_as::<_, TransactionRow>(&query)
+                .bind(period_id)
+                .bind(params.fetch_limit())
+                .fetch_all(&self.pool)
+                .await?
         };
 
-        let transactions: Vec<Transaction> = rows.into_iter().map(Transaction::from).collect();
-
-        Ok((transactions, total))
+        Ok(rows.into_iter().map(Transaction::from).collect())
     }
 
     async fn delete_transaction(&self, id: &Uuid) -> Result<(), AppError> {

@@ -2,7 +2,7 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::budget_category::{BudgetCategory, BudgetCategoryRequest};
 use crate::models::category::Category;
-use crate::models::pagination::PaginationParams;
+use crate::models::pagination::CursorParams;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
@@ -45,7 +45,7 @@ impl From<BudgetCategoryRow> for BudgetCategory {
 pub trait BudgetCategoryRepository {
     async fn create_budget_category(&self, request: &BudgetCategoryRequest) -> Result<BudgetCategory, AppError>;
     async fn get_budget_category_by_id(&self, id: &Uuid) -> Result<Option<BudgetCategory>, AppError>;
-    async fn list_budget_categories(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<BudgetCategory>, i64), AppError>;
+    async fn list_budget_categories(&self, params: &CursorParams) -> Result<Vec<BudgetCategory>, AppError>;
     async fn delete_budget_category(&self, id: &Uuid) -> Result<(), AppError>;
     async fn update_budget_category_value(&self, id: &Uuid, new_budget_value: &i32) -> Result<(), AppError>;
 }
@@ -103,52 +103,60 @@ impl BudgetCategoryRepository for PostgresRepository {
         Ok(row.map(BudgetCategory::from))
     }
 
-    async fn list_budget_categories(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<BudgetCategory>, i64), AppError> {
-        // Get total count
-        #[derive(sqlx::FromRow)]
-        struct CountRow {
-            total: i64,
-        }
-
-        let count_row = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as total FROM budget_category")
-            .fetch_one(&self.pool)
-            .await?;
-        let total = count_row.total;
-
-        // Build query with optional pagination
-        let base_query = r#"
-            SELECT
-                bc.id,
-                bc.category_id,
-                bc.budgeted_value,
-                bc.created_at,
-                c.name as category_name,
-                COALESCE(c.color, '') as category_color,
-                COALESCE(c.icon, '') as category_icon,
-                c.parent_id as category_parent_id,
-                c.category_type::text as category_category_type,
-                c.created_at as category_created_at
-            FROM budget_category bc
-            JOIN category c
-                ON c.id = bc.category_id
-            ORDER BY bc.created_at DESC
-            "#;
-
-        let rows = if let Some(params) = pagination
-            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
-        {
-            sqlx::query_as::<_, BudgetCategoryRow>(&format!("{} LIMIT $1 OFFSET $2", base_query))
-                .bind(limit)
-                .bind(offset)
-                .fetch_all(&self.pool)
-                .await?
+    async fn list_budget_categories(&self, params: &CursorParams) -> Result<Vec<BudgetCategory>, AppError> {
+        let rows = if let Some(cursor) = params.cursor {
+            sqlx::query_as::<_, BudgetCategoryRow>(
+                r#"
+                SELECT
+                    bc.id,
+                    bc.category_id,
+                    bc.budgeted_value,
+                    bc.created_at,
+                    c.name as category_name,
+                    COALESCE(c.color, '') as category_color,
+                    COALESCE(c.icon, '') as category_icon,
+                    c.parent_id as category_parent_id,
+                    c.category_type::text as category_category_type,
+                    c.created_at as category_created_at
+                FROM budget_category bc
+                JOIN category c ON c.id = bc.category_id
+                WHERE (bc.created_at, bc.id) < (
+                    SELECT created_at, id FROM budget_category WHERE id = $1
+                )
+                ORDER BY bc.created_at DESC, bc.id DESC
+                LIMIT $2
+                "#,
+            )
+            .bind(cursor)
+            .bind(params.fetch_limit())
+            .fetch_all(&self.pool)
+            .await?
         } else {
-            sqlx::query_as::<_, BudgetCategoryRow>(base_query).fetch_all(&self.pool).await?
+            sqlx::query_as::<_, BudgetCategoryRow>(
+                r#"
+                SELECT
+                    bc.id,
+                    bc.category_id,
+                    bc.budgeted_value,
+                    bc.created_at,
+                    c.name as category_name,
+                    COALESCE(c.color, '') as category_color,
+                    COALESCE(c.icon, '') as category_icon,
+                    c.parent_id as category_parent_id,
+                    c.category_type::text as category_category_type,
+                    c.created_at as category_created_at
+                FROM budget_category bc
+                JOIN category c ON c.id = bc.category_id
+                ORDER BY bc.created_at DESC, bc.id DESC
+                LIMIT $1
+                "#,
+            )
+            .bind(params.fetch_limit())
+            .fetch_all(&self.pool)
+            .await?
         };
 
-        let budget_categories: Vec<BudgetCategory> = rows.into_iter().map(BudgetCategory::from).collect();
-
-        Ok((budget_categories, total))
+        Ok(rows.into_iter().map(BudgetCategory::from).collect())
     }
 
     async fn delete_budget_category(&self, id: &Uuid) -> Result<(), AppError> {

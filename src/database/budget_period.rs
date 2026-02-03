@@ -1,13 +1,13 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::budget_period::{BudgetPeriod, BudgetPeriodRequest};
-use crate::models::pagination::PaginationParams;
+use crate::models::pagination::CursorParams;
 use uuid::Uuid;
 
 #[async_trait::async_trait]
 pub trait BudgetPeriodRepository {
     async fn create_budget_period(&self, request: &BudgetPeriodRequest) -> Result<Uuid, AppError>;
-    async fn list_budget_periods(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<BudgetPeriod>, i64), AppError>;
+    async fn list_budget_periods(&self, params: &CursorParams) -> Result<Vec<BudgetPeriod>, AppError>;
     async fn get_current_budget_period(&self) -> Result<BudgetPeriod, AppError>;
     async fn get_budget_period(&self, budget_period_id: &Uuid) -> Result<BudgetPeriod, AppError>;
     async fn update_budget_period(&self, id: &Uuid, request: &BudgetPeriodRequest) -> Result<BudgetPeriod, AppError>;
@@ -38,38 +38,38 @@ impl BudgetPeriodRepository for PostgresRepository {
         Ok(row.id)
     }
 
-    async fn list_budget_periods(&self, pagination: Option<&PaginationParams>) -> Result<(Vec<BudgetPeriod>, i64), AppError> {
-        // Get total count
-        #[derive(sqlx::FromRow)]
-        struct CountRow {
-            total: i64,
-        }
-
-        let count_row = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as total FROM budget_period")
-            .fetch_one(&self.pool)
-            .await?;
-        let total = count_row.total;
-
-        // Build query with optional pagination
-        let base_query = r#"
-            SELECT id, name, start_date, end_date, created_at
-            FROM budget_period
-            ORDER BY start_date
-            "#;
-
-        let budget_periods = if let Some(params) = pagination
-            && let (Some(limit), Some(offset)) = (params.effective_limit(), params.offset())
-        {
-            sqlx::query_as::<_, BudgetPeriod>(&format!("{} LIMIT $1 OFFSET $2", base_query))
-                .bind(limit)
-                .bind(offset)
-                .fetch_all(&self.pool)
-                .await?
+    async fn list_budget_periods(&self, params: &CursorParams) -> Result<Vec<BudgetPeriod>, AppError> {
+        let budget_periods = if let Some(cursor) = params.cursor {
+            sqlx::query_as::<_, BudgetPeriod>(
+                r#"
+                SELECT id, name, start_date, end_date, created_at
+                FROM budget_period
+                WHERE (start_date, id) > (
+                    SELECT start_date, id FROM budget_period WHERE id = $1
+                )
+                ORDER BY start_date ASC, id ASC
+                LIMIT $2
+                "#,
+            )
+            .bind(cursor)
+            .bind(params.fetch_limit())
+            .fetch_all(&self.pool)
+            .await?
         } else {
-            sqlx::query_as::<_, BudgetPeriod>(base_query).fetch_all(&self.pool).await?
+            sqlx::query_as::<_, BudgetPeriod>(
+                r#"
+                SELECT id, name, start_date, end_date, created_at
+                FROM budget_period
+                ORDER BY start_date ASC, id ASC
+                LIMIT $1
+                "#,
+            )
+            .bind(params.fetch_limit())
+            .fetch_all(&self.pool)
+            .await?
         };
 
-        Ok((budget_periods, total))
+        Ok(budget_periods)
     }
 
     async fn get_current_budget_period(&self) -> Result<BudgetPeriod, AppError> {

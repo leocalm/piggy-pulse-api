@@ -3,7 +3,7 @@ use crate::database::account::AccountRepository;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::account::{AccountRequest, AccountResponse};
-use crate::models::pagination::{PaginatedResponse, PaginationParams};
+use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use crate::service::account::AccountService;
 use rocket::serde::json::Json;
 use rocket::{State, http::Status, routes};
@@ -24,34 +24,19 @@ pub async fn create_account(
     Ok((Status::Created, Json(AccountResponse::from(&account))))
 }
 
-#[rocket::get("/?<page>&<limit>")]
+#[rocket::get("/?<cursor>&<limit>")]
 pub async fn list_all_accounts(
     pool: &State<PgPool>,
     _current_user: CurrentUser,
-    page: Option<i64>,
+    cursor: Option<String>,
     limit: Option<i64>,
-) -> Result<Json<PaginatedResponse<AccountResponse>>, AppError> {
+) -> Result<Json<CursorPaginatedResponse<AccountResponse>>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let account_service = AccountService::new(&repo);
+    let params = CursorParams::from_query(cursor, limit)?;
 
-    let pagination = if page.is_some() || limit.is_some() {
-        Some(PaginationParams { page, limit })
-    } else {
-        None
-    };
-
-    let responses = account_service.list_accounts(pagination.as_ref()).await?;
-    let total = responses.len() as i64;
-
-    let paginated = if let Some(params) = pagination {
-        let effective_page = params.page.unwrap_or(1);
-        let effective_limit = params.effective_limit().unwrap_or(PaginationParams::DEFAULT_LIMIT);
-        PaginatedResponse::new(responses, effective_page, effective_limit, total)
-    } else {
-        PaginatedResponse::new(responses, 1, total, total)
-    };
-
-    Ok(Json(paginated))
+    let responses = account_service.list_accounts(&params).await?;
+    Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.id)))
 }
 
 #[rocket::get("/<id>")]
