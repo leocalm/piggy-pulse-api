@@ -14,6 +14,7 @@ pub enum CategoryType {
 #[derive(Serialize, Debug, Clone, Default)]
 pub struct Category {
     pub id: Uuid,
+    pub user_id: Uuid,
     pub name: String,
     pub color: String,
     pub icon: String,

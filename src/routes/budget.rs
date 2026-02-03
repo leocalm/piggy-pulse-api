@@ -12,34 +12,34 @@ use uuid::Uuid;
 use validator::Validate;
 
 #[rocket::post("/", data = "<payload>")]
-pub async fn create_budget(pool: &State<PgPool>, _current_user: CurrentUser, payload: Json<BudgetRequest>) -> Result<(Status, Json<BudgetResponse>), AppError> {
+pub async fn create_budget(pool: &State<PgPool>, current_user: CurrentUser, payload: Json<BudgetRequest>) -> Result<(Status, Json<BudgetResponse>), AppError> {
     payload.validate()?;
 
     let repo = PostgresRepository { pool: pool.inner().clone() };
-    let budget = repo.create_budget(&payload).await?;
+    let budget = repo.create_budget(&payload, &current_user.id).await?;
     Ok((Status::Created, Json(BudgetResponse::from(&budget))))
 }
 
 #[rocket::get("/?<cursor>&<limit>")]
 pub async fn list_all_budgets(
     pool: &State<PgPool>,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     cursor: Option<String>,
     limit: Option<i64>,
 ) -> Result<Json<CursorPaginatedResponse<BudgetResponse>>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let params = CursorParams::from_query(cursor, limit)?;
 
-    let budgets = repo.list_budgets(&params).await?;
+    let budgets = repo.list_budgets(&params, &current_user.id).await?;
     let responses: Vec<BudgetResponse> = budgets.iter().map(BudgetResponse::from).collect();
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.id)))
 }
 
 #[rocket::get("/<id>")]
-pub async fn get_budget(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Json<BudgetResponse>, AppError> {
+pub async fn get_budget(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Json<BudgetResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget id", e))?;
-    if let Some(budget) = repo.get_budget_by_id(&uuid).await? {
+    if let Some(budget) = repo.get_budget_by_id(&uuid, &current_user.id).await? {
         Ok(Json(BudgetResponse::from(&budget)))
     } else {
         Err(AppError::NotFound("Budget not found".to_string()))
@@ -49,21 +49,21 @@ pub async fn get_budget(pool: &State<PgPool>, _current_user: CurrentUser, id: &s
 #[rocket::put("/<id>", data = "<payload>")]
 pub async fn put_budget(
     pool: &State<PgPool>,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     id: &str,
     payload: Json<BudgetRequest>,
 ) -> Result<(Status, Json<BudgetResponse>), AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget id", e))?;
-    let budget = repo.update_budget(&uuid, &payload).await?;
+    let budget = repo.update_budget(&uuid, &payload, &current_user.id).await?;
     Ok((Status::Ok, Json(BudgetResponse::from(&budget))))
 }
 
 #[rocket::delete("/<id>")]
-pub async fn delete_budget(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+pub async fn delete_budget(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget id", e))?;
-    repo.delete_budget(&uuid).await?;
+    repo.delete_budget(&uuid, &current_user.id).await?;
     Ok(Status::Ok)
 }
 

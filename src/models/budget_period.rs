@@ -6,6 +6,7 @@ use validator::{Validate, ValidationError};
 #[derive(Serialize, Debug, Default, sqlx::FromRow)]
 pub struct BudgetPeriod {
     pub id: Uuid,
+    pub user_id: Uuid,
     pub name: String,
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,

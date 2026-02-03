@@ -7,6 +7,7 @@ use validator::Validate;
 #[derive(Serialize, Debug, Clone, Default)]
 pub struct BudgetCategory {
     pub id: Uuid,
+    pub user_id: Uuid,
     pub category_id: Uuid,
     pub budgeted_value: i32,
     pub created_at: DateTime<Utc>,

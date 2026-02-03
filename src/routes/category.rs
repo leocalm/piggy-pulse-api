@@ -14,36 +14,36 @@ use validator::Validate;
 #[rocket::post("/", data = "<payload>")]
 pub async fn create_category(
     pool: &State<PgPool>,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     payload: Json<CategoryRequest>,
 ) -> Result<(Status, Json<CategoryResponse>), AppError> {
     payload.validate()?;
 
     let repo = PostgresRepository { pool: pool.inner().clone() };
-    let category = repo.create_category(&payload).await?;
+    let category = repo.create_category(&payload, &current_user.id).await?;
     Ok((Status::Created, Json(CategoryResponse::from(&category))))
 }
 
 #[rocket::get("/?<cursor>&<limit>")]
 pub async fn list_all_categories(
     pool: &State<PgPool>,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     cursor: Option<String>,
     limit: Option<i64>,
 ) -> Result<Json<CursorPaginatedResponse<CategoryResponse>>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let params = CursorParams::from_query(cursor, limit)?;
 
-    let categories = repo.list_categories(&params).await?;
+    let categories = repo.list_categories(&params, &current_user.id).await?;
     let responses: Vec<CategoryResponse> = categories.iter().map(CategoryResponse::from).collect();
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.id)))
 }
 
 #[rocket::get("/<id>")]
-pub async fn get_category(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Json<CategoryResponse>, AppError> {
+pub async fn get_category(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Json<CategoryResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
-    if let Some(category) = repo.get_category_by_id(&uuid).await? {
+    if let Some(category) = repo.get_category_by_id(&uuid, &current_user.id).await? {
         Ok(Json(CategoryResponse::from(&category)))
     } else {
         Err(AppError::NotFound("Category not found".to_string()))
@@ -51,37 +51,37 @@ pub async fn get_category(pool: &State<PgPool>, _current_user: CurrentUser, id: 
 }
 
 #[rocket::delete("/<id>")]
-pub async fn delete_category(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+pub async fn delete_category(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
-    repo.delete_category(&uuid).await?;
+    repo.delete_category(&uuid, &current_user.id).await?;
     Ok(Status::Ok)
 }
 
 #[rocket::put("/<id>", data = "<payload>")]
 pub async fn put_category(
     pool: &State<PgPool>,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     id: &str,
     payload: Json<CategoryRequest>,
 ) -> Result<Json<CategoryResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
-    let category = repo.update_category(&uuid, &payload).await?;
+    let category = repo.update_category(&uuid, &payload, &current_user.id).await?;
     Ok(Json(CategoryResponse::from(&category)))
 }
 
 #[rocket::get("/not-in-budget?<cursor>&<limit>")]
 pub async fn list_categories_not_in_budget(
     pool: &State<PgPool>,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     cursor: Option<String>,
     limit: Option<i64>,
 ) -> Result<Json<CursorPaginatedResponse<CategoryResponse>>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let params = CursorParams::from_query(cursor, limit)?;
 
-    let categories = repo.list_categories_not_in_budget(&params).await?;
+    let categories = repo.list_categories_not_in_budget(&params, &current_user.id).await?;
     let responses: Vec<CategoryResponse> = categories.iter().map(CategoryResponse::from).collect();
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.id)))
 }
