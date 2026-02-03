@@ -10,6 +10,7 @@ use uuid::Uuid;
 #[derive(Debug, sqlx::FromRow)]
 struct BudgetCategoryRow {
     id: Uuid,
+    user_id: Uuid,
     category_id: Uuid,
     budgeted_value: i32,
     created_at: DateTime<Utc>,
@@ -25,11 +26,13 @@ impl From<BudgetCategoryRow> for BudgetCategory {
     fn from(row: BudgetCategoryRow) -> Self {
         BudgetCategory {
             id: row.id,
+            user_id: Uuid::nil(),
             category_id: row.category_id,
             budgeted_value: row.budgeted_value,
             created_at: row.created_at,
             category: Category {
                 id: row.category_id,
+                user_id: Uuid::nil(),
                 name: row.category_name,
                 color: row.category_color,
                 icon: row.category_icon,

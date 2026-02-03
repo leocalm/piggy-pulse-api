@@ -8,6 +8,8 @@ pub struct Budget {
     #[serde(default)]
     pub id: Uuid,
     #[serde(default)]
+    pub user_id: Uuid,
+    #[serde(default)]
     pub name: String,
     #[serde(default)]
     pub start_day: i32,

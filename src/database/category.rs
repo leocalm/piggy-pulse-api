@@ -9,6 +9,7 @@ use uuid::Uuid;
 #[derive(Debug, sqlx::FromRow)]
 struct CategoryRow {
     id: Uuid,
+    user_id: Uuid,
     name: String,
     color: String,
     icon: String,
@@ -21,6 +22,7 @@ impl From<CategoryRow> for Category {
     fn from(row: CategoryRow) -> Self {
         Category {
             id: row.id,
+            user_id: Uuid::nil(),
             name: row.name,
             color: row.color,
             icon: row.icon,

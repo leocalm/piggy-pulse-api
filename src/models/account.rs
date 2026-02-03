@@ -17,6 +17,7 @@ pub enum AccountType {
 #[derive(Serialize, Debug, Clone, Default)]
 pub struct Account {
     pub id: Uuid,
+    pub user_id: Uuid,
     pub name: String,
     pub color: String,
     pub icon: String,

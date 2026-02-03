@@ -66,6 +66,7 @@ impl From<TransactionRow> for Transaction {
         let to_account = if let Some(to_account_id) = row.to_account_id {
             Some(Account {
                 id: to_account_id,
+                user_id: Uuid::nil(),
                 name: row.to_account_name.unwrap(),
                 color: row.to_account_color.unwrap(),
                 icon: row.to_account_icon.unwrap(),
@@ -89,6 +90,7 @@ impl From<TransactionRow> for Transaction {
         let vendor = if let Some(vendor_id) = row.vendor_id {
             Some(Vendor {
                 id: vendor_id,
+                user_id: Uuid::nil(),
                 name: row.vendor_name.unwrap(),
                 created_at: row.vendor_created_at.unwrap(),
             })
@@ -103,6 +105,7 @@ impl From<TransactionRow> for Transaction {
             occurred_at: row.occurred_at,
             category: Category {
                 id: row.category_id,
+                user_id: Uuid::nil(),
                 name: row.category_name,
                 color: row.category_color,
                 icon: row.category_icon,
@@ -110,8 +113,10 @@ impl From<TransactionRow> for Transaction {
                 category_type: category_type_from_db(&row.category_category_type),
                 created_at: row.category_created_at,
             },
+
             from_account: Account {
                 id: row.from_account_id,
+                user_id: Uuid::nil(),
                 name: row.from_account_name,
                 color: row.from_account_color,
                 icon: row.from_account_icon,
@@ -128,6 +133,7 @@ impl From<TransactionRow> for Transaction {
                 created_at: row.from_account_created_at,
                 spend_limit: row.from_account_spend_limit,
             },
+
             to_account,
             vendor,
         }
