@@ -1,4 +1,3 @@
-use crate::database::currency::CurrencyRepository;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::account::{Account, AccountRequest, AccountType};
@@ -51,18 +50,8 @@ impl From<AccountRow> for Account {
     }
 }
 
-#[async_trait::async_trait]
-pub trait AccountRepository {
-    async fn create_account(&self, request: &AccountRequest, user_id: &Uuid) -> Result<Account, AppError>;
-    async fn get_account_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Account>, AppError>;
-    async fn list_accounts(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Account>, AppError>;
-    async fn delete_account(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError>;
-    async fn update_account(&self, id: &Uuid, request: &AccountRequest, user_id: &Uuid) -> Result<Account, AppError>;
-}
-
-#[async_trait::async_trait]
-impl AccountRepository for PostgresRepository {
-    async fn create_account(&self, request: &AccountRequest, user_id: &Uuid) -> Result<Account, AppError> {
+impl PostgresRepository {
+    pub async fn create_account(&self, request: &AccountRequest, user_id: &Uuid) -> Result<Account, AppError> {
         let currency = self
             .get_currency_by_code(&request.currency)
             .await?
@@ -125,7 +114,7 @@ impl AccountRepository for PostgresRepository {
         })
     }
 
-    async fn get_account_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Account>, AppError> {
+    pub async fn get_account_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Account>, AppError> {
         let row = sqlx::query_as::<_, AccountRow>(
             r#"
             SELECT
@@ -157,7 +146,7 @@ impl AccountRepository for PostgresRepository {
         Ok(row.map(Account::from))
     }
 
-    async fn list_accounts(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Account>, AppError> {
+    pub async fn list_accounts(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Account>, AppError> {
         let rows = if let Some(cursor) = params.cursor {
             sqlx::query_as::<_, AccountRow>(
                 r#"
@@ -226,7 +215,7 @@ impl AccountRepository for PostgresRepository {
         Ok(rows.into_iter().map(Account::from).collect())
     }
 
-    async fn delete_account(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
+    pub async fn delete_account(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
         sqlx::query("DELETE FROM account WHERE id = $1 AND user_id = $2")
             .bind(id)
             .bind(user_id)
@@ -236,7 +225,7 @@ impl AccountRepository for PostgresRepository {
         Ok(())
     }
 
-    async fn update_account(&self, id: &Uuid, request: &AccountRequest, user_id: &Uuid) -> Result<Account, AppError> {
+    pub async fn update_account(&self, id: &Uuid, request: &AccountRequest, user_id: &Uuid) -> Result<Account, AppError> {
         let currency = self
             .get_currency_by_code(&request.currency)
             .await?

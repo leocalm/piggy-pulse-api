@@ -1,5 +1,4 @@
 use crate::auth::CurrentUser;
-use crate::database::category::CategoryRepository;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::category::{CategoryRequest, CategoryResponse};

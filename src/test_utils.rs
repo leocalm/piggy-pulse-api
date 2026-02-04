@@ -1,26 +1,23 @@
-use crate::database::account::AccountRepository;
-use crate::database::budget::BudgetRepository;
-use crate::database::budget_category::BudgetCategoryRepository;
-use crate::database::transaction::TransactionRepository;
-use crate::error::app_error::AppError;
-use crate::models::account::{Account, AccountRequest};
+use crate::models::account::{Account, AccountRequest, AccountType};
 use crate::models::budget::{Budget, BudgetRequest};
 use crate::models::budget_category::{BudgetCategory, BudgetCategoryRequest};
-use crate::models::category::Category;
+use crate::models::budget_period::BudgetPeriod;
+use crate::models::category::{Category, CategoryType};
 use crate::models::currency::Currency;
 use crate::models::transaction::{Transaction, TransactionRequest};
 use crate::models::vendor::Vendor;
+use chrono::NaiveDate;
 use uuid::Uuid;
 
 impl From<&TransactionRequest> for Transaction {
     fn from(transaction_request: &TransactionRequest) -> Self {
         let to_account = transaction_request.to_account_id.as_ref().map(|acc_id| Account {
-            id: acc_id.clone(),
+            id: *acc_id,
             ..Account::default()
         });
 
         let vendor = transaction_request.vendor_id.as_ref().map(|v_id| Vendor {
-            id: v_id.clone(),
+            id: *v_id,
             ..Vendor::default()
         });
 
@@ -90,121 +87,73 @@ impl From<&BudgetRequest> for Budget {
     }
 }
 
-pub struct MockRepository {}
-
-#[async_trait::async_trait]
-impl AccountRepository for MockRepository {
-    async fn create_account(&self, request: &AccountRequest, _user_id: &Uuid) -> Result<Account, AppError> {
-        Ok(request.into())
-    }
-
-    async fn get_account_by_id(&self, id: &Uuid, _user_id: &Uuid) -> Result<Option<Account>, AppError> {
-        Ok(Some(Account { id: *id, ..Account::default() }))
-    }
-
-    async fn list_accounts(&self, _params: &crate::models::pagination::CursorParams, _user_id: &Uuid) -> Result<Vec<Account>, AppError> {
-        Ok(vec![Account::default()])
-    }
-
-    async fn delete_account(&self, _id: &Uuid, _user_id: &Uuid) -> Result<(), AppError> {
-        Ok(())
-    }
-
-    async fn update_account(&self, id: &Uuid, request: &AccountRequest, _user_id: &Uuid) -> Result<Account, AppError> {
-        let mut account: Account = request.into();
-        account.id = *id;
-        Ok(account)
-    }
-}
-
-#[async_trait::async_trait]
-impl BudgetCategoryRepository for MockRepository {
-    async fn create_budget_category(&self, request: &BudgetCategoryRequest, _user_id: &Uuid) -> Result<BudgetCategory, AppError> {
-        Ok(request.into())
-    }
-
-    async fn get_budget_category_by_id(&self, id: &Uuid, _user_id: &Uuid) -> Result<Option<BudgetCategory>, AppError> {
-        Ok(Some(BudgetCategory {
-            id: *id,
-            ..BudgetCategory::default()
-        }))
-    }
-
-    async fn list_budget_categories(&self, _params: &crate::models::pagination::CursorParams, _user_id: &Uuid) -> Result<Vec<BudgetCategory>, AppError> {
-        Ok(vec![BudgetCategory::default()])
-    }
-
-    async fn delete_budget_category(&self, _id: &Uuid, _user_id: &Uuid) -> Result<(), AppError> {
-        Ok(())
-    }
-
-    async fn update_budget_category_value(&self, _id: &Uuid, _new_budget_value: &i32, _user_id: &Uuid) -> Result<(), AppError> {
-        Ok(())
-    }
-}
-
-#[async_trait::async_trait]
-impl TransactionRepository for MockRepository {
-    async fn create_transaction(&self, transaction_request: &TransactionRequest, _user_id: &Uuid) -> Result<Transaction, AppError> {
-        Ok(Transaction {
+pub fn sample_account() -> Account {
+    Account {
+        id: Uuid::new_v4(),
+        user_id: Uuid::nil(),
+        name: "Sample Account".to_string(),
+        color: "#000000".to_string(),
+        icon: "icon".to_string(),
+        account_type: AccountType::Checking,
+        currency: Currency {
             id: Uuid::new_v4(),
-            ..transaction_request.into()
-        })
-    }
-
-    async fn get_transaction_by_id(&self, id: &Uuid, _user_id: &Uuid) -> Result<Option<Transaction>, AppError> {
-        Ok(Some(Transaction {
-            id: *id,
-            ..Transaction::default()
-        }))
-    }
-
-    async fn list_transactions(&self, _params: &crate::models::pagination::CursorParams, _user_id: &Uuid) -> Result<Vec<Transaction>, AppError> {
-        Ok(vec![Transaction::default()])
-    }
-
-    async fn get_transactions_for_period(
-        &self,
-        _period_id: &Uuid,
-        _params: &crate::models::pagination::CursorParams,
-        _user_id: &Uuid,
-    ) -> Result<Vec<Transaction>, AppError> {
-        Ok(vec![Transaction::default()])
-    }
-
-    async fn delete_transaction(&self, _id: &Uuid, _user_id: &Uuid) -> Result<(), AppError> {
-        Ok(())
-    }
-
-    async fn update_transaction(&self, id: &Uuid, transaction_request: &TransactionRequest, _user_id: &Uuid) -> Result<Transaction, AppError> {
-        Ok(Transaction {
-            id: *id,
-            ..transaction_request.into()
-        })
+            name: "US Dollar".to_string(),
+            symbol: "$".to_string(),
+            currency: "USD".to_string(),
+            decimal_places: 2,
+            ..Currency::default()
+        },
+        balance: 1_000,
+        spend_limit: None,
+        ..Account::default()
     }
 }
 
-#[async_trait::async_trait]
-impl BudgetRepository for MockRepository {
-    async fn create_budget(&self, request: &BudgetRequest, _user_id: &Uuid) -> Result<Budget, AppError> {
-        Ok(request.into())
+pub fn sample_transaction() -> Transaction {
+    Transaction {
+        id: Uuid::new_v4(),
+        user_id: Uuid::nil(),
+        amount: 500,
+        description: "Sample".into(),
+        occurred_at: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+        category: Category {
+            id: Uuid::new_v4(),
+            category_type: CategoryType::Outgoing,
+            name: "Food".into(),
+            ..Category::default()
+        },
+        from_account: sample_account(),
+        to_account: None,
+        vendor: Some(Vendor {
+            id: Uuid::new_v4(),
+            name: "Vendor".into(),
+            ..Vendor::default()
+        }),
     }
+}
 
-    async fn get_budget_by_id(&self, id: &Uuid, _user_id: &Uuid) -> Result<Option<Budget>, AppError> {
-        Ok(Some(Budget { id: *id, ..Budget::default() }))
+pub fn sample_budget_category() -> BudgetCategory {
+    BudgetCategory {
+        id: Uuid::new_v4(),
+        user_id: Uuid::nil(),
+        category: Category {
+            id: Uuid::new_v4(),
+            name: "Food".into(),
+            category_type: CategoryType::Outgoing,
+            ..Category::default()
+        },
+        budgeted_value: 1_000,
+        ..BudgetCategory::default()
     }
+}
 
-    async fn list_budgets(&self, _params: &crate::models::pagination::CursorParams, _user_id: &Uuid) -> Result<Vec<Budget>, AppError> {
-        Ok(vec![Budget::default()])
-    }
-
-    async fn delete_budget(&self, _id: &Uuid, _user_id: &Uuid) -> Result<(), AppError> {
-        Ok(())
-    }
-
-    async fn update_budget(&self, id: &Uuid, request: &BudgetRequest, _user_id: &Uuid) -> Result<Budget, AppError> {
-        let mut budget: Budget = request.into();
-        budget.id = *id;
-        Ok(budget)
+pub fn sample_budget_period() -> BudgetPeriod {
+    BudgetPeriod {
+        id: Uuid::new_v4(),
+        user_id: Uuid::nil(),
+        name: "Jan".into(),
+        start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+        end_date: NaiveDate::from_ymd_opt(2024, 1, 31).unwrap(),
+        ..BudgetPeriod::default()
     }
 }

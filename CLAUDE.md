@@ -60,35 +60,26 @@ sqlx migrate add <description>   # creates migrations/NNNN_description/{up,down}
 
 ### Layered Architecture Pattern
 
-The codebase follows a clean separation of concerns with three main layers:
+The codebase keeps a simple separation of concerns:
 
-1. **Routes Layer** (`src/routes/`): HTTP handlers that receive requests, validate input, and return responses
-2. **Service Layer** (`src/service/`): Business logic layer (currently minimal, with `account` and `dashboard` services)
-3. **Database Layer** (`src/database/`): Data access layer using trait-based repository pattern
+1. **Routes Layer** (`src/routes/`): Rocket handlers for HTTP I/O.
+2. **Service Layer** (`src/service/`): Light business logic helpers (e.g., account aggregation, dashboard calculations).
+3. **Database Layer** (`src/database/`): Concrete data access methods implemented directly on `PostgresRepository`.
 
-### Repository Pattern
+### Repository Implementation (concrete, no traits)
 
-Each domain entity has a corresponding repository trait defined in `src/database/<entity>.rs`:
+There are **no repository traits**. Each `src/database/<entity>.rs` file implements `impl PostgresRepository { ... }` with async methods for that entity (CRUD, queries, helpers).
 
-```rust
-#[async_trait::async_trait]
-pub trait EntityRepository {
-    async fn create_entity(&self, request: &EntityRequest) -> Result<Entity, AppError>;
-    async fn get_entity_by_id(&self, id: &Uuid) -> Result<Option<Entity>, AppError>;
-    async fn list_entities(&self) -> Result<Vec<Entity>, AppError>;
-    async fn delete_entity(&self, id: &Uuid) -> Result<(), AppError>;
-    async fn update_entity(&self, id: &Uuid, request: &EntityRequest) -> Result<Entity, AppError>;
-}
-```
-
-All repository traits are implemented for `PostgresRepository<'a>` which wraps a `deadpool_postgres::Client`.
+Benefits:
+- Less boilerplate and indirection.
+- Callers (routes/services) use the concrete repository directly.
+- Tests rely on pure helper functions and sample data instead of mock trait impls.
 
 ### Database Connection Management
 
-- Uses `deadpool-postgres` for connection pooling (configured in `src/db.rs`)
-- Pool is initialized at application startup with hardcoded credentials (localhost, postgres:example)
-- Pool is managed by Rocket's state system and injected into route handlers
-- Routes call `get_client(pool)` to obtain a connection, then wrap it in `PostgresRepository { client: &client }`
+- Uses `sqlx::PgPool` (see `Config` / Rocket state) for pooling.
+- Routes receive `&State<PgPool>`, then construct `PostgresRepository { pool: pool.inner().clone() }`.
+- No `deadpool-postgres` or trait objects involved.
 
 ### Authentication
 
@@ -129,58 +120,53 @@ Custom error types in `src/error/`:
 
 ### Testing
 
-- Test utilities in `src/test_utils.rs` provide `MockRepository` implementations for unit testing
-- Some routes have test modules (e.g., `src/routes/health.rs`, `src/service/dashboard.rs`)
-- Mock repositories implement the same traits as `PostgresRepository` for dependency injection in tests
+- Test utilities in `src/test_utils.rs` provide **sample data helpers** (`sample_account`, `sample_transaction`, etc.) and conversions from request structs to models.
+- Services expose pure helper functions for deterministic unit tests (e.g., dashboard helpers).
+- Most route tests that hit the database remain `#[ignore]` unless a DB is available.
 
 ## Key Implementation Patterns
 
 ### Adding a New Entity
 
-When adding a new entity (e.g., "Payment"), follow this pattern:
-
-1. Add database table in a new migration file
-2. Create model struct in `src/models/payment.rs` and add to `src/models.rs`
-3. Create repository trait and PostgresRepository impl in `src/database/payment.rs` and add to `src/database.rs`
-4. Create route handlers in `src/routes/payment.rs` and add to `src/routes.rs`
-5. Mount routes in `src/lib.rs` `build_rocket()` function
-6. Add mock implementation to `src/test_utils.rs` if needed for testing
+1. Add DB table via migration.
+2. Create model structs in `src/models/<entity>.rs`.
+3. Add concrete methods on `PostgresRepository` in `src/database/<entity>.rs`.
+4. Add route handlers in `src/routes/<entity>.rs` and mount in `src/lib.rs`.
+5. Add any needed sample data helpers in `src/test_utils.rs` for unit tests.
 
 ### Route Handler Pattern
 
-All route handlers follow this structure:
+Routes construct the concrete repository directly from the pooled `PgPool`:
 
 ```rust
 pub async fn handler(
-    pool: &State<Pool>,
-    _current_user: CurrentUser,
-    // other params
+    pool: &State<PgPool>,
+    current_user: CurrentUser,
 ) -> Result<Json<Response>, AppError> {
-    let client = get_client(pool).await?;
-    let repo = PostgresRepository { client: &client };
-    let result = repo.some_operation().await?;
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let result = repo.some_operation(&current_user.id).await?;
     Ok(Json(Response::from(&result)))
 }
 ```
 
 ### Database Query Pattern
 
-Repository implementations use raw SQL with tokio-postgres:
-
-```rust
-let rows = self .client.query(
-"SELECT ... FROM table WHERE id = $1",
-& [ & id]
-).await?;
-```
-
-Results are mapped using helper functions like `map_row_to_entity(row)`.
+Repository methods use `sqlx` with `PgPool` (no trait objects, no deadpool). Mapping is usually done with `sqlx::FromRow` structs or manual conversions.
 
 ## Important Notes
 
-- PostgreSQL connection details are hardcoded in `src/db.rs` (localhost, user: postgres, password: example, db: budget_db)
-- Authentication is currently stubbed out and not enforced
-- The codebase uses `async-trait` for async trait methods
-- All IDs are UUIDs generated by PostgreSQL's `gen_random_uuid()`
-- Amounts are stored as `BIGINT` (cents) in the database but exposed as `i64` in Rust
-- Timestamps use PostgreSQL `TIMESTAMPTZ` with `chrono::DateTime<Utc>`
+- PostgreSQL connection details come from config/ENV (see `Config` / Rocket state).
+- Authentication remains a light stub via `CurrentUser`.
+- IDs are UUIDs from PostgreSQL `gen_random_uuid()`.
+- Amounts are stored as `BIGINT` (cents) in the database but exposed as `i64` in Rust.
+- Timestamps use `TIMESTAMPTZ` with `chrono::DateTime<Utc>`.
+
+## CI Discipline
+
+Always run the full PR check suite locally before pushing:
+- `cargo fmt --check`
+- `cargo clippy --no-deps -- -D warnings`
+- `cargo build --verbose`
+- `cargo test --verbose`
+
+This mirrors `.github/workflows/rust.yml` and keeps PR checks green.

@@ -44,18 +44,8 @@ impl From<BudgetCategoryRow> for BudgetCategory {
     }
 }
 
-#[async_trait::async_trait]
-pub trait BudgetCategoryRepository {
-    async fn create_budget_category(&self, request: &BudgetCategoryRequest, user_id: &Uuid) -> Result<BudgetCategory, AppError>;
-    async fn get_budget_category_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<BudgetCategory>, AppError>;
-    async fn list_budget_categories(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<BudgetCategory>, AppError>;
-    async fn delete_budget_category(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError>;
-    async fn update_budget_category_value(&self, id: &Uuid, new_budget_value: &i32, user_id: &Uuid) -> Result<(), AppError>;
-}
-
-#[async_trait::async_trait]
-impl BudgetCategoryRepository for PostgresRepository {
-    async fn create_budget_category(&self, request: &BudgetCategoryRequest, user_id: &Uuid) -> Result<BudgetCategory, AppError> {
+impl PostgresRepository {
+    pub async fn create_budget_category(&self, request: &BudgetCategoryRequest, user_id: &Uuid) -> Result<BudgetCategory, AppError> {
         #[derive(sqlx::FromRow)]
         struct IdRow {
             id: Uuid,
@@ -80,7 +70,7 @@ impl BudgetCategoryRepository for PostgresRepository {
         }
     }
 
-    async fn get_budget_category_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<BudgetCategory>, AppError> {
+    pub async fn get_budget_category_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<BudgetCategory>, AppError> {
         let row = sqlx::query_as::<_, BudgetCategoryRow>(
             r#"
             SELECT
@@ -109,7 +99,7 @@ impl BudgetCategoryRepository for PostgresRepository {
         Ok(row.map(BudgetCategory::from))
     }
 
-    async fn list_budget_categories(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<BudgetCategory>, AppError> {
+    pub async fn list_budget_categories(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<BudgetCategory>, AppError> {
         let rows = if let Some(cursor) = params.cursor {
             sqlx::query_as::<_, BudgetCategoryRow>(
                 r#"
@@ -171,7 +161,7 @@ impl BudgetCategoryRepository for PostgresRepository {
         Ok(rows.into_iter().map(BudgetCategory::from).collect())
     }
 
-    async fn delete_budget_category(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
+    pub async fn delete_budget_category(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
         sqlx::query("DELETE FROM budget_category WHERE id = $1 AND user_id = $2")
             .bind(id)
             .bind(user_id)
@@ -181,7 +171,7 @@ impl BudgetCategoryRepository for PostgresRepository {
         Ok(())
     }
 
-    async fn update_budget_category_value(&self, id: &Uuid, new_budget_value: &i32, user_id: &Uuid) -> Result<(), AppError> {
+    pub async fn update_budget_category_value(&self, id: &Uuid, new_budget_value: &i32, user_id: &Uuid) -> Result<(), AppError> {
         sqlx::query("UPDATE budget_category SET budgeted_value = $1 WHERE id = $2 AND user_id = $3")
             .bind(new_budget_value)
             .bind(id)

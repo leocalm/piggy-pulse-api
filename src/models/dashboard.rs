@@ -9,7 +9,7 @@ pub struct BudgetPerDayResponse {
     pub balance: i32,
 }
 
-#[derive(Serialize, Debug, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Serialize, Debug, Ord, PartialOrd, Eq, PartialEq, Clone)]
 pub struct SpentPerCategoryResponse {
     pub category_name: String,
     pub budgeted_value: i32,

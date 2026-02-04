@@ -3,18 +3,8 @@ use crate::error::app_error::AppError;
 use crate::models::currency::{Currency, CurrencyRequest};
 use uuid::Uuid;
 
-#[async_trait::async_trait]
-pub trait CurrencyRepository {
-    async fn get_currency_by_code(&self, currency_code: &str) -> Result<Option<Currency>, AppError>;
-    async fn get_currencies(&self, name: &str) -> Result<Vec<Currency>, AppError>;
-    async fn create_currency(&self, currency: &CurrencyRequest) -> Result<Currency, AppError>;
-    async fn delete_currency(&self, currency_id: &Uuid) -> Result<(), AppError>;
-    async fn update_currency(&self, id: &Uuid, request: &CurrencyRequest) -> Result<Currency, AppError>;
-}
-
-#[async_trait::async_trait]
-impl CurrencyRepository for PostgresRepository {
-    async fn get_currency_by_code(&self, currency_code: &str) -> Result<Option<Currency>, AppError> {
+impl PostgresRepository {
+    pub async fn get_currency_by_code(&self, currency_code: &str) -> Result<Option<Currency>, AppError> {
         Ok(sqlx::query_as::<_, Currency>(
             r#"
               SELECT id, name, symbol, currency, decimal_places, created_at
@@ -27,7 +17,7 @@ impl CurrencyRepository for PostgresRepository {
         .await?)
     }
 
-    async fn get_currencies(&self, name: &str) -> Result<Vec<Currency>, AppError> {
+    pub async fn get_currencies(&self, name: &str) -> Result<Vec<Currency>, AppError> {
         let pattern = format!("%{}%", name);
 
         Ok(sqlx::query_as::<_, Currency>(
@@ -42,7 +32,7 @@ impl CurrencyRepository for PostgresRepository {
         .await?)
     }
 
-    async fn create_currency(&self, currency: &CurrencyRequest) -> Result<Currency, AppError> {
+    pub async fn create_currency(&self, currency: &CurrencyRequest) -> Result<Currency, AppError> {
         Ok(sqlx::query_as::<_, Currency>(
             r#"
         INSERT INTO currency (name, symbol, currency, decimal_places)
@@ -64,7 +54,7 @@ impl CurrencyRepository for PostgresRepository {
         .await?)
     }
 
-    async fn delete_currency(&self, currency_id: &Uuid) -> Result<(), AppError> {
+    pub async fn delete_currency(&self, currency_id: &Uuid) -> Result<(), AppError> {
         sqlx::query(
             r#"
         DELETE FROM currency
@@ -78,7 +68,7 @@ impl CurrencyRepository for PostgresRepository {
         Ok(())
     }
 
-    async fn update_currency(&self, id: &Uuid, request: &CurrencyRequest) -> Result<Currency, AppError> {
+    pub async fn update_currency(&self, id: &Uuid, request: &CurrencyRequest) -> Result<Currency, AppError> {
         Ok(sqlx::query_as::<_, Currency>(
             r#"
             UPDATE currency
