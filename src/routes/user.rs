@@ -5,7 +5,7 @@ use crate::error::app_error::AppError;
 use crate::models::user::{LoginRequest, UserRequest, UserResponse};
 use rocket::http::{Cookie, CookieJar, Status};
 use rocket::serde::json::Json;
-use rocket::{State, routes};
+use rocket::{routes, State};
 use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
@@ -58,6 +58,81 @@ pub fn post_user_logout(cookies: &CookieJar<'_>) -> Status {
     Status::Ok
 }
 
+#[rocket::get("/me")]
+pub async fn get_me(pool: &State<PgPool>, current_user: CurrentUser) -> Result<Json<UserResponse>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    if let Some(user) = repo.get_user_by_id(&current_user.id).await? {
+        Ok(Json(UserResponse::from(&user)))
+    } else {
+        Err(AppError::NotFound(current_user.id.to_string()))
+    }
+}
+
 pub fn routes() -> Vec<rocket::Route> {
-    routes![post_user, post_user_login, post_user_logout, put_user, delete_user_route]
+    routes![post_user, post_user_login, post_user_logout, put_user, delete_user_route, get_me]
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Config, build_rocket};
+    use rocket::http::{ContentType, Cookie, Status};
+    use rocket::local::asynchronous::Client;
+    use serde_json::Value;
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_get_me_unauthorized_without_cookie() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let response = client.get("/api/users/me").dispatch().await;
+
+        assert_eq!(response.status(), Status::Unauthorized);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_get_me_returns_current_user() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let payload = serde_json::json!({
+            "name": "Test User",
+            "email": "test.user@example.com",
+            "password": "password123"
+        });
+
+        let response = client
+            .post("/api/users/")
+            .header(ContentType::JSON)
+            .body(payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Created);
+
+        let body = response.into_string().await.expect("user response body");
+        let user_json: Value = serde_json::from_str(&body).expect("valid user json");
+        let user_id = user_json["id"].as_str().expect("user id");
+        let user_email = user_json["email"].as_str().expect("user email");
+
+        let cookie_value = format!("{}:{}", user_id, user_email);
+        client
+            .cookies()
+            .add_private(Cookie::build(("user", cookie_value)).path("/").build());
+
+        let response = client.get("/api/users/me").dispatch().await;
+
+        assert_eq!(response.status(), Status::Ok);
+
+        let body = response.into_string().await.expect("me response body");
+        let me_json: Value = serde_json::from_str(&body).expect("valid me json");
+
+        assert_eq!(me_json["id"].as_str().unwrap(), user_id);
+        assert_eq!(me_json["email"].as_str().unwrap(), user_email);
+    }
 }
