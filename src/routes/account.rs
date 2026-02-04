@@ -1,7 +1,7 @@
 use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
-use crate::models::account::{AccountRequest, AccountResponse};
+use crate::models::account::{AccountListResponse, AccountRequest, AccountResponse};
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use crate::service::account::AccountService;
 use rocket::serde::json::Json;
@@ -29,7 +29,7 @@ pub async fn list_all_accounts(
     current_user: CurrentUser,
     cursor: Option<String>,
     limit: Option<i64>,
-) -> Result<Json<CursorPaginatedResponse<AccountResponse>>, AppError> {
+) -> Result<Json<CursorPaginatedResponse<AccountListResponse>>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let account_service = AccountService::new(&repo);
     let params = CursorParams::from_query(cursor, limit)?;

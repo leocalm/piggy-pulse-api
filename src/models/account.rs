@@ -56,6 +56,22 @@ pub struct AccountResponse {
     pub spend_limit: Option<i32>,
 }
 
+#[derive(Serialize, Debug)]
+pub struct AccountListResponse {
+    pub id: Uuid,
+    pub name: String,
+    pub color: String,
+    pub icon: String,
+    pub account_type: AccountType,
+    pub currency: CurrencyResponse,
+    pub balance: i64,
+    pub current_balance: i64,
+    pub balance_per_day: i64,
+    pub balance_change_this_month: i64,
+    pub transactions_count: i64,
+    pub spend_limit: Option<i32>,
+}
+
 impl From<&Account> for AccountResponse {
     fn from(account: &Account) -> Self {
         AccountResponse {
