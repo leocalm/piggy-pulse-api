@@ -6,12 +6,15 @@ use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use crate::models::transaction::{TransactionRequest, TransactionResponse};
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket::{State, routes};
+use rocket::{State, delete, get, post, put};
+use rocket_okapi::openapi;
 use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
 
-#[rocket::post("/", data = "<payload>")]
+/// Create a new transaction
+#[openapi(tag = "Transactions")]
+#[post("/", data = "<payload>")]
 pub async fn create_transaction(
     pool: &State<PgPool>,
     current_user: CurrentUser,
@@ -25,7 +28,9 @@ pub async fn create_transaction(
     Ok((Status::Created, Json(TransactionResponse::from(&tx))))
 }
 
-#[rocket::get("/?<period_id>&<cursor>&<limit>")]
+/// List all transactions with cursor-based pagination, optionally filtered by budget period
+#[openapi(tag = "Transactions")]
+#[get("/?<period_id>&<cursor>&<limit>")]
 pub async fn list_all_transactions(
     pool: &State<PgPool>,
     current_user: CurrentUser,
@@ -47,7 +52,9 @@ pub async fn list_all_transactions(
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.id)))
 }
 
-#[rocket::get("/<id>")]
+/// Get a transaction by ID
+#[openapi(tag = "Transactions")]
+#[get("/<id>")]
 pub async fn get_transaction(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Json<TransactionResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid transaction id", e))?;
@@ -58,7 +65,9 @@ pub async fn get_transaction(pool: &State<PgPool>, current_user: CurrentUser, id
     }
 }
 
-#[rocket::delete("/<id>")]
+/// Delete a transaction by ID
+#[openapi(tag = "Transactions")]
+#[delete("/<id>")]
 pub async fn delete_transaction(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid transaction id", e))?;
@@ -66,7 +75,9 @@ pub async fn delete_transaction(pool: &State<PgPool>, current_user: CurrentUser,
     Ok(Status::Ok)
 }
 
-#[rocket::put("/<id>", data = "<payload>")]
+/// Update a transaction by ID
+#[openapi(tag = "Transactions")]
+#[put("/<id>", data = "<payload>")]
 pub async fn put_transaction(
     pool: &State<PgPool>,
     current_user: CurrentUser,
@@ -79,8 +90,8 @@ pub async fn put_transaction(
     Ok(Json(TransactionResponse::from(&tx)))
 }
 
-pub fn routes() -> Vec<rocket::Route> {
-    routes![create_transaction, list_all_transactions, get_transaction, delete_transaction, put_transaction]
+pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
+    rocket_okapi::openapi_get_routes_spec![create_transaction, list_all_transactions, get_transaction, delete_transaction, put_transaction]
 }
 
 #[cfg(test)]

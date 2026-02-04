@@ -6,12 +6,15 @@ use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use crate::models::vendor::{VendorRequest, VendorResponse, VendorWithStatsResponse};
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket::{State, routes};
+use rocket::{State, delete, get, post, put};
+use rocket_okapi::openapi;
 use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
 
-#[rocket::post("/", data = "<payload>")]
+/// Create a new vendor
+#[openapi(tag = "Vendors")]
+#[post("/", data = "<payload>")]
 pub async fn create_vendor(pool: &State<PgPool>, current_user: CurrentUser, payload: Json<VendorRequest>) -> Result<(Status, Json<VendorResponse>), AppError> {
     payload.validate()?;
 
@@ -20,7 +23,9 @@ pub async fn create_vendor(pool: &State<PgPool>, current_user: CurrentUser, payl
     Ok((Status::Created, Json(VendorResponse::from(&vendor))))
 }
 
-#[rocket::get("/?<cursor>&<limit>")]
+/// List all vendors with cursor-based pagination
+#[openapi(tag = "Vendors")]
+#[get("/?<cursor>&<limit>")]
 pub async fn list_all_vendors(
     pool: &State<PgPool>,
     current_user: CurrentUser,
@@ -35,7 +40,9 @@ pub async fn list_all_vendors(
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.id)))
 }
 
-#[rocket::get("/<id>")]
+/// Get a vendor by ID
+#[openapi(tag = "Vendors")]
+#[get("/<id>")]
 pub async fn get_vendor(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Json<VendorResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid vendor id", e))?;
@@ -46,7 +53,9 @@ pub async fn get_vendor(pool: &State<PgPool>, current_user: CurrentUser, id: &st
     }
 }
 
-#[rocket::delete("/<id>")]
+/// Delete a vendor by ID
+#[openapi(tag = "Vendors")]
+#[delete("/<id>")]
 pub async fn delete_vendor(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid vendor id", e))?;
@@ -54,7 +63,9 @@ pub async fn delete_vendor(pool: &State<PgPool>, current_user: CurrentUser, id: 
     Ok(Status::Ok)
 }
 
-#[rocket::put("/<id>", data = "<payload>")]
+/// Update a vendor by ID
+#[openapi(tag = "Vendors")]
+#[put("/<id>", data = "<payload>")]
 pub async fn put_vendor(pool: &State<PgPool>, current_user: CurrentUser, id: &str, payload: Json<VendorRequest>) -> Result<Json<VendorResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid vendor id", e))?;
@@ -62,7 +73,9 @@ pub async fn put_vendor(pool: &State<PgPool>, current_user: CurrentUser, id: &st
     Ok(Json(VendorResponse::from(&vendor)))
 }
 
-#[rocket::get("/with_status?<order_by>")]
+/// Get vendors with transaction statistics, ordered by specified field
+#[openapi(tag = "Vendors")]
+#[get("/with_status?<order_by>")]
 pub async fn get_vendors_with_status(
     pool: &State<PgPool>,
     current_user: CurrentUser,
@@ -78,8 +91,8 @@ pub async fn get_vendors_with_status(
     ))
 }
 
-pub fn routes() -> Vec<rocket::Route> {
-    routes![create_vendor, list_all_vendors, get_vendor, delete_vendor, put_vendor, get_vendors_with_status]
+pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
+    rocket_okapi::openapi_get_routes_spec![create_vendor, list_all_vendors, get_vendor, delete_vendor, put_vendor, get_vendors_with_status]
 }
 
 #[cfg(test)]

@@ -4,12 +4,15 @@ use crate::error::app_error::AppError;
 use crate::models::currency::{CurrencyRequest, CurrencyResponse};
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket::{State, routes};
+use rocket::{State, delete, get, post, put};
+use rocket_okapi::openapi;
 use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
 
-#[rocket::post("/", data = "<payload>")]
+/// Create a new currency
+#[openapi(tag = "Currencies")]
+#[post("/", data = "<payload>")]
 pub async fn create_currency(
     pool: &State<PgPool>,
     _current_user: CurrentUser,
@@ -22,7 +25,9 @@ pub async fn create_currency(
     Ok((Status::Created, Json(CurrencyResponse::from(&currency))))
 }
 
-#[rocket::get("/<code>")]
+/// Get a currency by its code (e.g., USD, EUR)
+#[openapi(tag = "Currencies")]
+#[get("/<code>")]
 pub async fn get_currency(pool: &State<PgPool>, _current_user: CurrentUser, code: &str) -> Result<Json<CurrencyResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     if let Some(currency) = repo.get_currency_by_code(code).await? {
@@ -32,14 +37,18 @@ pub async fn get_currency(pool: &State<PgPool>, _current_user: CurrentUser, code
     }
 }
 
-#[rocket::get("/name/<name>")]
+/// Get currencies by name
+#[openapi(tag = "Currencies")]
+#[get("/name/<name>")]
 pub async fn get_currencies(pool: &State<PgPool>, _current_user: CurrentUser, name: &str) -> Result<Json<Vec<CurrencyResponse>>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let currencies = repo.get_currencies(name).await?;
     Ok(Json(currencies.iter().map(CurrencyResponse::from).collect()))
 }
 
-#[rocket::delete("/<id>")]
+/// Delete a currency by ID
+#[openapi(tag = "Currencies")]
+#[delete("/<id>")]
 pub async fn delete_currency(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid currency id", e))?;
@@ -47,7 +56,9 @@ pub async fn delete_currency(pool: &State<PgPool>, _current_user: CurrentUser, i
     Ok(Status::Ok)
 }
 
-#[rocket::put("/<id>", data = "<payload>")]
+/// Update a currency by ID
+#[openapi(tag = "Currencies")]
+#[put("/<id>", data = "<payload>")]
 pub async fn put_currency(
     pool: &State<PgPool>,
     _current_user: CurrentUser,
@@ -60,6 +71,6 @@ pub async fn put_currency(
     Ok(Json(CurrencyResponse::from(&currency)))
 }
 
-pub fn routes() -> Vec<rocket::Route> {
-    routes![create_currency, get_currency, get_currencies, delete_currency, put_currency]
+pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
+    rocket_okapi::openapi_get_routes_spec![create_currency, get_currency, get_currencies, delete_currency, put_currency]
 }

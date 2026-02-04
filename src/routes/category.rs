@@ -5,12 +5,15 @@ use crate::models::category::{CategoryRequest, CategoryResponse};
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket::{State, routes};
+use rocket::{State, delete, get, post, put};
+use rocket_okapi::openapi;
 use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
 
-#[rocket::post("/", data = "<payload>")]
+/// Create a new category
+#[openapi(tag = "Categories")]
+#[post("/", data = "<payload>")]
 pub async fn create_category(
     pool: &State<PgPool>,
     current_user: CurrentUser,
@@ -23,7 +26,9 @@ pub async fn create_category(
     Ok((Status::Created, Json(CategoryResponse::from(&category))))
 }
 
-#[rocket::get("/?<cursor>&<limit>")]
+/// List all categories with cursor-based pagination
+#[openapi(tag = "Categories")]
+#[get("/?<cursor>&<limit>")]
 pub async fn list_all_categories(
     pool: &State<PgPool>,
     current_user: CurrentUser,
@@ -38,7 +43,9 @@ pub async fn list_all_categories(
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.id)))
 }
 
-#[rocket::get("/<id>")]
+/// Get a category by ID
+#[openapi(tag = "Categories")]
+#[get("/<id>")]
 pub async fn get_category(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Json<CategoryResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
@@ -49,7 +56,9 @@ pub async fn get_category(pool: &State<PgPool>, current_user: CurrentUser, id: &
     }
 }
 
-#[rocket::delete("/<id>")]
+/// Delete a category by ID
+#[openapi(tag = "Categories")]
+#[delete("/<id>")]
 pub async fn delete_category(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
@@ -57,7 +66,9 @@ pub async fn delete_category(pool: &State<PgPool>, current_user: CurrentUser, id
     Ok(Status::Ok)
 }
 
-#[rocket::put("/<id>", data = "<payload>")]
+/// Update a category by ID
+#[openapi(tag = "Categories")]
+#[put("/<id>", data = "<payload>")]
 pub async fn put_category(
     pool: &State<PgPool>,
     current_user: CurrentUser,
@@ -70,7 +81,9 @@ pub async fn put_category(
     Ok(Json(CategoryResponse::from(&category)))
 }
 
-#[rocket::get("/not-in-budget?<cursor>&<limit>")]
+/// List outgoing categories not yet associated with a budget
+#[openapi(tag = "Categories")]
+#[get("/not-in-budget?<cursor>&<limit>")]
 pub async fn list_categories_not_in_budget(
     pool: &State<PgPool>,
     current_user: CurrentUser,
@@ -85,8 +98,8 @@ pub async fn list_categories_not_in_budget(
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.id)))
 }
 
-pub fn routes() -> Vec<rocket::Route> {
-    routes![
+pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
+    rocket_okapi::openapi_get_routes_spec![
         create_category,
         list_all_categories,
         get_category,

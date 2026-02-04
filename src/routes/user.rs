@@ -4,12 +4,15 @@ use crate::error::app_error::AppError;
 use crate::models::user::{LoginRequest, UserRequest, UserResponse};
 use rocket::http::{Cookie, CookieJar, Status};
 use rocket::serde::json::Json;
-use rocket::{State, routes};
+use rocket::{State, delete, get, post, put};
+use rocket_okapi::openapi;
 use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
 
-#[rocket::post("/", data = "<payload>")]
+/// Create a new user (sign up)
+#[openapi(tag = "Users")]
+#[post("/", data = "<payload>")]
 pub async fn post_user(pool: &State<PgPool>, payload: Json<UserRequest>) -> Result<(Status, Json<UserResponse>), AppError> {
     payload.validate()?;
 
@@ -23,7 +26,9 @@ pub async fn post_user(pool: &State<PgPool>, payload: Json<UserRequest>) -> Resu
     Ok((Status::Created, Json(UserResponse::from(&user))))
 }
 
-#[rocket::put("/<id>", data = "<payload>")]
+/// Update a user by ID
+#[openapi(tag = "Users")]
+#[put("/<id>", data = "<payload>")]
 pub async fn put_user(pool: &State<PgPool>, _current_user: CurrentUser, id: &str, payload: Json<UserRequest>) -> Result<Json<UserResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid user id", e))?;
@@ -31,7 +36,9 @@ pub async fn put_user(pool: &State<PgPool>, _current_user: CurrentUser, id: &str
     Ok(Json(UserResponse::from(&user)))
 }
 
-#[rocket::delete("/<id>")]
+/// Delete a user by ID
+#[openapi(tag = "Users")]
+#[delete("/<id>")]
 pub async fn delete_user_route(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid user id", e))?;
@@ -39,7 +46,9 @@ pub async fn delete_user_route(pool: &State<PgPool>, _current_user: CurrentUser,
     Ok(Status::Ok)
 }
 
-#[rocket::post("/login", data = "<payload>")]
+/// Log in a user and set authentication cookie
+#[openapi(tag = "Users")]
+#[post("/login", data = "<payload>")]
 pub async fn post_user_login(pool: &State<PgPool>, cookies: &CookieJar<'_>, payload: Json<LoginRequest>) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     if let Some(user) = repo.get_user_by_email(&payload.email).await? {
@@ -51,13 +60,17 @@ pub async fn post_user_login(pool: &State<PgPool>, cookies: &CookieJar<'_>, payl
     Ok(Status::Ok)
 }
 
-#[rocket::post("/logout")]
+/// Log out the current user
+#[openapi(tag = "Users")]
+#[post("/logout")]
 pub fn post_user_logout(cookies: &CookieJar<'_>) -> Status {
     cookies.remove_private(Cookie::build("user").build());
     Status::Ok
 }
 
-#[rocket::get("/me")]
+/// Get the currently authenticated user
+#[openapi(tag = "Users")]
+#[get("/me")]
 pub async fn get_me(pool: &State<PgPool>, current_user: CurrentUser) -> Result<Json<UserResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     if let Some(user) = repo.get_user_by_id(&current_user.id).await? {
@@ -67,8 +80,8 @@ pub async fn get_me(pool: &State<PgPool>, current_user: CurrentUser) -> Result<J
     }
 }
 
-pub fn routes() -> Vec<rocket::Route> {
-    routes![post_user, post_user_login, post_user_logout, put_user, delete_user_route, get_me]
+pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
+    rocket_okapi::openapi_get_routes_spec![post_user, post_user_login, post_user_logout, put_user, delete_user_route, get_me]
 }
 
 #[cfg(test)]

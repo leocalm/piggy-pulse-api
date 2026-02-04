@@ -5,12 +5,15 @@ use crate::models::budget_category::{BudgetCategoryRequest, BudgetCategoryRespon
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket::{State, routes};
+use rocket::{State, delete, get, post, put};
+use rocket_okapi::openapi;
 use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
 
-#[rocket::post("/", data = "<payload>")]
+/// Create a new budget category
+#[openapi(tag = "Budget Categories")]
+#[post("/", data = "<payload>")]
 pub async fn create_budget_category(
     pool: &State<PgPool>,
     current_user: CurrentUser,
@@ -23,7 +26,9 @@ pub async fn create_budget_category(
     Ok((Status::Created, Json(BudgetCategoryResponse::from(&budget_category))))
 }
 
-#[rocket::get("/?<cursor>&<limit>")]
+/// List all budget categories with cursor-based pagination
+#[openapi(tag = "Budget Categories")]
+#[get("/?<cursor>&<limit>")]
 pub async fn list_all_budget_categories(
     pool: &State<PgPool>,
     current_user: CurrentUser,
@@ -38,7 +43,9 @@ pub async fn list_all_budget_categories(
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.id)))
 }
 
-#[rocket::get("/<id>")]
+/// Get a budget category by ID
+#[openapi(tag = "Budget Categories")]
+#[get("/<id>")]
 pub async fn get_budget_category(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Json<BudgetCategoryResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget category id", e))?;
@@ -49,7 +56,9 @@ pub async fn get_budget_category(pool: &State<PgPool>, current_user: CurrentUser
     }
 }
 
-#[rocket::delete("/<id>")]
+/// Delete a budget category by ID
+#[openapi(tag = "Budget Categories")]
+#[delete("/<id>")]
 pub async fn delete_budget_category(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget category id", e))?;
@@ -57,7 +66,9 @@ pub async fn delete_budget_category(pool: &State<PgPool>, current_user: CurrentU
     Ok(Status::Ok)
 }
 
-#[rocket::put("/<id>", data = "<payload>")]
+/// Update a budget category's budgeted value by ID
+#[openapi(tag = "Budget Categories")]
+#[put("/<id>", data = "<payload>")]
 pub async fn put_budget_category(pool: &State<PgPool>, current_user: CurrentUser, id: &str, payload: Json<i32>) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget category id", e))?;
@@ -65,8 +76,8 @@ pub async fn put_budget_category(pool: &State<PgPool>, current_user: CurrentUser
     Ok(Status::Ok)
 }
 
-pub fn routes() -> Vec<rocket::Route> {
-    routes![
+pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
+    rocket_okapi::openapi_get_routes_spec![
         create_budget_category,
         list_all_budget_categories,
         get_budget_category,

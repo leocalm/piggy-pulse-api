@@ -24,6 +24,10 @@ validator = { version = "0.20", features = ["derive"] }
 thiserror = "2.0"
 # Database access with sqlx
 sqlx = { version = "0.8.6", features = ["chrono", "uuid", "migrate", "postgres", "runtime-tokio-rustls", "macros"] }
+# OpenAPI/Swagger documentation
+rocket_okapi = { version = "0.9", features = ["swagger", "rapidoc"] }
+schemars = { version = "0.8", features = ["uuid1", "chrono"] }
+okapi = { version = "0.7" }
 
 [dev-dependencies]
 proptest = "1.6"

@@ -1,9 +1,13 @@
 use rocket::serde::json::Json;
 use rocket::serde::{Deserialize, Serialize};
-use rocket::{State, http::Status, routes};
+use rocket::{State, get, http::Status};
+use rocket_okapi::openapi;
+use schemars::JsonSchema;
 use sqlx::PgPool;
 
-#[rocket::get("/")]
+/// Check API and database health
+#[openapi(tag = "Health")]
+#[get("/")]
 pub async fn healthcheck(pool: &State<PgPool>) -> Result<Json<HealthResponse>, Status> {
     sqlx::query("SELECT 1").execute(pool.inner()).await.map_err(|_| Status::ServiceUnavailable)?;
 
@@ -13,11 +17,11 @@ pub async fn healthcheck(pool: &State<PgPool>) -> Result<Json<HealthResponse>, S
     }))
 }
 
-pub fn routes() -> Vec<rocket::Route> {
-    routes![healthcheck]
+pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
+    rocket_okapi::openapi_get_routes_spec![healthcheck]
 }
 
-#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, JsonSchema)]
 pub struct HealthResponse {
     pub status: String,
     pub database: String,

@@ -1,5 +1,6 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use rocket::serde::{Deserialize, Serialize};
+use schemars::JsonSchema;
 use uuid::Uuid;
 use validator::{Validate, ValidationError};
 
@@ -13,7 +14,7 @@ pub struct BudgetPeriod {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Deserialize, Debug, Validate)]
+#[derive(Deserialize, Debug, Validate, JsonSchema)]
 #[validate(schema(function = "validate_date_range"))]
 pub struct BudgetPeriodRequest {
     #[validate(length(min = 3))]
@@ -29,7 +30,7 @@ fn validate_date_range(request: &BudgetPeriodRequest) -> Result<(), ValidationEr
     Ok(())
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, JsonSchema)]
 pub struct BudgetPeriodResponse {
     pub id: Uuid,
     pub name: String,

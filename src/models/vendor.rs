@@ -1,5 +1,6 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use rocket::serde::{Deserialize, Serialize};
+use schemars::JsonSchema;
 use uuid::Uuid;
 use validator::Validate;
 
@@ -11,20 +12,20 @@ pub struct Vendor {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct VendorStats {
     pub transaction_count: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_used_at: Option<NaiveDate>,
 }
 
-#[derive(Deserialize, Debug, Validate)]
+#[derive(Deserialize, Debug, Validate, JsonSchema)]
 pub struct VendorRequest {
     #[validate(length(min = 3))]
     pub name: String,
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, JsonSchema)]
 pub struct VendorResponse {
     pub id: Uuid,
     pub name: String,
@@ -57,7 +58,7 @@ impl From<&VendorWithStats> for VendorWithStatsResponse {
     }
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, JsonSchema)]
 pub struct VendorWithStatsResponse {
     #[serde(flatten)]
     pub vendor: VendorResponse,
