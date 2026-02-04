@@ -16,9 +16,9 @@ pub use config::Config;
 use crate::db::stage_db;
 use crate::middleware::RequestLogger;
 use crate::routes as app_routes;
-use rocket::{catchers, http::Method, Build, Rocket};
+use rocket::{Build, Rocket, catchers, http::Method};
 use rocket_cors::{AllowedOrigins, CorsOptions};
-use rocket_okapi::swagger_ui::{make_swagger_ui, SwaggerUIConfig};
+use rocket_okapi::swagger_ui::{SwaggerUIConfig, make_swagger_ui};
 use tracing_subscriber::EnvFilter;
 
 fn init_tracing(log_level: &str, json_format: bool) {
