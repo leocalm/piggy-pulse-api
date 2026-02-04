@@ -1,6 +1,5 @@
 use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
-use crate::database::user::UserRepository;
 use crate::error::app_error::AppError;
 use crate::models::user::{LoginRequest, UserRequest, UserResponse};
 use rocket::http::{Cookie, CookieJar, Status};

@@ -1,6 +1,4 @@
 use crate::auth::CurrentUser;
-use crate::database::budget_period::BudgetPeriodRepository;
-use crate::database::dashboard::DashboardRepository;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::dashboard::{BudgetPerDayResponse, DashboardResponse, MonthProgressResponse, MonthlyBurnInResponse, SpentPerCategoryResponse};

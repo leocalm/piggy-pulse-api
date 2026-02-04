@@ -216,20 +216,8 @@ fn build_transaction_query(from_clause: &str, where_clause: &str, order_by: &str
     query
 }
 
-#[async_trait::async_trait]
-pub trait TransactionRepository {
-    async fn create_transaction(&self, transaction: &TransactionRequest, user_id: &Uuid) -> Result<Transaction, AppError>;
-
-    async fn get_transaction_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Transaction>, AppError>;
-    async fn list_transactions(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Transaction>, AppError>;
-    async fn get_transactions_for_period(&self, period_id: &Uuid, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Transaction>, AppError>;
-    async fn delete_transaction(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError>;
-    async fn update_transaction(&self, id: &Uuid, transaction: &TransactionRequest, user_id: &Uuid) -> Result<Transaction, AppError>;
-}
-
-#[async_trait::async_trait]
-impl TransactionRepository for PostgresRepository {
-    async fn create_transaction(&self, transaction: &TransactionRequest, user_id: &Uuid) -> Result<Transaction, AppError> {
+impl PostgresRepository {
+    pub async fn create_transaction(&self, transaction: &TransactionRequest, user_id: &Uuid) -> Result<Transaction, AppError> {
         let to_account_id = if let Some(acc_id) = &transaction.to_account_id { Some(acc_id) } else { None };
         let vendor_id = if let Some(v_id) = &transaction.vendor_id { Some(v_id) } else { None };
 
@@ -270,7 +258,7 @@ impl TransactionRepository for PostgresRepository {
         Ok(Transaction::from(row))
     }
 
-    async fn get_transaction_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Transaction>, AppError> {
+    pub async fn get_transaction_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Transaction>, AppError> {
         let query = build_transaction_query("transaction t", "t.id = $1 AND t.user_id = $2", "");
         let row = sqlx::query_as::<_, TransactionRow>(&query)
             .bind(id)
@@ -281,7 +269,7 @@ impl TransactionRepository for PostgresRepository {
         Ok(row.map(Transaction::from))
     }
 
-    async fn list_transactions(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Transaction>, AppError> {
+    pub async fn list_transactions(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Transaction>, AppError> {
         let rows = if let Some(cursor) = params.cursor {
             let base = build_transaction_query(
                 "transaction t",
@@ -306,7 +294,7 @@ impl TransactionRepository for PostgresRepository {
         Ok(rows.into_iter().map(Transaction::from).collect())
     }
 
-    async fn get_transactions_for_period(&self, period_id: &Uuid, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Transaction>, AppError> {
+    pub async fn get_transactions_for_period(&self, period_id: &Uuid, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Transaction>, AppError> {
         let rows = if let Some(cursor) = params.cursor {
             let query = format!(
                 "SELECT {} FROM transaction t CROSS JOIN budget_period bp {} \
@@ -348,7 +336,7 @@ impl TransactionRepository for PostgresRepository {
         Ok(rows.into_iter().map(Transaction::from).collect())
     }
 
-    async fn delete_transaction(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
+    pub async fn delete_transaction(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
         sqlx::query("DELETE FROM transaction WHERE id = $1 AND user_id = $2")
             .bind(id)
             .bind(user_id)
@@ -358,7 +346,7 @@ impl TransactionRepository for PostgresRepository {
         Ok(())
     }
 
-    async fn update_transaction(&self, id: &Uuid, transaction: &TransactionRequest, user_id: &Uuid) -> Result<Transaction, AppError> {
+    pub async fn update_transaction(&self, id: &Uuid, transaction: &TransactionRequest, user_id: &Uuid) -> Result<Transaction, AppError> {
         let select_query = build_transaction_query("updated t", "", "");
         let query = format!(
             r#"

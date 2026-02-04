@@ -34,19 +34,8 @@ impl From<CategoryRow> for Category {
     }
 }
 
-#[async_trait::async_trait]
-pub trait CategoryRepository {
-    async fn create_category(&self, request: &CategoryRequest, user_id: &Uuid) -> Result<Category, AppError>;
-    async fn get_category_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Category>, AppError>;
-    async fn list_categories(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Category>, AppError>;
-    async fn delete_category(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError>;
-    async fn update_category(&self, id: &Uuid, request: &CategoryRequest, user_id: &Uuid) -> Result<Category, AppError>;
-    async fn list_categories_not_in_budget(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Category>, AppError>;
-}
-
-#[async_trait::async_trait]
-impl CategoryRepository for PostgresRepository {
-    async fn create_category(&self, request: &CategoryRequest, user_id: &Uuid) -> Result<Category, AppError> {
+impl PostgresRepository {
+    pub async fn create_category(&self, request: &CategoryRequest, user_id: &Uuid) -> Result<Category, AppError> {
         let row = sqlx::query_as::<_, CategoryRow>(
             r#"
             INSERT INTO category (user_id, name, color, icon, parent_id, category_type)
@@ -74,7 +63,7 @@ impl CategoryRepository for PostgresRepository {
         Ok(Category::from(row))
     }
 
-    async fn get_category_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Category>, AppError> {
+    pub async fn get_category_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Category>, AppError> {
         let row = sqlx::query_as::<_, CategoryRow>(
             r#"
             SELECT
@@ -98,7 +87,7 @@ impl CategoryRepository for PostgresRepository {
         Ok(row.map(Category::from))
     }
 
-    async fn list_categories(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Category>, AppError> {
+    pub async fn list_categories(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Category>, AppError> {
         let rows = if let Some(cursor) = params.cursor {
             sqlx::query_as::<_, CategoryRow>(
                 r#"
@@ -150,7 +139,7 @@ impl CategoryRepository for PostgresRepository {
         Ok(rows.into_iter().map(Category::from).collect())
     }
 
-    async fn delete_category(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
+    pub async fn delete_category(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
         sqlx::query("DELETE FROM category WHERE id = $1 AND user_id = $2")
             .bind(id)
             .bind(user_id)
@@ -160,7 +149,7 @@ impl CategoryRepository for PostgresRepository {
         Ok(())
     }
 
-    async fn update_category(&self, id: &Uuid, request: &CategoryRequest, user_id: &Uuid) -> Result<Category, AppError> {
+    pub async fn update_category(&self, id: &Uuid, request: &CategoryRequest, user_id: &Uuid) -> Result<Category, AppError> {
         let row = sqlx::query_as::<_, CategoryRow>(
             r#"
             UPDATE category
@@ -190,7 +179,7 @@ impl CategoryRepository for PostgresRepository {
         Ok(Category::from(row))
     }
 
-    async fn list_categories_not_in_budget(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Category>, AppError> {
+    pub async fn list_categories_not_in_budget(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Category>, AppError> {
         let rows = if let Some(cursor) = params.cursor {
             sqlx::query_as::<_, CategoryRow>(
                 r#"
