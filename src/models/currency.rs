@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
+use schemars::JsonSchema;
 use uuid::Uuid;
 use validator::Validate;
 
@@ -25,7 +26,7 @@ impl From<&Currency> for CurrencyResponse {
     }
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, JsonSchema)]
 pub struct CurrencyResponse {
     pub id: Uuid,
     pub name: String,
@@ -34,7 +35,7 @@ pub struct CurrencyResponse {
     pub decimal_places: i32,
 }
 
-#[derive(Deserialize, Debug, Validate)]
+#[derive(Deserialize, Debug, Validate, JsonSchema)]
 pub struct CurrencyRequest {
     #[validate(length(min = 3))]
     pub name: String,
