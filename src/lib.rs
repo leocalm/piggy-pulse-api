@@ -3,6 +3,7 @@ mod config;
 mod database;
 mod db;
 mod error;
+mod middleware;
 mod models;
 mod routes;
 mod service;
@@ -13,13 +14,21 @@ pub mod test_utils;
 pub use config::Config;
 
 use crate::db::stage_db;
+use crate::middleware::RequestLogger;
 use crate::routes as app_routes;
-use rocket::{catchers, http::Method, Build, Rocket};
+use rocket::{Build, Rocket, catchers, http::Method};
 use rocket_cors::{AllowedOrigins, CorsOptions};
-use rocket_okapi::swagger_ui::{make_swagger_ui, SwaggerUIConfig};
+use rocket_okapi::swagger_ui::{SwaggerUIConfig, make_swagger_ui};
 use tracing_subscriber::EnvFilter;
 
 fn init_tracing(log_level: &str, json_format: bool) {
+    // Configure logging with environment variable support
+    // RUST_LOG environment variable can be used for fine-grained control per module:
+    // Examples:
+    //   RUST_LOG=debug                    - Set all to debug
+    //   RUST_LOG=budget=debug             - Set budget crate to debug
+    //   RUST_LOG=budget::routes=trace     - Set specific module to trace
+    //   RUST_LOG=info,budget::routes=debug - Global info, routes at debug
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
 
     let subscriber = tracing_subscriber::fmt()
@@ -88,6 +97,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
 
     let mut rocket = rocket::build()
         .attach(cors)
+        .attach(RequestLogger) // Attach request/response logging middleware
         .attach(stage_db(config.database));
 
     rocket_okapi::mount_endpoints_and_merged_docs! {
