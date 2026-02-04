@@ -76,6 +76,7 @@ pub async fn get_recent_transactions(
 ) -> Result<Json<Vec<TransactionResponse>>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let budget_period_uuid = parse_period_id(period_id)?;
+    repo.get_budget_period(&budget_period_uuid, &current_user.id).await?;
     let params = CursorParams { cursor: None, limit: Some(10) };
     let transactions = repo.get_transactions_for_period(&budget_period_uuid, &params, &current_user.id).await?;
     Ok(Json(transactions.iter().take(10).map(TransactionResponse::from).collect()))
