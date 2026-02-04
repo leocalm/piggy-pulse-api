@@ -10,6 +10,7 @@ use uuid::Uuid;
 pub trait UserRepository {
     async fn create_user(&self, name: &str, email: &str, password: &str) -> Result<User, AppError>;
     async fn get_user_by_email(&self, email: &str) -> Result<Option<User>, AppError>;
+    async fn get_user_by_id(&self, id: &Uuid) -> Result<Option<User>, AppError>;
     async fn verify_password(&self, user: &User, password: &str) -> Result<(), AppError>;
     async fn update_user(&self, id: &Uuid, name: &str, email: &str, password: &str) -> Result<User, AppError>;
     async fn delete_user(&self, id: &Uuid) -> Result<(), AppError>;
@@ -46,6 +47,21 @@ impl UserRepository for PostgresRepository {
             "#,
         )
         .bind(email)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(user)
+    }
+
+    async fn get_user_by_id(&self, id: &Uuid) -> Result<Option<User>, AppError> {
+        let user = sqlx::query_as::<_, User>(
+            r#"
+            SELECT id, name, email, password_hash, created_at
+            FROM users
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
         .fetch_optional(&self.pool)
         .await?;
 
