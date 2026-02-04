@@ -1,11 +1,12 @@
 use crate::error::app_error::AppError;
 use rocket::serde::{Deserialize, Serialize};
+use schemars::JsonSchema;
 use uuid::Uuid;
 
 /// Cursor-based pagination parameters.
 /// `cursor` is the `id` of the last item seen on the previous page.
 /// When `None`, the query starts from the beginning of the result set.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(crate = "rocket::serde")]
 pub struct CursorParams {
     pub cursor: Option<Uuid>,
@@ -41,7 +42,7 @@ impl CursorParams {
 
 /// Cursor-paginated response wrapper.
 /// `next_cursor` is `Some(id)` when there is another page, `None` on the last page.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(crate = "rocket::serde")]
 pub struct CursorPaginatedResponse<T> {
     pub data: Vec<T>,

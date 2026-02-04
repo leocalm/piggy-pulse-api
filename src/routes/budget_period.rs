@@ -5,12 +5,15 @@ use crate::models::budget_period::{BudgetPeriodRequest, BudgetPeriodResponse};
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket::{State, routes};
+use rocket::{State, delete, get, post, put};
+use rocket_okapi::openapi;
 use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
 
-#[rocket::post("/", data = "<payload>")]
+/// Create a new budget period
+#[openapi(tag = "Budget Periods")]
+#[post("/", data = "<payload>")]
 pub async fn create_budget_period(pool: &State<PgPool>, current_user: CurrentUser, payload: Json<BudgetPeriodRequest>) -> Result<(Status, String), AppError> {
     payload.validate()?;
 
@@ -19,7 +22,9 @@ pub async fn create_budget_period(pool: &State<PgPool>, current_user: CurrentUse
     Ok((Status::Created, budget_period_id.to_string()))
 }
 
-#[rocket::get("/?<cursor>&<limit>")]
+/// List all budget periods with cursor-based pagination
+#[openapi(tag = "Budget Periods")]
+#[get("/?<cursor>&<limit>")]
 pub async fn list_budget_periods(
     pool: &State<PgPool>,
     current_user: CurrentUser,
@@ -34,14 +39,18 @@ pub async fn list_budget_periods(
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.id)))
 }
 
-#[rocket::get("/current")]
+/// Get the current budget period (whose date range covers today)
+#[openapi(tag = "Budget Periods")]
+#[get("/current")]
 pub async fn get_current_budget_period(pool: &State<PgPool>, current_user: CurrentUser) -> Result<Json<BudgetPeriodResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let budget_period = repo.get_current_budget_period(&current_user.id).await?;
     Ok(Json(BudgetPeriodResponse::from(&budget_period)))
 }
 
-#[rocket::put("/<id>", data = "<payload>")]
+/// Update a budget period by ID
+#[openapi(tag = "Budget Periods")]
+#[put("/<id>", data = "<payload>")]
 pub async fn put_budget_period(
     pool: &State<PgPool>,
     current_user: CurrentUser,
@@ -54,7 +63,9 @@ pub async fn put_budget_period(
     Ok(Json(BudgetPeriodResponse::from(&budget_period)))
 }
 
-#[rocket::delete("/<id>")]
+/// Delete a budget period by ID
+#[openapi(tag = "Budget Periods")]
+#[delete("/<id>")]
 pub async fn delete_budget_period(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget period id", e))?;
@@ -63,7 +74,7 @@ pub async fn delete_budget_period(pool: &State<PgPool>, current_user: CurrentUse
 }
 
 pub fn routes() -> Vec<rocket::Route> {
-    routes![
+    rocket_okapi::openapi_get_routes![
         create_budget_period,
         list_budget_periods,
         get_current_budget_period,

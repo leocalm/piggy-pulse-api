@@ -16,6 +16,7 @@ use crate::db::stage_db;
 use crate::routes as app_routes;
 use rocket::{Build, Rocket, catchers, http::Method};
 use rocket_cors::{AllowedOrigins, CorsOptions};
+use rocket_okapi::swagger_ui::{SwaggerUIConfig, make_swagger_ui};
 use tracing_subscriber::EnvFilter;
 
 fn init_tracing(log_level: &str, json_format: bool) {
@@ -67,6 +68,13 @@ fn build_cors(cors_config: &config::CorsConfig) -> CorsOptions {
     }
 }
 
+fn get_swagger_config() -> SwaggerUIConfig {
+    SwaggerUIConfig {
+        url: "/api/openapi.json".to_owned(),
+        ..Default::default()
+    }
+}
+
 pub fn build_rocket(config: Config) -> Rocket<Build> {
     init_tracing(&config.logging.level, config.logging.json_format);
 
@@ -86,6 +94,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
         .mount("/api/health", app_routes::health::routes())
         .mount("/api/dashboard", app_routes::dashboard::routes())
         .mount("/api/budget_period", app_routes::budget_period::routes())
+        .mount("/api/docs", make_swagger_ui(&get_swagger_config()))
         .register("/api", catchers![app_routes::error::not_found, app_routes::error::conflict])
 }
 

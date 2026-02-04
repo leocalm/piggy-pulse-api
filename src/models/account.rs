@@ -1,10 +1,11 @@
 use crate::models::currency::{Currency, CurrencyResponse};
 use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
+use schemars::JsonSchema;
 use uuid::Uuid;
 use validator::Validate;
 
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq, Default, JsonSchema)]
 pub enum AccountType {
     #[default]
     Checking,
@@ -28,7 +29,7 @@ pub struct Account {
     pub spend_limit: Option<i32>,
 }
 
-#[derive(Deserialize, Debug, Validate)]
+#[derive(Deserialize, Debug, Validate, JsonSchema)]
 pub struct AccountRequest {
     #[validate(length(min = 3))]
     pub name: String,
@@ -44,7 +45,7 @@ pub struct AccountRequest {
     pub spend_limit: Option<i32>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, JsonSchema)]
 pub struct AccountResponse {
     pub id: Uuid,
     pub name: String,
