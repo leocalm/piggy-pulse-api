@@ -1,12 +1,26 @@
-use rocket::{http::Status, routes};
+use rocket::serde::json::Json;
+use rocket::serde::{Deserialize, Serialize};
+use rocket::{State, http::Status, routes};
+use sqlx::PgPool;
 
 #[rocket::get("/")]
-pub async fn healthcheck() -> Status {
-    Status::Ok
+pub async fn healthcheck(pool: &State<PgPool>) -> Result<Json<HealthResponse>, Status> {
+    sqlx::query("SELECT 1").execute(pool.inner()).await.map_err(|_| Status::ServiceUnavailable)?;
+
+    Ok(Json(HealthResponse {
+        status: "ok".to_string(),
+        database: "connected".to_string(),
+    }))
 }
 
 pub fn routes() -> Vec<rocket::Route> {
     routes![healthcheck]
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
+pub struct HealthResponse {
+    pub status: String,
+    pub database: String,
 }
 
 #[cfg(test)]
@@ -30,5 +44,14 @@ mod tests {
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
         let response = client.get("/api/health").dispatch().await;
         assert_eq!(response.status(), Status::Ok);
+
+        let body = response.into_json::<super::HealthResponse>().await.expect("health response json");
+        assert_eq!(
+            body,
+            super::HealthResponse {
+                status: "ok".to_string(),
+                database: "connected".to_string(),
+            }
+        );
     }
 }
