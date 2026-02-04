@@ -22,18 +22,9 @@ pub async fn create_transaction(
 ) -> Result<(Status, Json<TransactionResponse>), AppError> {
     payload.validate()?;
 
-    let start = std::time::Instant::now();
-
-    let client_start = std::time::Instant::now();
-    // No longer acquiring deadpool client; use PostgresRepository with PgPool
     let repo = PostgresRepository { pool: pool.inner().clone() };
-    tracing::trace!("Using PgPool in {:?}", client_start.elapsed());
-
-    let query_start = std::time::Instant::now();
     let tx = repo.create_transaction(&payload, &current_user.id).await?;
-    tracing::trace!("Created transaction in {:?}", query_start.elapsed());
 
-    tracing::trace!("Total create_transaction time: {:?}", start.elapsed());
     Ok((Status::Created, Json(TransactionResponse::from(&tx))))
 }
 

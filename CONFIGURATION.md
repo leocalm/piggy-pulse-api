@@ -102,7 +102,49 @@ BUDGET_LOGGING_LEVEL=info
 BUDGET_LOGGING_JSON_FORMAT=false
 ```
 
-You can also use the standard `RUST_LOG` environment variable which takes precedence.
+#### Advanced Logging Configuration with RUST_LOG
+
+For fine-grained control over logging levels per module, use the `RUST_LOG` environment variable.
+This takes precedence over `BUDGET_LOGGING_LEVEL`.
+
+Examples:
+```bash
+# Set all modules to debug level
+export RUST_LOG=debug
+
+# Set only the budget crate to debug
+export RUST_LOG=budget=debug
+
+# Set specific modules to different levels
+export RUST_LOG=budget::routes=trace,budget::database=debug,info
+
+# Global info, but routes module at debug level
+export RUST_LOG=info,budget::routes=debug
+
+# Trace specific route handlers
+export RUST_LOG=budget::routes::transaction=trace
+```
+
+#### Request/Response Logging
+
+The application automatically logs:
+- **Incoming requests**: method, URI, and unique request ID
+- **Completed responses**: status code, request ID, method, and URI
+- **Errors**: Full error context including request ID, user ID (if authenticated), method, and URI
+- **Request IDs**: Added to all response headers as `X-Request-Id` for distributed tracing
+
+Log levels for requests/responses:
+- `info` level: Successful requests (2xx, 3xx status codes)
+- `warn` level: Client and server errors (4xx, 5xx status codes)
+
+#### Structured Logging for Production
+
+Enable JSON-formatted structured logs for production environments:
+```bash
+export BUDGET_LOGGING_JSON_FORMAT=true
+```
+
+This outputs logs in JSON format, making them easier to parse by log aggregation tools like ELK, Datadog, or CloudWatch.
 
 ## Environment-Specific Configuration
 

@@ -104,8 +104,33 @@ impl From<&AppError> for Status {
 }
 
 impl<'r> Responder<'r, 'static> for AppError {
-    fn respond_to(self, _req: &Request<'_>) -> rocket::response::Result<'static> {
-        error!(error = ?self, "request failed");
+    fn respond_to(self, req: &Request<'_>) -> rocket::response::Result<'static> {
+        // Extract request context for better error logging
+        let method = req.method();
+        let uri = req.uri();
+
+        // Try to get request_id from local_cache
+        let request_id = req
+            .local_cache(|| None::<crate::middleware::RequestId>)
+            .as_ref()
+            .map(|r| r.0.as_str())
+            .unwrap_or("unknown");
+
+        // Try to get user from auth
+        let user_id = req
+            .local_cache(|| None::<crate::auth::CurrentUser>)
+            .as_ref()
+            .map(|u| u.id.to_string())
+            .unwrap_or_else(|| "anonymous".to_string());
+
+        error!(
+            error = ?self,
+            request_id = %request_id,
+            user_id = %user_id,
+            method = %method,
+            uri = %uri,
+            "request failed"
+        );
 
         let status = Status::from(&self);
         let body = self.to_string();
