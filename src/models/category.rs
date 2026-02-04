@@ -1,9 +1,10 @@
 use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
+use schemars::JsonSchema;
 use uuid::Uuid;
 use validator::Validate;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq, Default, JsonSchema)]
 pub enum CategoryType {
     Incoming,
     #[default]
@@ -23,7 +24,7 @@ pub struct Category {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Deserialize, Debug, Validate)]
+#[derive(Deserialize, Debug, Validate, JsonSchema)]
 pub struct CategoryRequest {
     #[validate(length(min = 3))]
     pub name: String,
@@ -35,7 +36,7 @@ pub struct CategoryRequest {
     pub category_type: CategoryType,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, JsonSchema)]
 pub struct CategoryResponse {
     pub id: Uuid,
     pub name: String,

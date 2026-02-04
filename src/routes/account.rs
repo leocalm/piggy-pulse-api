@@ -5,12 +5,15 @@ use crate::models::account::{AccountRequest, AccountResponse};
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use crate::service::account::AccountService;
 use rocket::serde::json::Json;
-use rocket::{State, http::Status, routes};
+use rocket::{State, delete, get, http::Status, post, put};
+use rocket_okapi::openapi;
 use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
 
-#[rocket::post("/", data = "<payload>")]
+/// Create a new account
+#[openapi(tag = "Accounts")]
+#[post("/", data = "<payload>")]
 pub async fn create_account(
     pool: &State<PgPool>,
     current_user: CurrentUser,
@@ -23,7 +26,9 @@ pub async fn create_account(
     Ok((Status::Created, Json(AccountResponse::from(&account))))
 }
 
-#[rocket::get("/?<cursor>&<limit>")]
+/// List all accounts with cursor-based pagination
+#[openapi(tag = "Accounts")]
+#[get("/?<cursor>&<limit>")]
 pub async fn list_all_accounts(
     pool: &State<PgPool>,
     current_user: CurrentUser,
@@ -38,7 +43,9 @@ pub async fn list_all_accounts(
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.id)))
 }
 
-#[rocket::get("/<id>")]
+/// Get an account by ID
+#[openapi(tag = "Accounts")]
+#[get("/<id>")]
 pub async fn get_account(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Json<AccountResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
@@ -49,7 +56,9 @@ pub async fn get_account(pool: &State<PgPool>, current_user: CurrentUser, id: &s
     }
 }
 
-#[rocket::delete("/<id>")]
+/// Delete an account by ID
+#[openapi(tag = "Accounts")]
+#[delete("/<id>")]
 pub async fn delete_account(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
@@ -57,7 +66,9 @@ pub async fn delete_account(pool: &State<PgPool>, current_user: CurrentUser, id:
     Ok(Status::Ok)
 }
 
-#[rocket::put("/<id>", data = "<payload>")]
+/// Update an account by ID
+#[openapi(tag = "Accounts")]
+#[put("/<id>", data = "<payload>")]
 pub async fn put_account(pool: &State<PgPool>, current_user: CurrentUser, id: &str, payload: Json<AccountRequest>) -> Result<Json<AccountResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
@@ -66,7 +77,7 @@ pub async fn put_account(pool: &State<PgPool>, current_user: CurrentUser, id: &s
 }
 
 pub fn routes() -> Vec<rocket::Route> {
-    routes![create_account, list_all_accounts, get_account, delete_account, put_account]
+    rocket_okapi::openapi_get_routes![create_account, list_all_accounts, get_account, delete_account, put_account]
 }
 
 #[cfg(test)]

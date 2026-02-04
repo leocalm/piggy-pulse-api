@@ -4,9 +4,10 @@ use crate::models::pagination::CursorParams;
 use crate::models::vendor::{Vendor, VendorRequest, VendorStats, VendorWithStats};
 use chrono::{DateTime, NaiveDate, Utc};
 use rocket::FromFormField;
+use schemars::JsonSchema;
 use uuid::Uuid;
 
-#[derive(FromFormField, Debug, Clone, Copy)]
+#[derive(FromFormField, Debug, Clone, Copy, JsonSchema)]
 pub enum VendorOrderBy {
     #[field(value = "name")]
     Name,

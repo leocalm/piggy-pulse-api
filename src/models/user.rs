@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
+use schemars::JsonSchema;
 use uuid::Uuid;
 use validator::Validate;
 
@@ -12,14 +13,14 @@ pub struct User {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, JsonSchema)]
 pub struct UserResponse {
     pub id: Uuid,
     pub name: String,
     pub email: String,
 }
 
-#[derive(Deserialize, Debug, Validate)]
+#[derive(Deserialize, Debug, Validate, JsonSchema)]
 pub struct UserRequest {
     #[validate(length(min = 8))]
     pub name: String,
@@ -29,7 +30,7 @@ pub struct UserRequest {
     pub password: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, JsonSchema)]
 pub struct LoginRequest {
     pub email: String,
     pub password: String,

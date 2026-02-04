@@ -2,6 +2,10 @@ use rocket::data::{Data, FromData, Outcome};
 use rocket::http::Status;
 use rocket::request::Request;
 use rocket::serde::json::serde_json;
+use rocket_okapi::r#gen::OpenApiGenerator;
+use rocket_okapi::okapi::openapi3::RequestBody;
+use rocket_okapi::okapi::schemars::JsonSchema;
+use rocket_okapi::request::OpenApiFromData;
 use serde::de::DeserializeOwned;
 use std::ops::Deref;
 use tracing::warn;
@@ -73,6 +77,27 @@ impl<'r, T: DeserializeOwned> FromData<'r> for JsonBody<T> {
                 Outcome::Error((Status::UnprocessableEntity, e))
             }
         }
+    }
+}
+
+impl<'r, T: JsonSchema + DeserializeOwned> OpenApiFromData<'r> for JsonBody<T> {
+    fn request_body(generator: &mut OpenApiGenerator) -> rocket_okapi::Result<RequestBody> {
+        let schema = generator.json_schema::<T>();
+        Ok(RequestBody {
+            content: {
+                let mut content = rocket_okapi::okapi::map! {};
+                content.insert(
+                    "application/json".to_string(),
+                    rocket_okapi::okapi::openapi3::MediaType {
+                        schema: Some(schema),
+                        ..Default::default()
+                    },
+                );
+                content
+            },
+            required: true,
+            ..Default::default()
+        })
     }
 }
 
