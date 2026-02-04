@@ -6,19 +6,8 @@ use password_hash::rand_core::OsRng;
 use password_hash::{PasswordHash, PasswordVerifier, Salt, SaltString};
 use uuid::Uuid;
 
-#[async_trait::async_trait]
-pub trait UserRepository {
-    async fn create_user(&self, name: &str, email: &str, password: &str) -> Result<User, AppError>;
-    async fn get_user_by_email(&self, email: &str) -> Result<Option<User>, AppError>;
-    async fn get_user_by_id(&self, id: &Uuid) -> Result<Option<User>, AppError>;
-    async fn verify_password(&self, user: &User, password: &str) -> Result<(), AppError>;
-    async fn update_user(&self, id: &Uuid, name: &str, email: &str, password: &str) -> Result<User, AppError>;
-    async fn delete_user(&self, id: &Uuid) -> Result<(), AppError>;
-}
-
-#[async_trait::async_trait]
-impl UserRepository for PostgresRepository {
-    async fn create_user(&self, name: &str, email: &str, password: &str) -> Result<User, AppError> {
+impl PostgresRepository {
+    pub async fn create_user(&self, name: &str, email: &str, password: &str) -> Result<User, AppError> {
         let (salt, password_hash) = password_hash(password);
 
         let user = sqlx::query_as::<_, User>(
@@ -38,7 +27,7 @@ impl UserRepository for PostgresRepository {
         Ok(user)
     }
 
-    async fn get_user_by_email(&self, email: &str) -> Result<Option<User>, AppError> {
+    pub async fn get_user_by_email(&self, email: &str) -> Result<Option<User>, AppError> {
         let user = sqlx::query_as::<_, User>(
             r#"
             SELECT id, name, email, password_hash, created_at
@@ -53,7 +42,7 @@ impl UserRepository for PostgresRepository {
         Ok(user)
     }
 
-    async fn get_user_by_id(&self, id: &Uuid) -> Result<Option<User>, AppError> {
+    pub async fn get_user_by_id(&self, id: &Uuid) -> Result<Option<User>, AppError> {
         let user = sqlx::query_as::<_, User>(
             r#"
             SELECT id, name, email, password_hash, created_at
@@ -68,7 +57,7 @@ impl UserRepository for PostgresRepository {
         Ok(user)
     }
 
-    async fn verify_password(&self, user: &User, password: &str) -> Result<(), AppError> {
+    pub async fn verify_password(&self, user: &User, password: &str) -> Result<(), AppError> {
         let password_hash = PasswordHash::new(&user.password_hash).map_err(|e| AppError::password_hash("Failed to parse stored password hash", e))?;
         Argon2::default()
             .verify_password(password.as_bytes(), &password_hash)
@@ -77,7 +66,7 @@ impl UserRepository for PostgresRepository {
         Ok(())
     }
 
-    async fn update_user(&self, id: &Uuid, name: &str, email: &str, password: &str) -> Result<User, AppError> {
+    pub async fn update_user(&self, id: &Uuid, name: &str, email: &str, password: &str) -> Result<User, AppError> {
         let (salt, password_hash) = password_hash(password);
 
         let user = sqlx::query_as::<_, User>(
@@ -99,7 +88,7 @@ impl UserRepository for PostgresRepository {
         Ok(user)
     }
 
-    async fn delete_user(&self, id: &Uuid) -> Result<(), AppError> {
+    pub async fn delete_user(&self, id: &Uuid) -> Result<(), AppError> {
         sqlx::query("DELETE FROM users WHERE id = $1").bind(id).execute(&self.pool).await?;
 
         Ok(())

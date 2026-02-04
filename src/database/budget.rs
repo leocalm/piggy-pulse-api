@@ -4,18 +4,8 @@ use crate::models::budget::{Budget, BudgetRequest};
 use crate::models::pagination::CursorParams;
 use uuid::Uuid;
 
-#[async_trait::async_trait]
-pub trait BudgetRepository {
-    async fn create_budget(&self, request: &BudgetRequest, user_id: &Uuid) -> Result<Budget, AppError>;
-    async fn get_budget_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Budget>, AppError>;
-    async fn list_budgets(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Budget>, AppError>;
-    async fn delete_budget(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError>;
-    async fn update_budget(&self, id: &Uuid, budget: &BudgetRequest, user_id: &Uuid) -> Result<Budget, AppError>;
-}
-
-#[async_trait::async_trait]
-impl BudgetRepository for PostgresRepository {
-    async fn create_budget(&self, request: &BudgetRequest, user_id: &Uuid) -> Result<Budget, AppError> {
+impl PostgresRepository {
+    pub async fn create_budget(&self, request: &BudgetRequest, user_id: &Uuid) -> Result<Budget, AppError> {
         let budget = sqlx::query_as::<_, Budget>(
             r#"
             INSERT INTO budget (user_id, name, start_day)
@@ -32,7 +22,7 @@ impl BudgetRepository for PostgresRepository {
         Ok(budget)
     }
 
-    async fn get_budget_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Budget>, AppError> {
+    pub async fn get_budget_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Budget>, AppError> {
         let budget = sqlx::query_as::<_, Budget>(
             r#"
             SELECT id, user_id, name, start_day, created_at
@@ -48,7 +38,7 @@ impl BudgetRepository for PostgresRepository {
         Ok(budget)
     }
 
-    async fn list_budgets(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Budget>, AppError> {
+    pub async fn list_budgets(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Budget>, AppError> {
         let budgets = if let Some(cursor) = params.cursor {
             sqlx::query_as::<_, Budget>(
                 r#"
@@ -84,7 +74,7 @@ impl BudgetRepository for PostgresRepository {
         Ok(budgets)
     }
 
-    async fn delete_budget(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
+    pub async fn delete_budget(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
         sqlx::query("DELETE FROM budget WHERE id = $1 AND user_id = $2")
             .bind(id)
             .bind(user_id)
@@ -94,7 +84,7 @@ impl BudgetRepository for PostgresRepository {
         Ok(())
     }
 
-    async fn update_budget(&self, id: &Uuid, budget: &BudgetRequest, user_id: &Uuid) -> Result<Budget, AppError> {
+    pub async fn update_budget(&self, id: &Uuid, budget: &BudgetRequest, user_id: &Uuid) -> Result<Budget, AppError> {
         let updated_budget = sqlx::query_as::<_, Budget>(
             r#"
             UPDATE budget
@@ -117,65 +107,19 @@ impl BudgetRepository for PostgresRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::MockRepository;
 
-    #[tokio::test]
-    async fn test_mock_create_budget() {
-        let repo = MockRepository {};
-        let request = BudgetRequest {
+    fn sample_budget_request() -> BudgetRequest {
+        BudgetRequest {
             name: "Monthly Budget".to_string(),
             start_day: 1,
-        };
-
-        let result = repo.create_budget(&request, &Uuid::new_v4()).await;
-        assert!(result.is_ok());
-        let budget = result.unwrap();
-        assert_eq!(budget.name, "Monthly Budget");
-        assert_eq!(budget.start_day, 1);
+        }
     }
 
-    #[tokio::test]
-    async fn test_mock_get_budget_by_id() {
-        let repo = MockRepository {};
-        let id = Uuid::new_v4();
-
-        let result = repo.get_budget_by_id(&id, &Uuid::new_v4()).await;
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_some());
-    }
-
-    #[tokio::test]
-    async fn test_mock_list_budgets() {
-        let repo = MockRepository {};
-        let params = crate::models::pagination::CursorParams { cursor: None, limit: None };
-        let result = repo.list_budgets(&params, &Uuid::new_v4()).await;
-        assert!(result.is_ok());
-        let budgets = result.unwrap();
-        assert_eq!(budgets.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn test_mock_delete_budget() {
-        let repo = MockRepository {};
-        let id = Uuid::new_v4();
-        let result = repo.delete_budget(&id, &Uuid::new_v4()).await;
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_mock_update_budget() {
-        let repo = MockRepository {};
-        let id = Uuid::new_v4();
-        let request = BudgetRequest {
-            name: "Updated Budget".to_string(),
-            start_day: 15,
-        };
-
-        let result = repo.update_budget(&id, &request, &Uuid::new_v4()).await;
-        assert!(result.is_ok());
-        let budget = result.unwrap();
-        assert_eq!(budget.id, id);
-        assert_eq!(budget.name, "Updated Budget");
-        assert_eq!(budget.start_day, 15);
+    #[test]
+    fn test_budget_from_request() {
+        let request = sample_budget_request();
+        let budget: Budget = (&request).into();
+        assert_eq!(budget.name, request.name);
+        assert_eq!(budget.start_day, request.start_day);
     }
 }

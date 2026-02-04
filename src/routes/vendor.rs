@@ -1,6 +1,6 @@
 use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
-use crate::database::vendor::{VendorOrderBy, VendorRepository};
+use crate::database::vendor::VendorOrderBy;
 use crate::error::app_error::AppError;
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use crate::models::vendor::{VendorRequest, VendorResponse, VendorWithStatsResponse};

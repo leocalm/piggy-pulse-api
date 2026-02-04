@@ -16,19 +16,8 @@ pub enum VendorOrderBy {
     MoreRecent,
 }
 
-#[async_trait::async_trait]
-pub trait VendorRepository {
-    async fn create_vendor(&self, request: &VendorRequest, user_id: &Uuid) -> Result<Vendor, AppError>;
-    async fn get_vendor_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Vendor>, AppError>;
-    async fn list_vendors(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Vendor>, AppError>;
-    async fn list_vendors_with_status(&self, order_by: VendorOrderBy, user_id: &Uuid) -> Result<Vec<VendorWithStats>, AppError>;
-    async fn delete_vendor(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError>;
-    async fn update_vendor(&self, id: &Uuid, request: &VendorRequest, user_id: &Uuid) -> Result<Vendor, AppError>;
-}
-
-#[async_trait::async_trait]
-impl VendorRepository for PostgresRepository {
-    async fn create_vendor(&self, request: &VendorRequest, user_id: &Uuid) -> Result<Vendor, AppError> {
+impl PostgresRepository {
+    pub async fn create_vendor(&self, request: &VendorRequest, user_id: &Uuid) -> Result<Vendor, AppError> {
         let vendor = sqlx::query_as::<_, Vendor>(
             r#"
             INSERT INTO vendor (user_id, name)
@@ -44,7 +33,7 @@ impl VendorRepository for PostgresRepository {
         Ok(vendor)
     }
 
-    async fn get_vendor_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Vendor>, AppError> {
+    pub async fn get_vendor_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Vendor>, AppError> {
         let vendor = sqlx::query_as::<_, Vendor>(
             r#"
             SELECT id, user_id, name, created_at
@@ -60,7 +49,7 @@ impl VendorRepository for PostgresRepository {
         Ok(vendor)
     }
 
-    async fn list_vendors(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Vendor>, AppError> {
+    pub async fn list_vendors(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Vendor>, AppError> {
         let vendors = if let Some(cursor) = params.cursor {
             sqlx::query_as::<_, Vendor>(
                 r#"
@@ -96,7 +85,7 @@ impl VendorRepository for PostgresRepository {
         Ok(vendors)
     }
 
-    async fn list_vendors_with_status(&self, order_by: VendorOrderBy, user_id: &Uuid) -> Result<Vec<VendorWithStats>, AppError> {
+    pub async fn list_vendors_with_status(&self, order_by: VendorOrderBy, user_id: &Uuid) -> Result<Vec<VendorWithStats>, AppError> {
         // Safe from SQL injection: order_by_clause is derived from a controlled enum
         let order_by_clause = match order_by {
             VendorOrderBy::Name => "v.name",
@@ -150,7 +139,7 @@ impl VendorRepository for PostgresRepository {
             .collect())
     }
 
-    async fn delete_vendor(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
+    pub async fn delete_vendor(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
         sqlx::query("DELETE FROM vendor WHERE id = $1 AND user_id = $2")
             .bind(id)
             .bind(user_id)
@@ -159,7 +148,7 @@ impl VendorRepository for PostgresRepository {
         Ok(())
     }
 
-    async fn update_vendor(&self, id: &Uuid, request: &VendorRequest, user_id: &Uuid) -> Result<Vendor, AppError> {
+    pub async fn update_vendor(&self, id: &Uuid, request: &VendorRequest, user_id: &Uuid) -> Result<Vendor, AppError> {
         let vendor = sqlx::query_as::<_, Vendor>(
             r#"
             UPDATE vendor

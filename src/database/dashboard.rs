@@ -4,16 +4,8 @@ use crate::models::dashboard::{BudgetPerDayResponse, MonthlyBurnInResponse, Spen
 
 use uuid::Uuid;
 
-#[async_trait::async_trait]
-pub trait DashboardRepository {
-    async fn balance_per_day(&self, user_id: &Uuid) -> Result<Vec<BudgetPerDayResponse>, AppError>;
-    async fn spent_per_category(&self, user_id: &Uuid) -> Result<Vec<SpentPerCategoryResponse>, AppError>;
-    async fn monthly_burn_in(&self, user_id: &Uuid) -> Result<MonthlyBurnInResponse, AppError>;
-}
-
-#[async_trait::async_trait]
-impl DashboardRepository for PostgresRepository {
-    async fn balance_per_day(&self, user_id: &Uuid) -> Result<Vec<BudgetPerDayResponse>, AppError> {
+impl PostgresRepository {
+    pub async fn balance_per_day(&self, user_id: &Uuid) -> Result<Vec<BudgetPerDayResponse>, AppError> {
         #[derive(sqlx::FromRow)]
         struct BalancePerDayRow {
             account_name: String,
@@ -56,7 +48,7 @@ impl DashboardRepository for PostgresRepository {
             .collect())
     }
 
-    async fn spent_per_category(&self, user_id: &Uuid) -> Result<Vec<SpentPerCategoryResponse>, AppError> {
+    pub async fn spent_per_category(&self, user_id: &Uuid) -> Result<Vec<SpentPerCategoryResponse>, AppError> {
         #[derive(sqlx::FromRow)]
         struct SpentPerCategoryRow {
             category_name: String,
@@ -115,7 +107,7 @@ GROUP BY category_name, budgeted_value
             .collect())
     }
 
-    async fn monthly_burn_in(&self, user_id: &Uuid) -> Result<MonthlyBurnInResponse, AppError> {
+    pub async fn monthly_burn_in(&self, user_id: &Uuid) -> Result<MonthlyBurnInResponse, AppError> {
         let row = sqlx::query_as::<_, MonthlyBurnInResponse>(
             r#"
 WITH budget_settings AS (

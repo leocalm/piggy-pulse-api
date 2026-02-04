@@ -1,5 +1,4 @@
 use crate::auth::CurrentUser;
-use crate::database::account::AccountRepository;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::account::{AccountRequest, AccountResponse};

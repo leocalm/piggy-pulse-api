@@ -1,25 +1,19 @@
-use crate::database::account::AccountRepository;
-use crate::database::transaction::TransactionRepository;
+use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
-use crate::models::account::AccountResponse;
+use crate::models::account::{Account, AccountResponse};
 use crate::models::currency::CurrencyResponse;
 use crate::models::pagination::CursorParams;
+use crate::models::transaction::Transaction;
 use crate::service::service_util::balance_on_date;
 use chrono::Utc;
 use uuid::Uuid;
 
-pub struct AccountService<'a, R>
-where
-    R: AccountRepository + TransactionRepository,
-{
-    repository: &'a R,
+pub struct AccountService<'a> {
+    repository: &'a PostgresRepository,
 }
 
-impl<'a, R> AccountService<'a, R>
-where
-    R: AccountRepository + TransactionRepository,
-{
-    pub fn new(repository: &'a R) -> Self {
+impl<'a> AccountService<'a> {
+    pub fn new(repository: &'a PostgresRepository) -> Self {
         AccountService { repository }
     }
 
@@ -31,47 +25,44 @@ where
         };
         let transactions = self.repository.list_transactions(&all_params, user_id).await?;
 
-        Ok(accounts
-            .iter()
-            .map(|a| AccountResponse {
-                id: a.id,
-                name: a.name.clone(),
-                color: a.color.clone(),
-                icon: a.icon.clone(),
-                account_type: a.account_type,
-                currency: CurrencyResponse::from(&a.currency),
-                balance: balance_on_date(Some(&Utc::now().date_naive()), a, &transactions) as i64,
-                spend_limit: a.spend_limit,
-            })
-            .collect())
+        Ok(account_responses(&accounts, &transactions))
     }
+}
+
+fn account_responses(accounts: &[Account], transactions: &[Transaction]) -> Vec<AccountResponse> {
+    accounts
+        .iter()
+        .map(|a| AccountResponse {
+            id: a.id,
+            name: a.name.clone(),
+            color: a.color.clone(),
+            icon: a.icon.clone(),
+            account_type: a.account_type,
+            currency: CurrencyResponse::from(&a.currency),
+            balance: balance_on_date(Some(&Utc::now().date_naive()), a, transactions) as i64,
+            spend_limit: a.spend_limit,
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::MockRepository;
+    use crate::test_utils::{sample_account, sample_transaction};
 
     #[tokio::test]
     async fn test_list_accounts() {
-        let repo = MockRepository {};
-        let service = AccountService::new(&repo);
-        let params = CursorParams { cursor: None, limit: None };
-
-        let result = service.list_accounts(&params, &Uuid::new_v4()).await;
-        assert!(result.is_ok());
-
-        let accounts = result.unwrap();
-        assert_eq!(accounts.len(), 1);
+        let accounts = vec![sample_account()];
+        let transactions = vec![sample_transaction()];
+        let responses = account_responses(&accounts, &transactions);
+        assert_eq!(responses.len(), 1);
+        assert_eq!(responses[0].id, accounts[0].id);
     }
 
     #[tokio::test]
     async fn test_list_accounts_with_cursor() {
-        let repo = MockRepository {};
-        let service = AccountService::new(&repo);
-        let params = CursorParams { cursor: None, limit: Some(10) };
-
-        let result = service.list_accounts(&params, &Uuid::new_v4()).await;
-        assert!(result.is_ok());
+        let accounts = vec![sample_account()];
+        let responses = account_responses(&accounts, &[]);
+        assert_eq!(responses.len(), 1);
     }
 }

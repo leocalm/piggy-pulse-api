@@ -4,19 +4,8 @@ use crate::models::budget_period::{BudgetPeriod, BudgetPeriodRequest};
 use crate::models::pagination::CursorParams;
 use uuid::Uuid;
 
-#[async_trait::async_trait]
-pub trait BudgetPeriodRepository {
-    async fn create_budget_period(&self, request: &BudgetPeriodRequest, user_id: &Uuid) -> Result<Uuid, AppError>;
-    async fn list_budget_periods(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<BudgetPeriod>, AppError>;
-    async fn get_current_budget_period(&self, user_id: &Uuid) -> Result<BudgetPeriod, AppError>;
-    async fn get_budget_period(&self, budget_period_id: &Uuid, user_id: &Uuid) -> Result<BudgetPeriod, AppError>;
-    async fn update_budget_period(&self, id: &Uuid, request: &BudgetPeriodRequest, user_id: &Uuid) -> Result<BudgetPeriod, AppError>;
-    async fn delete_budget_period(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError>;
-}
-
-#[async_trait::async_trait]
-impl BudgetPeriodRepository for PostgresRepository {
-    async fn create_budget_period(&self, request: &BudgetPeriodRequest, user_id: &Uuid) -> Result<Uuid, AppError> {
+impl PostgresRepository {
+    pub async fn create_budget_period(&self, request: &BudgetPeriodRequest, user_id: &Uuid) -> Result<Uuid, AppError> {
         #[derive(sqlx::FromRow)]
         struct IdRow {
             id: Uuid,
@@ -39,7 +28,7 @@ impl BudgetPeriodRepository for PostgresRepository {
         Ok(row.id)
     }
 
-    async fn list_budget_periods(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<BudgetPeriod>, AppError> {
+    pub async fn list_budget_periods(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<BudgetPeriod>, AppError> {
         let budget_periods = if let Some(cursor) = params.cursor {
             sqlx::query_as::<_, BudgetPeriod>(
                 r#"
@@ -77,7 +66,7 @@ impl BudgetPeriodRepository for PostgresRepository {
         Ok(budget_periods)
     }
 
-    async fn get_current_budget_period(&self, user_id: &Uuid) -> Result<BudgetPeriod, AppError> {
+    pub async fn get_current_budget_period(&self, user_id: &Uuid) -> Result<BudgetPeriod, AppError> {
         let budget_period = sqlx::query_as::<_, BudgetPeriod>(
             r#"
             SELECT id, user_id, name, start_date, end_date, created_at
@@ -94,7 +83,7 @@ impl BudgetPeriodRepository for PostgresRepository {
         Ok(budget_period)
     }
 
-    async fn get_budget_period(&self, budget_period_id: &Uuid, user_id: &Uuid) -> Result<BudgetPeriod, AppError> {
+    pub async fn get_budget_period(&self, budget_period_id: &Uuid, user_id: &Uuid) -> Result<BudgetPeriod, AppError> {
         let budget_period = sqlx::query_as::<_, BudgetPeriod>(
             r#"
             SELECT id, user_id, name, start_date, end_date, created_at
@@ -110,7 +99,7 @@ impl BudgetPeriodRepository for PostgresRepository {
         Ok(budget_period)
     }
 
-    async fn update_budget_period(&self, id: &Uuid, request: &BudgetPeriodRequest, user_id: &Uuid) -> Result<BudgetPeriod, AppError> {
+    pub async fn update_budget_period(&self, id: &Uuid, request: &BudgetPeriodRequest, user_id: &Uuid) -> Result<BudgetPeriod, AppError> {
         let budget_period = sqlx::query_as::<_, BudgetPeriod>(
             r#"
             UPDATE budget_period
@@ -130,7 +119,7 @@ impl BudgetPeriodRepository for PostgresRepository {
         Ok(budget_period)
     }
 
-    async fn delete_budget_period(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
+    pub async fn delete_budget_period(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
         sqlx::query("DELETE FROM budget_period WHERE id = $1 AND user_id = $2")
             .bind(id)
             .bind(user_id)

@@ -1,6 +1,5 @@
 use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
-use crate::database::transaction::TransactionRepository;
 use crate::error::app_error::AppError;
 use crate::error::json::JsonBody;
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
