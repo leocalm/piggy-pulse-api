@@ -1,6 +1,6 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
-use crate::models::dashboard::{BudgetPerDayResponse, MonthProgressResponse, MonthlyBurnInResponse, SpentPerCategoryResponse};
+use crate::models::dashboard::{BudgetPerDayResponse, MonthProgressResponse, MonthlyBurnInResponse, SpentPerCategoryResponse, TotalAssetsResponse};
 
 use chrono::NaiveDate;
 use uuid::Uuid;
@@ -220,6 +220,47 @@ WHERE bp.id = $1 AND bp.user_id = $2
             days_in_period: row.days_in_period as u32,
             remaining_days: row.remaining_days as u32,
             days_passed_percentage: row.days_passed_percentage as u32,
+        })
+    }
+
+    pub async fn get_total_assets(&self, user_id: &Uuid) -> Result<TotalAssetsResponse, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct TotalAssetsRow {
+            total_assets: i32,
+        }
+
+        let row = sqlx::query_as::<_, TotalAssetsRow>(
+            r#"
+WITH account_initial_balances AS (
+    SELECT
+        SUM(balance) as balance_total
+    FROM account
+    WHERE user_id = $1
+)
+SELECT
+    (SUM(
+            CASE
+                WHEN c.category_type = 'Incoming'                              THEN  t.amount
+                WHEN c.category_type = 'Outgoing'                              THEN -t.amount
+                WHEN c.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount
+                WHEN c.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount
+                ELSE 0
+                END
+    ) + aib.balance_total)::int as total_assets
+FROM transaction t
+JOIN account a ON a.id = t.from_account_id OR a.id = t.to_account_id
+JOIN category c ON c.id = t.category_id
+CROSS JOIN account_initial_balances aib
+WHERE t.user_id = $1 AND a.account_type <> 'Allowance'
+GROUP BY aib.balance_total
+"#,
+        )
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(TotalAssetsResponse {
+            total_assets: row.total_assets,
         })
     }
 }

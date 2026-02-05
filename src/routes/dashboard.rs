@@ -2,10 +2,9 @@ use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::RateLimit;
-use crate::models::dashboard::{BudgetPerDayResponse, DashboardResponse, MonthProgressResponse, MonthlyBurnInResponse, SpentPerCategoryResponse};
+use crate::models::dashboard::{BudgetPerDayResponse, MonthProgressResponse, MonthlyBurnInResponse, SpentPerCategoryResponse, TotalAssetsResponse};
 use crate::models::pagination::CursorParams;
 use crate::models::transaction::TransactionResponse;
-use crate::service::dashboard::DashboardService;
 use rocket::serde::json::Json;
 use rocket::{State, get};
 use rocket_okapi::openapi;
@@ -96,21 +95,12 @@ pub async fn get_recent_transactions(
     Ok(Json(transactions.iter().take(10).map(TransactionResponse::from).collect()))
 }
 
-/// Get complete dashboard data for a budget period.
-/// Returns 400 if `period_id` is missing ("Missing period_id query parameter") or invalid.
+/// Get total assets
 #[openapi(tag = "Dashboard")]
-#[get("/dashboard?<period_id>")]
-pub async fn get_dashboard(
-    pool: &State<PgPool>,
-    _rate_limit: RateLimit,
-    current_user: CurrentUser,
-    period_id: Option<String>,
-) -> Result<Json<DashboardResponse>, AppError> {
+#[get("/total-assets")]
+pub async fn get_total_assets(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser) -> Result<Json<TotalAssetsResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
-    let budget_period_uuid = parse_period_id(period_id)?;
-    let budget_period = repo.get_budget_period(&budget_period_uuid, &current_user.id).await?;
-    let mut dashboard_service = DashboardService::new(&repo, &budget_period);
-    Ok(Json(dashboard_service.dashboard_response(&current_user.id).await?))
+    Ok(Json(repo.get_total_assets(&current_user.id).await?))
 }
 
 pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
@@ -120,7 +110,7 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
         get_monthly_burn_in,
         get_month_progress,
         get_recent_transactions,
-        get_dashboard
+        get_total_assets,
     ]
 }
 
