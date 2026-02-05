@@ -1,6 +1,7 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
+use serde_json::json;
 use uuid::Uuid;
 use validator::Validate;
 
@@ -15,6 +16,18 @@ pub struct Vendor {
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct VendorStats {
     pub transaction_count: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_used_at: Option<NaiveDate>,
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct VendorPeriodStats {
+    #[schemars(
+        description = "Number of transactions in the selected budget period.",
+        example = "vendor_period_transaction_count_example"
+    )]
+    pub transaction_count: i64,
+    #[schemars(description = "Last used date (any time).", example = "vendor_last_used_example")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_used_at: Option<NaiveDate>,
 }
@@ -65,4 +78,49 @@ pub struct VendorWithStatsResponse {
 
     #[serde(flatten)]
     pub stats: VendorStats,
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct VendorWithPeriodStats {
+    #[serde(flatten)]
+    pub vendor: Vendor,
+
+    #[serde(flatten)]
+    pub stats: VendorPeriodStats,
+}
+
+impl From<&VendorWithPeriodStats> for VendorWithPeriodStatsResponse {
+    fn from(vendor_with_status: &VendorWithPeriodStats) -> Self {
+        Self {
+            vendor: (&vendor_with_status.vendor).into(),
+            stats: vendor_with_status.stats.clone(),
+        }
+    }
+}
+
+#[derive(Serialize, Debug, Clone, JsonSchema)]
+#[schemars(example = "vendor_with_period_stats_example")]
+pub struct VendorWithPeriodStatsResponse {
+    #[serde(flatten)]
+    pub vendor: VendorResponse,
+
+    #[serde(flatten)]
+    pub stats: VendorPeriodStats,
+}
+
+fn vendor_period_transaction_count_example() -> i64 {
+    3
+}
+
+fn vendor_last_used_example() -> NaiveDate {
+    NaiveDate::from_ymd_opt(2024, 1, 14).expect("valid date")
+}
+
+fn vendor_with_period_stats_example() -> serde_json::Value {
+    json!({
+        "id": "6f64b6ea-1a79-41e4-95c2-86f8393c4b30",
+        "name": "Vendor Co",
+        "transaction_count": 3,
+        "last_used_at": "2024-01-14"
+    })
 }

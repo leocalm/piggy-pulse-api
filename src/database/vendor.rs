@@ -1,7 +1,8 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
+use crate::models::budget_period::BudgetPeriod;
 use crate::models::pagination::CursorParams;
-use crate::models::vendor::{Vendor, VendorRequest, VendorStats, VendorWithStats};
+use crate::models::vendor::{Vendor, VendorPeriodStats, VendorRequest, VendorStats, VendorWithPeriodStats, VendorWithStats};
 use chrono::{DateTime, NaiveDate, Utc};
 use rocket::FromFormField;
 use schemars::JsonSchema;
@@ -50,40 +51,96 @@ impl PostgresRepository {
         Ok(vendor)
     }
 
-    pub async fn list_vendors(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Vendor>, AppError> {
-        let vendors = if let Some(cursor) = params.cursor {
-            sqlx::query_as::<_, Vendor>(
+    pub async fn list_vendors(&self, params: &CursorParams, user_id: &Uuid, period: &BudgetPeriod) -> Result<Vec<VendorWithPeriodStats>, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct VendorWithPeriodStatsRow {
+            id: Uuid,
+            user_id: Uuid,
+            name: String,
+            created_at: DateTime<Utc>,
+            transaction_count: i64,
+            last_used_at: Option<NaiveDate>,
+        }
+
+        let rows = if let Some(cursor) = params.cursor {
+            sqlx::query_as::<_, VendorWithPeriodStatsRow>(
                 r#"
-                SELECT id, user_id, name, created_at
-                FROM vendor
-                WHERE user_id = $1
-                    AND (created_at, id) < (SELECT created_at, id FROM vendor WHERE id = $2)
-                ORDER BY created_at DESC, id DESC
-                LIMIT $3
+WITH selected_period AS (
+    SELECT $2::date AS start_date, $3::date AS end_date
+)
+SELECT v.id,
+       v.user_id,
+       v.name,
+       v.created_at,
+       COUNT(t.id) FILTER (
+            WHERE t.occurred_at >= sp.start_date
+              AND t.occurred_at <= sp.end_date
+       )::bigint AS transaction_count,
+       MAX(t.occurred_at) AS last_used_at
+FROM vendor v
+CROSS JOIN selected_period sp
+LEFT JOIN transaction t ON v.id = t.vendor_id AND t.user_id = $1
+WHERE v.user_id = $1
+  AND (v.created_at, v.id) < (SELECT created_at, id FROM vendor WHERE id = $4)
+GROUP BY v.id, v.user_id, v.name, v.created_at
+ORDER BY v.created_at DESC, v.id DESC
+LIMIT $5
                 "#,
             )
             .bind(user_id)
+            .bind(period.start_date)
+            .bind(period.end_date)
             .bind(cursor)
             .bind(params.fetch_limit())
             .fetch_all(&self.pool)
             .await?
         } else {
-            sqlx::query_as::<_, Vendor>(
+            sqlx::query_as::<_, VendorWithPeriodStatsRow>(
                 r#"
-                SELECT id, user_id, name, created_at
-                FROM vendor
-                WHERE user_id = $1
-                ORDER BY created_at DESC, id DESC
-                LIMIT $2
+WITH selected_period AS (
+    SELECT $2::date AS start_date, $3::date AS end_date
+)
+SELECT v.id,
+       v.user_id,
+       v.name,
+       v.created_at,
+       COUNT(t.id) FILTER (
+            WHERE t.occurred_at >= sp.start_date
+              AND t.occurred_at <= sp.end_date
+       )::bigint AS transaction_count,
+       MAX(t.occurred_at) AS last_used_at
+FROM vendor v
+CROSS JOIN selected_period sp
+LEFT JOIN transaction t ON v.id = t.vendor_id AND t.user_id = $1
+WHERE v.user_id = $1
+GROUP BY v.id, v.user_id, v.name, v.created_at
+ORDER BY v.created_at DESC, v.id DESC
+LIMIT $4
                 "#,
             )
             .bind(user_id)
+            .bind(period.start_date)
+            .bind(period.end_date)
             .bind(params.fetch_limit())
             .fetch_all(&self.pool)
             .await?
         };
 
-        Ok(vendors)
+        Ok(rows
+            .into_iter()
+            .map(|row| VendorWithPeriodStats {
+                vendor: Vendor {
+                    id: row.id,
+                    user_id: row.user_id,
+                    name: row.name,
+                    created_at: row.created_at,
+                },
+                stats: VendorPeriodStats {
+                    transaction_count: row.transaction_count,
+                    last_used_at: row.last_used_at,
+                },
+            })
+            .collect())
     }
 
     pub async fn list_vendors_with_status(&self, order_by: VendorOrderBy, user_id: &Uuid) -> Result<Vec<VendorWithStats>, AppError> {
