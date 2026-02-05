@@ -1,6 +1,7 @@
 use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
+use crate::middleware::rate_limit::RateLimit;
 use crate::models::category::{CategoryRequest, CategoryResponse};
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use rocket::http::Status;
@@ -16,6 +17,7 @@ use validator::Validate;
 #[post("/", data = "<payload>")]
 pub async fn create_category(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     payload: Json<CategoryRequest>,
 ) -> Result<(Status, Json<CategoryResponse>), AppError> {
@@ -31,6 +33,7 @@ pub async fn create_category(
 #[get("/?<cursor>&<limit>")]
 pub async fn list_all_categories(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     cursor: Option<String>,
     limit: Option<i64>,
@@ -46,7 +49,7 @@ pub async fn list_all_categories(
 /// Get a category by ID
 #[openapi(tag = "Categories")]
 #[get("/<id>")]
-pub async fn get_category(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Json<CategoryResponse>, AppError> {
+pub async fn get_category(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser, id: &str) -> Result<Json<CategoryResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
     if let Some(category) = repo.get_category_by_id(&uuid, &current_user.id).await? {
@@ -59,7 +62,7 @@ pub async fn get_category(pool: &State<PgPool>, current_user: CurrentUser, id: &
 /// Delete a category by ID
 #[openapi(tag = "Categories")]
 #[delete("/<id>")]
-pub async fn delete_category(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+pub async fn delete_category(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
     repo.delete_category(&uuid, &current_user.id).await?;
@@ -71,6 +74,7 @@ pub async fn delete_category(pool: &State<PgPool>, current_user: CurrentUser, id
 #[put("/<id>", data = "<payload>")]
 pub async fn put_category(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     id: &str,
     payload: Json<CategoryRequest>,
@@ -86,6 +90,7 @@ pub async fn put_category(
 #[get("/not-in-budget?<cursor>&<limit>")]
 pub async fn list_categories_not_in_budget(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     cursor: Option<String>,
     limit: Option<i64>,

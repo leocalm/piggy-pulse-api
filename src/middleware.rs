@@ -1,3 +1,5 @@
+pub mod rate_limit;
+
 use rocket::fairing::{Fairing, Info, Kind};
 use rocket::http::Header;
 use rocket::request::{FromRequest, Outcome, Request};

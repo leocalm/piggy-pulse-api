@@ -1,6 +1,7 @@
 use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
+use crate::middleware::rate_limit::RateLimit;
 use crate::models::dashboard::{BudgetPerDayResponse, DashboardResponse, MonthProgressResponse, MonthlyBurnInResponse, SpentPerCategoryResponse};
 use crate::models::pagination::CursorParams;
 use crate::models::transaction::TransactionResponse;
@@ -23,6 +24,7 @@ fn parse_period_id(period_id: Option<String>) -> Result<Uuid, AppError> {
 #[get("/budget-per-day?<period_id>")]
 pub async fn get_balance_per_day(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     period_id: Option<String>,
 ) -> Result<Json<Vec<BudgetPerDayResponse>>, AppError> {
@@ -37,6 +39,7 @@ pub async fn get_balance_per_day(
 #[get("/spent-per-category?<period_id>")]
 pub async fn get_spent_per_category(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     period_id: Option<String>,
 ) -> Result<Json<Vec<SpentPerCategoryResponse>>, AppError> {
@@ -49,7 +52,12 @@ pub async fn get_spent_per_category(
 /// Returns 400 if `period_id` is missing ("Missing period_id query parameter") or invalid.
 #[openapi(tag = "Dashboard")]
 #[get("/monthly-burn-in?<period_id>")]
-pub async fn get_monthly_burn_in(pool: &State<PgPool>, current_user: CurrentUser, period_id: Option<String>) -> Result<Json<MonthlyBurnInResponse>, AppError> {
+pub async fn get_monthly_burn_in(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    period_id: Option<String>,
+) -> Result<Json<MonthlyBurnInResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let budget_period_uuid = parse_period_id(period_id)?;
     Ok(Json(repo.monthly_burn_in(&budget_period_uuid, &current_user.id).await?))
@@ -59,7 +67,12 @@ pub async fn get_monthly_burn_in(pool: &State<PgPool>, current_user: CurrentUser
 /// Returns 400 if `period_id` is missing ("Missing period_id query parameter") or invalid.
 #[openapi(tag = "Dashboard")]
 #[get("/month-progress?<period_id>")]
-pub async fn get_month_progress(pool: &State<PgPool>, current_user: CurrentUser, period_id: Option<String>) -> Result<Json<MonthProgressResponse>, AppError> {
+pub async fn get_month_progress(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    period_id: Option<String>,
+) -> Result<Json<MonthProgressResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let budget_period_uuid = parse_period_id(period_id)?;
     Ok(Json(repo.month_progress(&budget_period_uuid, &current_user.id).await?))
@@ -71,6 +84,7 @@ pub async fn get_month_progress(pool: &State<PgPool>, current_user: CurrentUser,
 #[get("/recent-transactions?<period_id>")]
 pub async fn get_recent_transactions(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     period_id: Option<String>,
 ) -> Result<Json<Vec<TransactionResponse>>, AppError> {
@@ -86,7 +100,12 @@ pub async fn get_recent_transactions(
 /// Returns 400 if `period_id` is missing ("Missing period_id query parameter") or invalid.
 #[openapi(tag = "Dashboard")]
 #[get("/dashboard?<period_id>")]
-pub async fn get_dashboard(pool: &State<PgPool>, current_user: CurrentUser, period_id: Option<String>) -> Result<Json<DashboardResponse>, AppError> {
+pub async fn get_dashboard(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    period_id: Option<String>,
+) -> Result<Json<DashboardResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let budget_period_uuid = parse_period_id(period_id)?;
     let budget_period = repo.get_budget_period(&budget_period_uuid, &current_user.id).await?;

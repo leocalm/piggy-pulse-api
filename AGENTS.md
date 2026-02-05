@@ -23,7 +23,7 @@ cargo build --release && cargo run --release
 cargo fmt
 
 # Lint code
-cargo clippy --no-deps -- -D warnings
+cargo clippy --workspace --all-targets -- -D warnings
 
 # Run tests
 cargo test
@@ -55,6 +55,12 @@ Key sections and their defaults:
 | | `json_format` | `false` |
 | `[cors]` | `allowed_origins` | `["*"]` |
 | | `allow_credentials` | `false` |
+| `[rate_limit]` | `read_limit` | 300 |
+| | `mutation_limit` | 60 |
+| | `auth_limit` | 10 |
+| | `window_seconds` | 60 |
+| | `cleanup_interval_seconds` | 60 |
+| | `require_client_ip` | `true` |
 
 > Wildcard origins (`*`) combined with `allow_credentials = true` is an invalid combination and will panic at startup.
 
@@ -196,7 +202,7 @@ Repository methods use `sqlx` with `PgPool` (no trait objects, no deadpool). Map
 
 Always run the full PR check suite locally before pushing:
 - `cargo fmt --check`
-- `cargo clippy --no-deps -- -D warnings`
+- `cargo clippy --workspace --all-targets -- -D warnings`
 - `cargo build --verbose`
 - `cargo test --verbose`
 

@@ -10,6 +10,7 @@ pub struct Config {
     pub server: ServerConfig,
     pub logging: LoggingConfig,
     pub cors: CorsConfig,
+    pub rate_limit: RateLimitConfig,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -37,6 +38,16 @@ pub struct LoggingConfig {
 pub struct CorsConfig {
     pub allowed_origins: Vec<String>,
     pub allow_credentials: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct RateLimitConfig {
+    pub read_limit: u32,
+    pub mutation_limit: u32,
+    pub auth_limit: u32,
+    pub window_seconds: u64,
+    pub cleanup_interval_seconds: u64,
+    pub require_client_ip: bool,
 }
 
 impl Default for DatabaseConfig {
@@ -74,6 +85,19 @@ impl Default for CorsConfig {
         Self {
             allowed_origins: vec!["*".to_string()],
             allow_credentials: false,
+        }
+    }
+}
+
+impl Default for RateLimitConfig {
+    fn default() -> Self {
+        Self {
+            read_limit: 300,
+            mutation_limit: 60,
+            auth_limit: 10,
+            window_seconds: 60,
+            cleanup_interval_seconds: 60,
+            require_client_ip: true,
         }
     }
 }

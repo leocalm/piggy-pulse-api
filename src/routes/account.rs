@@ -1,6 +1,7 @@
 use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
+use crate::middleware::rate_limit::RateLimit;
 use crate::models::account::{AccountRequest, AccountResponse};
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use crate::service::account::AccountService;
@@ -16,6 +17,7 @@ use validator::Validate;
 #[post("/", data = "<payload>")]
 pub async fn create_account(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     payload: Json<AccountRequest>,
 ) -> Result<(Status, Json<AccountResponse>), AppError> {
@@ -31,6 +33,7 @@ pub async fn create_account(
 #[get("/?<cursor>&<limit>")]
 pub async fn list_all_accounts(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     cursor: Option<String>,
     limit: Option<i64>,
@@ -46,7 +49,7 @@ pub async fn list_all_accounts(
 /// Get an account by ID
 #[openapi(tag = "Accounts")]
 #[get("/<id>")]
-pub async fn get_account(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Json<AccountResponse>, AppError> {
+pub async fn get_account(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser, id: &str) -> Result<Json<AccountResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
     if let Some(account) = repo.get_account_by_id(&uuid, &current_user.id).await? {
@@ -59,7 +62,7 @@ pub async fn get_account(pool: &State<PgPool>, current_user: CurrentUser, id: &s
 /// Delete an account by ID
 #[openapi(tag = "Accounts")]
 #[delete("/<id>")]
-pub async fn delete_account(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+pub async fn delete_account(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
     repo.delete_account(&uuid, &current_user.id).await?;
@@ -69,7 +72,13 @@ pub async fn delete_account(pool: &State<PgPool>, current_user: CurrentUser, id:
 /// Update an account by ID
 #[openapi(tag = "Accounts")]
 #[put("/<id>", data = "<payload>")]
-pub async fn put_account(pool: &State<PgPool>, current_user: CurrentUser, id: &str, payload: Json<AccountRequest>) -> Result<Json<AccountResponse>, AppError> {
+pub async fn put_account(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    id: &str,
+    payload: Json<AccountRequest>,
+) -> Result<Json<AccountResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
     let account = repo.update_account(&uuid, &payload, &current_user.id).await?;

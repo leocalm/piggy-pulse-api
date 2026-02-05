@@ -1,26 +1,130 @@
-name: Rust
+name: Rust (fast PRs, full on main)
 
 on:
-  push:
-    branches: [ "main" ]
   pull_request:
+    types: [ opened, synchronize, reopened, ready_for_review ]
+    branches: [ "main" ]
+  push:
     branches: [ "main" ]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  pr-fast:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache cargo registry and git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Cache target directory
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-target-debug-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-target-debug-
+
+      - name: Cache sccache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/sccache
+          key: ${{ runner.os }}-sccache-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-sccache-
+
+      - name: Setup Rust (minimal)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Install sccache
+        run: |
+          if cargo install sccache --locked; then
+            echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+            echo "SCCACHE_DIR=$HOME/.cache/sccache" >> $GITHUB_ENV
+          else
+            echo "sccache install failed; continuing without it" >&2
+          fi
+
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Fast compile check (PR)
+        run: cargo check --workspace --all-targets --tests
+
+      - name: Run quick unit tests (lib-only)
+        run: cargo test --lib --workspace
+
+      - name: Show sccache stats
+        run: sccache --show-stats || true
+
+  main-full:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore cargo & target & sccache caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            ~/.cache/sccache
+          key: ${{ runner.os }}-cargo-target-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-target-release-
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Setup Rust (minimal)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Install sccache
+        run: |
+          if cargo install sccache --locked; then
+            echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+            echo "SCCACHE_DIR=$HOME/.cache/sccache" >> $GITHUB_ENV
+          else
+            echo "sccache install failed; continuing without it" >&2
+          fi
+
       - name: Format
         run: cargo fmt --check
+
       - name: Clippy
-        run: cargo clippy --no-deps -- -D warnings
-      - name: Build
-        run: cargo build --verbose
-      - name: Run tests
-        run: cargo test --verbose
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Build (release)
+        run: cargo build --workspace --release --all-targets --verbose
+
+      - name: Run tests (release)
+        run: cargo test --workspace --all-targets --release --verbose
+
+      - name: Show sccache stats
+        run: sccache --show-stats || true

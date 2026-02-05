@@ -14,6 +14,12 @@ pub struct CurrentUser {
     pub username: String,
 }
 
+pub(crate) fn parse_user_cookie_value(value: &str) -> Option<(Uuid, String)> {
+    let (id_str, username) = value.split_once(':')?;
+    let id = Uuid::parse_str(id_str).ok()?;
+    Some((id, username.to_string()))
+}
+
 #[rocket::async_trait]
 impl<'r> FromRequest<'r> for CurrentUser {
     type Error = AppError;
@@ -21,13 +27,9 @@ impl<'r> FromRequest<'r> for CurrentUser {
     async fn from_request(req: &'r Request<'_>) -> RequestOutcome<Self, Self::Error> {
         let cookies = req.cookies();
         if let Some(cookie) = cookies.get_private("user")
-            && let Some((id_str, username)) = cookie.value().split_once(':')
-            && let Ok(id) = Uuid::parse_str(id_str)
+            && let Some((id, username)) = parse_user_cookie_value(cookie.value())
         {
-            return Outcome::Success(CurrentUser {
-                id,
-                username: username.to_string(),
-            });
+            return Outcome::Success(CurrentUser { id, username });
         }
 
         Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials))
@@ -63,5 +65,31 @@ impl<'a> OpenApiFromRequest<'a> for CurrentUser {
             }),
         );
         Ok(responses)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_user_cookie_value;
+    use uuid::Uuid;
+
+    #[test]
+    fn parse_user_cookie_value_valid() {
+        let id = Uuid::new_v4();
+        let value = format!("{}:user@example.com", id);
+        let parsed = parse_user_cookie_value(&value);
+        assert!(matches!(parsed, Some((parsed_id, username)) if parsed_id == id && username == "user@example.com"));
+    }
+
+    #[test]
+    fn parse_user_cookie_value_invalid_uuid() {
+        let parsed = parse_user_cookie_value("not-a-uuid:user@example.com");
+        assert!(parsed.is_none());
+    }
+
+    #[test]
+    fn parse_user_cookie_value_missing_delimiter() {
+        let parsed = parse_user_cookie_value("missing-delimiter");
+        assert!(parsed.is_none());
     }
 }

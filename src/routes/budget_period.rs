@@ -1,6 +1,7 @@
 use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
+use crate::middleware::rate_limit::RateLimit;
 use crate::models::budget_period::{BudgetPeriodRequest, BudgetPeriodResponse};
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use rocket::http::Status;
@@ -14,7 +15,12 @@ use validator::Validate;
 /// Create a new budget period
 #[openapi(tag = "Budget Periods")]
 #[post("/", data = "<payload>")]
-pub async fn create_budget_period(pool: &State<PgPool>, current_user: CurrentUser, payload: Json<BudgetPeriodRequest>) -> Result<(Status, String), AppError> {
+pub async fn create_budget_period(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    payload: Json<BudgetPeriodRequest>,
+) -> Result<(Status, String), AppError> {
     payload.validate()?;
 
     let repo = PostgresRepository { pool: pool.inner().clone() };
@@ -27,6 +33,7 @@ pub async fn create_budget_period(pool: &State<PgPool>, current_user: CurrentUse
 #[get("/?<cursor>&<limit>")]
 pub async fn list_budget_periods(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     cursor: Option<String>,
     limit: Option<i64>,
@@ -42,7 +49,11 @@ pub async fn list_budget_periods(
 /// Get the current budget period (whose date range covers today)
 #[openapi(tag = "Budget Periods")]
 #[get("/current")]
-pub async fn get_current_budget_period(pool: &State<PgPool>, current_user: CurrentUser) -> Result<Json<BudgetPeriodResponse>, AppError> {
+pub async fn get_current_budget_period(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+) -> Result<Json<BudgetPeriodResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let budget_period = repo.get_current_budget_period(&current_user.id).await?;
     Ok(Json(BudgetPeriodResponse::from(&budget_period)))
@@ -53,6 +64,7 @@ pub async fn get_current_budget_period(pool: &State<PgPool>, current_user: Curre
 #[put("/<id>", data = "<payload>")]
 pub async fn put_budget_period(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     id: &str,
     payload: Json<BudgetPeriodRequest>,
@@ -66,7 +78,7 @@ pub async fn put_budget_period(
 /// Delete a budget period by ID
 #[openapi(tag = "Budget Periods")]
 #[delete("/<id>")]
-pub async fn delete_budget_period(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+pub async fn delete_budget_period(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget period id", e))?;
     repo.delete_budget_period(&uuid, &current_user.id).await?;
