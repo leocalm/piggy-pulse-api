@@ -17,6 +17,7 @@ use crate::db::stage_db;
 use crate::middleware::RequestLogger;
 use crate::middleware::rate_limit::RateLimiter;
 use crate::routes as app_routes;
+use rocket::fairing::AdHoc;
 use rocket::{Build, Rocket, catchers, http::Method};
 use rocket_cors::{AllowedOrigins, CorsOptions};
 use rocket_okapi::swagger_ui::{SwaggerUIConfig, make_swagger_ui};
@@ -86,6 +87,15 @@ fn get_swagger_config() -> SwaggerUIConfig {
     }
 }
 
+fn stage_rate_limiter(rate_limit_config: config::RateLimitConfig) -> AdHoc {
+    AdHoc::on_ignite("Rate Limiter", move |rocket| {
+        let limiter = Arc::new(RateLimiter::new(rate_limit_config.clone()));
+        limiter.clone().spawn_cleanup_task();
+
+        Box::pin(async move { rocket.manage(limiter) })
+    })
+}
+
 pub fn build_rocket(config: Config) -> Rocket<Build> {
     init_tracing(&config.logging.level, config.logging.json_format);
 
@@ -93,11 +103,8 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
 
     let settings = rocket_okapi::settings::OpenApiSettings::default();
 
-    let rate_limiter = Arc::new(RateLimiter::new(config.rate_limit.clone()));
-    rate_limiter.clone().spawn_cleanup_task();
-
     let mut rocket = rocket::build()
-        .manage(rate_limiter)
+        .attach(stage_rate_limiter(config.rate_limit.clone()))
         .attach(cors)
         .attach(RequestLogger) // Attach request/response logging middleware
         .attach(stage_db(config.database));
