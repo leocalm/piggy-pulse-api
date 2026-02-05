@@ -109,7 +109,7 @@ mod tests {
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
-        let response = client.put("/api/budget_period/invalid").dispatch().await;
+        let response = client.put("/api/v1/budget_period/invalid").dispatch().await;
 
         assert_eq!(response.status(), Status::BadRequest);
     }
@@ -122,7 +122,7 @@ mod tests {
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
-        let response = client.delete("/api/budget_period/not-valid").dispatch().await;
+        let response = client.delete("/api/v1/budget_period/not-valid").dispatch().await;
 
         assert_eq!(response.status(), Status::BadRequest);
     }

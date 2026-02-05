@@ -111,7 +111,7 @@ mod tests {
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
-        let response = client.get("/api/users/me").dispatch().await;
+        let response = client.get("/api/v1/users/me").dispatch().await;
 
         assert_eq!(response.status(), Status::Unauthorized);
     }
@@ -130,7 +130,12 @@ mod tests {
             "password": "password123"
         });
 
-        let response = client.post("/api/users/").header(ContentType::JSON).body(payload.to_string()).dispatch().await;
+        let response = client
+            .post("/api/v1/users/")
+            .header(ContentType::JSON)
+            .body(payload.to_string())
+            .dispatch()
+            .await;
 
         assert_eq!(response.status(), Status::Created);
 
@@ -142,7 +147,7 @@ mod tests {
         let cookie_value = format!("{}:{}", user_id, user_email);
         client.cookies().add_private(Cookie::build(("user", cookie_value)).path("/").build());
 
-        let response = client.get("/api/users/me").dispatch().await;
+        let response = client.get("/api/v1/users/me").dispatch().await;
 
         assert_eq!(response.status(), Status::Ok);
 

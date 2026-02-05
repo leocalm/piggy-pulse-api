@@ -136,7 +136,7 @@ mod tests {
         });
 
         let response = client
-            .post("/api/categories/")
+            .post("/api/v1/categories/")
             .header(ContentType::JSON)
             .body(invalid_payload.to_string())
             .dispatch()
@@ -153,7 +153,7 @@ mod tests {
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
-        let response = client.get("/api/categories/invalid-id").dispatch().await;
+        let response = client.get("/api/v1/categories/invalid-id").dispatch().await;
 
         assert_eq!(response.status(), Status::BadRequest);
     }
@@ -166,7 +166,7 @@ mod tests {
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
-        let response = client.delete("/api/categories/bad-uuid").dispatch().await;
+        let response = client.delete("/api/v1/categories/bad-uuid").dispatch().await;
 
         assert_eq!(response.status(), Status::BadRequest);
     }

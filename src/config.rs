@@ -11,6 +11,7 @@ pub struct Config {
     pub logging: LoggingConfig,
     pub cors: CorsConfig,
     pub rate_limit: RateLimitConfig,
+    pub api: ApiConfig,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -49,6 +50,14 @@ pub struct RateLimitConfig {
     pub cleanup_interval_seconds: u64,
     pub require_client_ip: bool,
 }
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ApiConfig {
+    pub base_path: String,
+    pub additional_base_paths: Vec<String>,
+}
+
+pub const DEFAULT_API_BASE_PATH: &str = "/api/v1";
 
 impl Default for DatabaseConfig {
     fn default() -> Self {
@@ -98,6 +107,15 @@ impl Default for RateLimitConfig {
             window_seconds: 60,
             cleanup_interval_seconds: 60,
             require_client_ip: true,
+        }
+    }
+}
+
+impl Default for ApiConfig {
+    fn default() -> Self {
+        Self {
+            base_path: DEFAULT_API_BASE_PATH.to_string(),
+            additional_base_paths: Vec::new(),
         }
     }
 }

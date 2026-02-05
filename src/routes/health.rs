@@ -46,7 +46,7 @@ mod tests {
         config.database.url = "postgresql://test:test@localhost/test".to_string();
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
-        let response = client.get("/api/health").dispatch().await;
+        let response = client.get("/api/v1/health").dispatch().await;
         assert_eq!(response.status(), Status::Ok);
 
         let body = response.into_json::<super::HealthResponse>().await.expect("health response json");
