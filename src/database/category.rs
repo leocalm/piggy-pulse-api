@@ -1,6 +1,7 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
-use crate::models::category::{Category, CategoryRequest, CategoryType};
+use crate::models::budget_period::BudgetPeriod;
+use crate::models::category::{Category, CategoryRequest, CategoryStats, CategoryType, CategoryWithStats, difference_vs_average_percentage};
 use crate::models::pagination::CursorParams;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -30,6 +31,43 @@ impl From<CategoryRow> for Category {
             parent_id: row.parent_id,
             category_type: category_type_from_db(&row.category_type),
             created_at: row.created_at,
+        }
+    }
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct CategoryWithStatsRow {
+    id: Uuid,
+    user_id: Uuid,
+    name: String,
+    color: String,
+    icon: String,
+    parent_id: Option<Uuid>,
+    category_type: String,
+    created_at: DateTime<Utc>,
+    used_in_period: i64,
+    average_period_usage: i64,
+    transaction_count: i64,
+}
+
+impl From<CategoryWithStatsRow> for CategoryWithStats {
+    fn from(row: CategoryWithStatsRow) -> Self {
+        CategoryWithStats {
+            category: Category {
+                id: row.id,
+                user_id: row.user_id,
+                name: row.name,
+                color: row.color,
+                icon: row.icon,
+                parent_id: row.parent_id,
+                category_type: category_type_from_db(&row.category_type),
+                created_at: row.created_at,
+            },
+            stats: CategoryStats {
+                used_in_period: row.used_in_period,
+                difference_vs_average_percentage: difference_vs_average_percentage(row.used_in_period, row.average_period_usage),
+                transaction_count: row.transaction_count,
+            },
         }
     }
 }
@@ -87,56 +125,162 @@ impl PostgresRepository {
         Ok(row.map(Category::from))
     }
 
-    pub async fn list_categories(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Category>, AppError> {
+    pub async fn list_categories(&self, params: &CursorParams, user_id: &Uuid, period: &BudgetPeriod) -> Result<Vec<CategoryWithStats>, AppError> {
         let rows = if let Some(cursor) = params.cursor {
-            sqlx::query_as::<_, CategoryRow>(
+            sqlx::query_as::<_, CategoryWithStatsRow>(
                 r#"
-                SELECT
-                    id,
-                    user_id,
-                    name,
-                    COALESCE(color, '') as color,
-                    COALESCE(icon, '') as icon,
-                    parent_id,
-                    category_type::text as category_type,
-                    created_at
-                FROM category
-                WHERE user_id = $1
-                    AND (created_at, id) < (SELECT created_at, id FROM category WHERE id = $2)
-                ORDER BY created_at DESC, id DESC
-                LIMIT $3
+WITH selected_period AS (
+    SELECT $2::date AS start_date, $3::date AS end_date
+),
+period_totals AS (
+    SELECT
+        bp.id AS period_id,
+        t.category_id,
+        SUM(t.amount)::bigint AS period_amount
+    FROM transaction t
+    JOIN budget_period bp
+        ON t.occurred_at >= bp.start_date
+       AND t.occurred_at <= bp.end_date
+       AND bp.user_id = $1
+    WHERE t.user_id = $1
+    GROUP BY bp.id, t.category_id
+),
+average_totals AS (
+    SELECT
+        category_id,
+        COALESCE(AVG(period_amount), 0)::bigint AS avg_period_amount
+    FROM period_totals
+    GROUP BY category_id
+),
+selected_period_totals AS (
+    SELECT
+        t.category_id,
+        COALESCE(SUM(t.amount), 0)::bigint AS used_this_period
+    FROM transaction t
+    CROSS JOIN selected_period sp
+    WHERE t.user_id = $1
+      AND t.occurred_at >= sp.start_date
+      AND t.occurred_at <= sp.end_date
+    GROUP BY t.category_id
+),
+selected_period_counts AS (
+    SELECT
+        t.category_id,
+        COUNT(*)::bigint AS transaction_count
+    FROM transaction t
+    CROSS JOIN selected_period sp
+    WHERE t.user_id = $1
+      AND t.occurred_at >= sp.start_date
+      AND t.occurred_at <= sp.end_date
+    GROUP BY t.category_id
+)
+SELECT
+    c.id,
+    c.user_id,
+    c.name,
+    COALESCE(c.color, '') as color,
+    COALESCE(c.icon, '') as icon,
+    c.parent_id,
+    c.category_type::text as category_type,
+    c.created_at,
+    COALESCE(spt.used_this_period, 0) AS used_in_period,
+    COALESCE(at.avg_period_amount, 0) AS average_period_usage,
+    COALESCE(spc.transaction_count, 0) AS transaction_count
+FROM category c
+LEFT JOIN selected_period_totals spt ON c.id = spt.category_id
+LEFT JOIN average_totals at ON c.id = at.category_id
+LEFT JOIN selected_period_counts spc ON c.id = spc.category_id
+WHERE c.user_id = $1
+  AND (c.created_at, c.id) < (SELECT created_at, id FROM category WHERE id = $4)
+ORDER BY c.created_at DESC, c.id DESC
+LIMIT $5
                 "#,
             )
             .bind(user_id)
+            .bind(period.start_date)
+            .bind(period.end_date)
             .bind(cursor)
             .bind(params.fetch_limit())
             .fetch_all(&self.pool)
             .await?
         } else {
-            sqlx::query_as::<_, CategoryRow>(
+            sqlx::query_as::<_, CategoryWithStatsRow>(
                 r#"
-                SELECT
-                    id,
-                    user_id,
-                    name,
-                    COALESCE(color, '') as color,
-                    COALESCE(icon, '') as icon,
-                    parent_id,
-                    category_type::text as category_type,
-                    created_at
-                FROM category
-                WHERE user_id = $1
-                ORDER BY created_at DESC, id DESC
-                LIMIT $2
+WITH selected_period AS (
+    SELECT $2::date AS start_date, $3::date AS end_date
+),
+period_totals AS (
+    SELECT
+        bp.id AS period_id,
+        t.category_id,
+        SUM(t.amount)::bigint AS period_amount
+    FROM transaction t
+    JOIN budget_period bp
+        ON t.occurred_at >= bp.start_date
+       AND t.occurred_at <= bp.end_date
+       AND bp.user_id = $1
+    WHERE t.user_id = $1
+    GROUP BY bp.id, t.category_id
+),
+average_totals AS (
+    SELECT
+        category_id,
+        COALESCE(AVG(period_amount), 0)::bigint AS avg_period_amount
+    FROM period_totals
+    GROUP BY category_id
+),
+selected_period_totals AS (
+    SELECT
+        t.category_id,
+        COALESCE(SUM(t.amount), 0)::bigint AS used_this_period
+    FROM transaction t
+    CROSS JOIN selected_period sp
+    WHERE t.user_id = $1
+      AND t.occurred_at >= sp.start_date
+      AND t.occurred_at <= sp.end_date
+    GROUP BY t.category_id
+),
+selected_period_counts AS (
+    SELECT
+        t.category_id,
+        COUNT(*)::bigint AS transaction_count
+    FROM transaction t
+    CROSS JOIN selected_period sp
+    WHERE t.user_id = $1
+      AND t.occurred_at >= sp.start_date
+      AND t.occurred_at <= sp.end_date
+    GROUP BY t.category_id
+)
+SELECT
+    c.id,
+    c.user_id,
+    c.name,
+    COALESCE(c.color, '') as color,
+    COALESCE(c.icon, '') as icon,
+    c.parent_id,
+    c.category_type::text as category_type,
+    c.created_at,
+    COALESCE(spt.used_this_period, 0) AS used_in_period,
+    COALESCE(at.avg_period_amount, 0) AS average_period_usage,
+    COALESCE(spc.transaction_count, 0) AS transaction_count
+FROM category c
+LEFT JOIN selected_period_totals spt ON c.id = spt.category_id
+LEFT JOIN average_totals at ON c.id = at.category_id
+LEFT JOIN selected_period_counts spc ON c.id = spc.category_id
+WHERE c.user_id = $1
+ORDER BY c.created_at DESC, c.id DESC
+LIMIT $4
                 "#,
             )
             .bind(user_id)
+            .bind(period.start_date)
+            .bind(period.end_date)
             .bind(params.fetch_limit())
             .fetch_all(&self.pool)
             .await?
         };
 
-        Ok(rows.into_iter().map(Category::from).collect())
+        Ok(rows.into_iter().map(CategoryWithStats::from).collect())
     }
 
     pub async fn delete_category(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
