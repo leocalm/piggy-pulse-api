@@ -23,7 +23,7 @@ pub struct VendorStats {
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct VendorPeriodStats {
     #[schemars(
-        description = "Number of transactions in the current budget period.",
+        description = "Number of transactions in the selected budget period.",
         example = "vendor_period_transaction_count_example"
     )]
     pub transaction_count: i64,

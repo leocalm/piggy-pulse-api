@@ -29,7 +29,8 @@ pub async fn create_vendor(
     Ok((Status::Created, Json(VendorResponse::from(&vendor))))
 }
 
-/// List all vendors with cursor-based pagination and stats for a selected budget period
+/// List all vendors with cursor-based pagination and stats for a selected budget period.
+/// Requires `period_id` query parameter.
 #[openapi(tag = "Vendors")]
 #[get("/?<period_id>&<cursor>&<limit>")]
 pub async fn list_all_vendors(
