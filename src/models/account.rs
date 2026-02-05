@@ -1,4 +1,5 @@
 use crate::models::currency::{Currency, CurrencyResponse};
+use crate::models::dashboard::BudgetPerDayResponse;
 use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
@@ -76,4 +77,35 @@ impl From<&Account> for AccountResponse {
             spend_limit: account.spend_limit,
         }
     }
+}
+
+#[derive(Serialize, Debug, JsonSchema)]
+pub struct AccountListResponse {
+    pub id: Uuid,
+    pub name: String,
+    pub color: String,
+    pub icon: String,
+    pub account_type: AccountType,
+    pub currency: CurrencyResponse,
+    pub balance: i64,
+    pub spend_limit: Option<i32>,
+    pub balance_per_day: Vec<BudgetPerDayResponse>,
+    pub balance_change_this_period: i64,
+    pub transaction_count: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct AccountWithMetrics {
+    pub account: Account,
+    pub current_balance: i64,
+    pub balance_change_this_period: i64,
+    pub transaction_count: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct AccountBalancePerDay {
+    pub account_id: Uuid,
+    pub account_name: String,
+    pub date: String,
+    pub balance: i32,
 }

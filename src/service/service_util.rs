@@ -3,6 +3,7 @@ use crate::models::category::CategoryType;
 use crate::models::transaction::Transaction;
 use chrono::NaiveDate;
 
+#[allow(dead_code)]
 pub fn add_transaction(tx: &Transaction, account: &Account) -> i32 {
     match tx.category.category_type {
         CategoryType::Incoming => tx.amount,
@@ -17,11 +18,13 @@ pub fn add_transaction(tx: &Transaction, account: &Account) -> i32 {
     }
 }
 
+#[allow(dead_code)]
 pub fn account_involved(account: &Account, transaction: &Transaction) -> bool {
     transaction.from_account.id == account.id
         || (transaction.to_account.is_some() && transaction.to_account.as_ref().is_some_and(|to_acc| to_acc.id == account.id))
 }
 
+#[allow(dead_code)]
 pub fn balance_on_date(date: Option<&NaiveDate>, account: &Account, transactions: &[Transaction]) -> i32 {
     transactions
         .iter()
