@@ -1,14 +1,23 @@
 use rocket::http::Status;
 use rocket::response::Responder;
+use rocket::serde::json::serde_json;
 use rocket::{Request, Response};
 use rocket_okapi::OpenApiError;
 use rocket_okapi::r#gen::OpenApiGenerator;
 use rocket_okapi::okapi::openapi3::Responses;
 use rocket_okapi::response::OpenApiResponderInner;
+use serde::Serialize;
 use std::io::Cursor;
 use thiserror::Error;
 use tracing::error;
 use validator::ValidationErrors;
+
+#[derive(Serialize)]
+#[serde(crate = "rocket::serde")]
+struct ErrorResponse {
+    message: String,
+    request_id: String,
+}
 
 #[derive(Debug, Error)]
 pub enum AppError {
@@ -113,8 +122,8 @@ impl<'r> Responder<'r, 'static> for AppError {
         let request_id = req
             .local_cache(|| None::<crate::middleware::RequestId>)
             .as_ref()
-            .map(|r| r.0.as_str())
-            .unwrap_or("unknown");
+            .map(|r| r.0.clone())
+            .unwrap_or_else(|| "unknown".to_string());
 
         // Try to get user from auth
         let user_id = req
@@ -133,9 +142,17 @@ impl<'r> Responder<'r, 'static> for AppError {
         );
 
         let status = Status::from(&self);
-        let body = self.to_string();
+        let error_response = ErrorResponse {
+            message: self.to_string(),
+            request_id: request_id.clone(),
+        };
+        let body = serde_json::to_string(&error_response).unwrap_or_else(|_| format!(r#"{{"message":"Internal server error","request_id":"{}"}}"#, request_id));
 
-        Response::build().status(status).sized_body(body.len(), Cursor::new(body)).ok()
+        Response::build()
+            .status(status)
+            .header(rocket::http::ContentType::JSON)
+            .sized_body(body.len(), Cursor::new(body))
+            .ok()
     }
 }
 
@@ -190,5 +207,44 @@ impl From<sqlx::Error> for AppError {
             sqlx::Error::RowNotFound => AppError::NotFound("Resource not found".to_string()),
             _ => AppError::db("Database error", e),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rocket::http::Status;
+    use rocket::local::blocking::Client;
+    use rocket::{get, routes};
+
+    #[get("/test-error")]
+    fn test_error_route() -> Result<(), AppError> {
+        Err(AppError::NotFound("Test resource".to_string()))
+    }
+
+    #[test]
+    fn test_error_response_includes_request_id() {
+        let rocket = rocket::build()
+            .attach(crate::middleware::RequestLogger)
+            .mount("/", routes![test_error_route]);
+
+        let client = Client::tracked(rocket).expect("valid rocket instance");
+        let response = client.get("/test-error").dispatch();
+
+        assert_eq!(response.status(), Status::NotFound);
+
+        // Verify X-Request-Id header is present
+        let request_id_header = response.headers().get_one("X-Request-Id");
+        assert!(request_id_header.is_some(), "X-Request-Id header should be present");
+
+        // Verify response body includes request_id
+        let body = response.into_string().expect("response body");
+        assert!(body.contains("request_id"), "Response body should contain request_id field");
+        assert!(body.contains("Test resource"), "Response body should contain error message");
+
+        // Verify it's valid JSON with both fields
+        let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
+        assert!(json.get("message").is_some(), "Response should have message field");
+        assert!(json.get("request_id").is_some(), "Response should have request_id field");
     }
 }
