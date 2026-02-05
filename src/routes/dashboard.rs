@@ -140,7 +140,12 @@ mod tests {
             "password": "password123"
         });
 
-        let response = client.post("/api/users/").header(ContentType::JSON).body(payload.to_string()).dispatch().await;
+        let response = client
+            .post("/api/v1/users/")
+            .header(ContentType::JSON)
+            .body(payload.to_string())
+            .dispatch()
+            .await;
         assert_eq!(response.status(), Status::Created);
 
         let body = response.into_string().await.expect("user response body");
@@ -163,7 +168,7 @@ mod tests {
         });
 
         let response = client
-            .post("/api/currency/")
+            .post("/api/v1/currency/")
             .header(ContentType::JSON)
             .body(payload.to_string())
             .dispatch()
@@ -180,7 +185,7 @@ mod tests {
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
         create_user_and_auth(&client).await;
 
-        let response = client.get("/api/dashboard/total-assets").dispatch().await;
+        let response = client.get("/api/v1/dashboard/total-assets").dispatch().await;
         assert_eq!(response.status(), Status::Ok);
 
         let body = response.into_string().await.expect("total assets response body");
@@ -209,14 +214,14 @@ mod tests {
         });
 
         let response = client
-            .post("/api/accounts/")
+            .post("/api/v1/accounts/")
             .header(ContentType::JSON)
             .body(account_payload.to_string())
             .dispatch()
             .await;
         assert_eq!(response.status(), Status::Created);
 
-        let response = client.get("/api/dashboard/total-assets").dispatch().await;
+        let response = client.get("/api/v1/dashboard/total-assets").dispatch().await;
         assert_eq!(response.status(), Status::Ok);
 
         let body = response.into_string().await.expect("total assets response body");

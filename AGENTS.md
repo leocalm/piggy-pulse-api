@@ -61,6 +61,8 @@ Key sections and their defaults:
 | | `window_seconds` | 60 |
 | | `cleanup_interval_seconds` | 60 |
 | | `require_client_ip` | `true` |
+| `[api]` | `base_path` | `/api/v1` |
+| | `additional_base_paths` | `[]` |
 
 > Wildcard origins (`*`) combined with `allow_credentials = true` is an invalid combination and will panic at startup.
 
@@ -124,22 +126,22 @@ Models are split into two types in `src/models/<entity>.rs`:
 
 ### API Endpoints Structure
 
-All endpoints are mounted under `/api`. List endpoints use cursor-based pagination (see Pagination below).
+All endpoints are mounted under `/api/v1` by default (configurable via `api.base_path`). The same routes can be exposed under additional base paths via `api.additional_base_paths`. The examples below assume the default base path. List endpoints use cursor-based pagination (see Pagination below).
 
-- `/api/health` — `GET /` runs `SELECT 1` against the pool; returns `{"status":"ok","database":"connected"}` or `503`
-- `/api/users` — create, login, logout, update, delete, `GET /me`
-- `/api/accounts` — CRUD + cursor-paginated list
-- `/api/currency` — CRUD; lookup by code (`GET /<code>`) or name (`GET /name/<name>`)
-- `/api/categories` — CRUD + cursor-paginated list; `GET /not-in-budget` returns Outgoing categories not yet associated with a budget
-- `/api/budgets` — CRUD + cursor-paginated list
-- `/api/budget-categories` — CRUD + cursor-paginated list
-- `/api/budget_period` — CRUD + cursor-paginated list; `GET /current` returns the period whose date range covers today
-- `/api/transactions` — CRUD + cursor-paginated list; list accepts optional `period_id` query filter
-- `/api/vendors` — CRUD + cursor-paginated list; `GET /with_status?order_by=<name|most_used|more_recent>` returns vendors enriched with transaction-count stats
-- `/api/dashboard` — `budget-per-day`, `spent-per-category`, `monthly-burn-in`, `month-progress`, `recent-transactions`, `dashboard` (all accept `period_id`)
+- `/api/v1/health` — `GET /` runs `SELECT 1` against the pool; returns `{"status":"ok","database":"connected"}` or `503`
+- `/api/v1/users` — create, login, logout, update, delete, `GET /me`
+- `/api/v1/accounts` — CRUD + cursor-paginated list
+- `/api/v1/currency` — CRUD; lookup by code (`GET /<code>`) or name (`GET /name/<name>`)
+- `/api/v1/categories` — CRUD + cursor-paginated list; `GET /not-in-budget` returns Outgoing categories not yet associated with a budget
+- `/api/v1/budgets` — CRUD + cursor-paginated list
+- `/api/v1/budget-categories` — CRUD + cursor-paginated list
+- `/api/v1/budget_period` — CRUD + cursor-paginated list; `GET /current` returns the period whose date range covers today
+- `/api/v1/transactions` — CRUD + cursor-paginated list; list accepts optional `period_id` query filter
+- `/api/v1/vendors` — CRUD + cursor-paginated list; `GET /with_status?order_by=<name|most_used|more_recent>` returns vendors enriched with transaction-count stats
+- `/api/v1/dashboard` — `budget-per-day`, `spent-per-category`, `monthly-burn-in`, `month-progress`, `recent-transactions`, `dashboard` (all accept `period_id`)
   `spent-per-category` returns `percentage_spent` in basis points (percent * 100). Example: 2534 = 25.34%.
 
-404 and 409 responses are caught under `/api` and returned as `{"message":"..."}` JSON.
+404 and 409 responses are caught under `/api/v1` by default and returned as `{"message":"..."}` JSON.
 
 ### Pagination
 

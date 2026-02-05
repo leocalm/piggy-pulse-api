@@ -112,7 +112,7 @@ mod tests {
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
-        let response = client.get("/api/transactions/invalid-uuid").dispatch().await;
+        let response = client.get("/api/v1/transactions/invalid-uuid").dispatch().await;
 
         assert_eq!(response.status(), Status::BadRequest);
     }
@@ -125,7 +125,7 @@ mod tests {
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
-        let response = client.delete("/api/transactions/bad-id").dispatch().await;
+        let response = client.delete("/api/v1/transactions/bad-id").dispatch().await;
 
         assert_eq!(response.status(), Status::BadRequest);
     }
@@ -138,7 +138,7 @@ mod tests {
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
-        let response = client.get("/api/transactions/?period_id=invalid-uuid").dispatch().await;
+        let response = client.get("/api/v1/transactions/?period_id=invalid-uuid").dispatch().await;
 
         assert_eq!(response.status(), Status::BadRequest);
     }

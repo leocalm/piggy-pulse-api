@@ -15,6 +15,10 @@ acquire_timeout = 5     # seconds
 port = 8000
 address = "127.0.0.1"
 
+[api]
+base_path = "/api/v1"
+additional_base_paths = []
+
 [logging]
 level = "info"  # trace, debug, info, warn, error
 json_format = false

@@ -102,6 +102,23 @@ BUDGET_LOGGING_LEVEL=info
 BUDGET_LOGGING_JSON_FORMAT=false
 ```
 
+### API
+
+```toml
+[api]
+base_path = "/api/v1"
+additional_base_paths = ["/api/v2"]
+```
+
+Or with environment variables:
+```bash
+BUDGET_API__BASE_PATH=/api/v1
+```
+
+Notes:
+- `additional_base_paths` is easiest to set in `Budget.toml` as a list.
+- If you need to set multiple base paths via environment variables, prefer the config file to avoid platform-specific list syntax.
+
 ### Rate Limiting
 
 ```toml
