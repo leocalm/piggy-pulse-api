@@ -197,18 +197,14 @@ impl PostgresRepository {
         Ok(row.map(Account::from))
     }
 
-    pub async fn list_accounts(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<AccountWithMetrics>, AppError> {
+    pub async fn list_accounts(&self, params: &CursorParams, budget_period_id: &Uuid, user_id: &Uuid) -> Result<Vec<AccountWithMetrics>, AppError> {
         let rows = if let Some(cursor) = params.cursor {
             sqlx::query_as::<_, AccountMetricsRow>(
                 r#"
-                WITH current_period AS (
+                WITH period AS (
                     SELECT start_date, end_date
                     FROM budget_period
-                    WHERE user_id = $2
-                      AND start_date <= CURRENT_DATE
-                      AND end_date >= CURRENT_DATE
-                    ORDER BY start_date DESC
-                    LIMIT 1
+                    WHERE id = $2 AND user_id = $3
                 )
                 SELECT
                     a.id,
@@ -237,9 +233,9 @@ impl PostgresRepository {
                     ), 0))::bigint AS current_balance,
                     COALESCE(SUM(
                         CASE
-                            WHEN cp.start_date IS NOT NULL
-                             AND t.occurred_at >= cp.start_date
-                             AND t.occurred_at <= cp.end_date THEN
+                            WHEN p.start_date IS NOT NULL
+                             AND t.occurred_at >= p.start_date
+                             AND t.occurred_at <= p.end_date THEN
                                 CASE
                                     WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
                                     WHEN cat.category_type = 'Outgoing'                              THEN -t.amount::bigint
@@ -258,12 +254,98 @@ impl PostgresRepository {
                     ), 0)::bigint AS transaction_count
                 FROM account a
                 JOIN currency c ON c.id = a.currency_id
-                LEFT JOIN current_period cp ON true
-                LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id) AND t.user_id = $2
+                LEFT JOIN period p ON true
+                LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id) AND t.user_id = $3
                 LEFT JOIN category cat ON t.category_id = cat.id
                 WHERE (a.created_at, a.id) < (
                     SELECT created_at, id FROM account WHERE id = $1
-                ) AND a.user_id = $2
+                ) AND a.user_id = $3
+                GROUP BY
+                    a.id,
+                    a.user_id,
+                    a.name,
+                    a.color,
+                    a.icon,
+                    a.account_type,
+                    a.balance,
+                    a.created_at,
+                    a.spend_limit,
+                    c.id,
+                    c.name,
+                    c.symbol,
+                    c.currency,
+                    c.decimal_places,
+                    c.created_at
+                ORDER BY a.created_at DESC, a.id DESC
+                LIMIT $4
+                "#,
+            )
+            .bind(cursor)
+            .bind(budget_period_id)
+            .bind(user_id)
+            .bind(params.fetch_limit())
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, AccountMetricsRow>(
+                r#"
+                WITH period AS (
+                    SELECT start_date, end_date
+                    FROM budget_period
+                    WHERE id = $1 AND user_id = $2
+                )
+                SELECT
+                    a.id,
+                    a.user_id,
+                    a.name,
+                    a.color,
+                    a.icon,
+                    a.account_type::text as account_type,
+                    a.balance,
+                    a.created_at,
+                    a.spend_limit,
+                    c.id as currency_id,
+                    c.name as currency_name,
+                    c.symbol as currency_symbol,
+                    c.currency as currency_code,
+                    c.decimal_places as currency_decimal_places,
+                    c.created_at as currency_created_at,
+                    (a.balance + COALESCE(SUM(
+                        CASE
+                            WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
+                            WHEN cat.category_type = 'Outgoing'                              THEN -t.amount::bigint
+                            WHEN cat.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
+                            WHEN cat.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
+                            ELSE 0
+                        END
+                    ), 0))::bigint AS current_balance,
+                    COALESCE(SUM(
+                        CASE
+                            WHEN p.start_date IS NOT NULL
+                             AND t.occurred_at >= p.start_date
+                             AND t.occurred_at <= p.end_date THEN
+                                CASE
+                                    WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
+                                    WHEN cat.category_type = 'Outgoing'                              THEN -t.amount::bigint
+                                    WHEN cat.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
+                                    WHEN cat.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
+                                    ELSE 0
+                                END
+                            ELSE 0
+                        END
+                    ), 0)::bigint AS balance_change_this_period,
+                    COALESCE(SUM(
+                        CASE
+                            WHEN t.from_account_id = a.id THEN 1
+                            ELSE 0
+                        END
+                    ), 0)::bigint AS transaction_count
+                FROM account a
+                JOIN currency c ON c.id = a.currency_id
+                LEFT JOIN period p ON true
+                LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id) AND t.user_id = $2
+                LEFT JOIN category cat ON t.category_id = cat.id
+                WHERE a.user_id = $2
                 GROUP BY
                     a.id,
                     a.user_id,
@@ -284,95 +366,7 @@ impl PostgresRepository {
                 LIMIT $3
                 "#,
             )
-            .bind(cursor)
-            .bind(user_id)
-            .bind(params.fetch_limit())
-            .fetch_all(&self.pool)
-            .await?
-        } else {
-            sqlx::query_as::<_, AccountMetricsRow>(
-                r#"
-                WITH current_period AS (
-                    SELECT start_date, end_date
-                    FROM budget_period
-                    WHERE user_id = $1
-                      AND start_date <= CURRENT_DATE
-                      AND end_date >= CURRENT_DATE
-                    ORDER BY start_date DESC
-                    LIMIT 1
-                )
-                SELECT
-                    a.id,
-                    a.user_id,
-                    a.name,
-                    a.color,
-                    a.icon,
-                    a.account_type::text as account_type,
-                    a.balance,
-                    a.created_at,
-                    a.spend_limit,
-                    c.id as currency_id,
-                    c.name as currency_name,
-                    c.symbol as currency_symbol,
-                    c.currency as currency_code,
-                    c.decimal_places as currency_decimal_places,
-                    c.created_at as currency_created_at,
-                    (a.balance + COALESCE(SUM(
-                        CASE
-                            WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
-                            WHEN cat.category_type = 'Outgoing'                              THEN -t.amount::bigint
-                            WHEN cat.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
-                            WHEN cat.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
-                            ELSE 0
-                        END
-                    ), 0))::bigint AS current_balance,
-                    COALESCE(SUM(
-                        CASE
-                            WHEN cp.start_date IS NOT NULL
-                             AND t.occurred_at >= cp.start_date
-                             AND t.occurred_at <= cp.end_date THEN
-                                CASE
-                                    WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
-                                    WHEN cat.category_type = 'Outgoing'                              THEN -t.amount::bigint
-                                    WHEN cat.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
-                                    WHEN cat.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
-                                    ELSE 0
-                                END
-                            ELSE 0
-                        END
-                    ), 0)::bigint AS balance_change_this_period,
-                    COALESCE(SUM(
-                        CASE
-                            WHEN t.from_account_id = a.id THEN 1
-                            ELSE 0
-                        END
-                    ), 0)::bigint AS transaction_count
-                FROM account a
-                JOIN currency c ON c.id = a.currency_id
-                LEFT JOIN current_period cp ON true
-                LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id) AND t.user_id = $1
-                LEFT JOIN category cat ON t.category_id = cat.id
-                WHERE a.user_id = $1
-                GROUP BY
-                    a.id,
-                    a.user_id,
-                    a.name,
-                    a.color,
-                    a.icon,
-                    a.account_type,
-                    a.balance,
-                    a.created_at,
-                    a.spend_limit,
-                    c.id,
-                    c.name,
-                    c.symbol,
-                    c.currency,
-                    c.decimal_places,
-                    c.created_at
-                ORDER BY a.created_at DESC, a.id DESC
-                LIMIT $2
-                "#,
-            )
+            .bind(budget_period_id)
             .bind(user_id)
             .bind(params.fetch_limit())
             .fetch_all(&self.pool)
@@ -382,7 +376,12 @@ impl PostgresRepository {
         Ok(rows.into_iter().map(AccountWithMetrics::from).collect())
     }
 
-    pub async fn list_account_balance_per_day(&self, account_ids: &[Uuid], user_id: &Uuid) -> Result<Vec<AccountBalancePerDay>, AppError> {
+    pub async fn list_account_balance_per_day(
+        &self,
+        account_ids: &[Uuid],
+        budget_period_id: &Uuid,
+        user_id: &Uuid,
+    ) -> Result<Vec<AccountBalancePerDay>, AppError> {
         if account_ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -400,11 +399,7 @@ impl PostgresRepository {
 WITH period AS (
     SELECT start_date, end_date
     FROM budget_period
-    WHERE user_id = $2
-      AND start_date <= CURRENT_DATE
-      AND end_date >= CURRENT_DATE
-    ORDER BY start_date DESC
-    LIMIT 1
+    WHERE id = $2 AND user_id = $3
 ),
 days AS (
     SELECT d::date AS day
@@ -429,9 +424,9 @@ base_balances AS (
     FROM account a
     LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id)
                             AND t.occurred_at < (SELECT start_date FROM period)
-                            AND t.user_id = $2
+                            AND t.user_id = $3
     LEFT JOIN category c    ON t.category_id = c.id
-    WHERE a.user_id = $2 AND a.id = ANY($1)
+    WHERE a.user_id = $3 AND a.id = ANY($1)
     GROUP BY a.id, a.balance
 ),
 daily_totals AS (
@@ -451,8 +446,8 @@ daily_totals AS (
     JOIN transaction t  ON t.from_account_id = a.id OR t.to_account_id = a.id
     JOIN category   c   ON t.category_id = c.id
     CROSS JOIN period
-    WHERE a.user_id = $2
-      AND t.user_id = $2
+    WHERE a.user_id = $3
+      AND t.user_id = $3
       AND a.id = ANY($1)
       AND t.occurred_at >= period.start_date
       AND t.occurred_at <= period.end_date
@@ -471,11 +466,12 @@ FROM account a
 JOIN  base_balances bb ON bb.id = a.id
 CROSS JOIN days d
 LEFT JOIN daily_totals dt ON dt.account_id = a.id AND dt.occurred_date = d.day
-WHERE a.user_id = $2 AND a.id = ANY($1)
+WHERE a.user_id = $3 AND a.id = ANY($1)
 ORDER BY a.id, d.day
             "#,
         )
         .bind(account_ids)
+        .bind(budget_period_id)
         .bind(user_id)
         .fetch_all(&self.pool)
         .await?;

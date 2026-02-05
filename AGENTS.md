@@ -130,7 +130,7 @@ All endpoints are mounted under `/api/v1` by default (configurable via `api.base
 
 - `/api/v1/health` — `GET /` runs `SELECT 1` against the pool; returns `{"status":"ok","database":"connected"}` or `503`
 - `/api/v1/users` — create, login, logout, update, delete, `GET /me`
-- `/api/v1/accounts` — CRUD + cursor-paginated list
+- `/api/v1/accounts` — CRUD + cursor-paginated list; list requires mandatory `period_id` query parameter to filter accounts by budget period. Returns 400 if `period_id` is missing ("Missing period_id query parameter") or invalid.
 - `/api/v1/currency` — CRUD; lookup by code (`GET /<code>`) or name (`GET /name/<name>`)
 - `/api/v1/categories` — CRUD + cursor-paginated list; `GET /not-in-budget` returns Outgoing categories not yet associated with a budget
 - `/api/v1/budgets` — CRUD + cursor-paginated list
