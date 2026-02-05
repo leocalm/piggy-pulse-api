@@ -30,18 +30,22 @@ pub async fn create_category(
 
 /// List all categories with cursor-based pagination
 #[openapi(tag = "Categories")]
-#[get("/?<cursor>&<limit>")]
+#[get("/?<period_id>&<cursor>&<limit>")]
 pub async fn list_all_categories(
     pool: &State<PgPool>,
     _rate_limit: RateLimit,
     current_user: CurrentUser,
+    period_id: Option<String>,
     cursor: Option<String>,
     limit: Option<i64>,
 ) -> Result<Json<CursorPaginatedResponse<CategoryWithStatsResponse>>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let params = CursorParams::from_query(cursor, limit)?;
+    let period_id = period_id.ok_or_else(|| AppError::BadRequest("Missing period_id".to_string()))?;
+    let period_uuid = Uuid::parse_str(&period_id).map_err(|e| AppError::uuid("Invalid period id", e))?;
+    let period = repo.get_budget_period(&period_uuid, &current_user.id).await?;
 
-    let categories = repo.list_categories(&params, &current_user.id).await?;
+    let categories = repo.list_categories(&params, &current_user.id, &period).await?;
     let responses: Vec<CategoryWithStatsResponse> = categories.iter().map(CategoryWithStatsResponse::from).collect();
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.category.id)))
 }
@@ -117,7 +121,7 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
 #[cfg(test)]
 mod tests {
     use crate::{Config, build_rocket};
-    use chrono::Utc;
+    use chrono::{Duration, Utc};
     use rocket::http::{ContentType, Cookie, Status};
     use rocket::local::asynchronous::Client;
     use serde_json::Value;
@@ -264,7 +268,25 @@ mod tests {
         let category_json: Value = serde_json::from_str(&body).expect("valid category json");
         let category_id = category_json["id"].as_str().expect("category id");
 
-        let occurred_at = Utc::now().date_naive().to_string();
+        let today = Utc::now().date_naive();
+        let period_payload = serde_json::json!({
+            "name": "Test Period",
+            "start_date": (today - Duration::days(1)).to_string(),
+            "end_date": (today + Duration::days(1)).to_string()
+        });
+
+        let response = client
+            .post("/api/v1/budget_period/")
+            .header(ContentType::JSON)
+            .body(period_payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Created);
+
+        let period_id = response.into_string().await.expect("period id");
+
+        let occurred_at = today.to_string();
         let tx_payload = serde_json::json!({
             "amount": 500,
             "description": "Groceries purchase",
@@ -284,7 +306,7 @@ mod tests {
 
         assert_eq!(response.status(), Status::Created);
 
-        let response = client.get("/api/v1/categories/?limit=50").dispatch().await;
+        let response = client.get(format!("/api/v1/categories/?period_id={}&limit=50", period_id)).dispatch().await;
         assert_eq!(response.status(), Status::Ok);
 
         let body = response.into_string().await.expect("categories response body");

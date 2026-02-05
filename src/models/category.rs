@@ -49,7 +49,7 @@ pub struct CategoryResponse {
 #[derive(Serialize, Debug, Clone, JsonSchema)]
 pub struct CategoryStats {
     pub used_this_month: i64,
-    /// Percentage of usage this month vs average monthly usage.
+    /// Percentage of usage in the selected period vs average period usage.
     pub difference_vs_average_percentage: i32,
     pub transaction_count: i64,
 }
@@ -94,11 +94,11 @@ impl From<&CategoryWithStats> for CategoryWithStatsResponse {
     }
 }
 
-pub fn difference_vs_average_percentage(used_this_month: i64, average_monthly_usage: i64) -> i32 {
-    if average_monthly_usage <= 0 {
+pub fn difference_vs_average_percentage(used_in_period: i64, average_period_usage: i64) -> i32 {
+    if average_period_usage <= 0 {
         0
     } else {
-        let percent = (used_this_month.saturating_mul(100)) / average_monthly_usage;
+        let percent = (used_in_period.saturating_mul(100)) / average_period_usage;
         percent.clamp(i32::MIN as i64, i32::MAX as i64) as i32
     }
 }

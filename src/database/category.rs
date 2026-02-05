@@ -1,5 +1,6 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
+use crate::models::budget_period::BudgetPeriod;
 use crate::models::category::{Category, CategoryRequest, CategoryStats, CategoryType, CategoryWithStats, difference_vs_average_percentage};
 use crate::models::pagination::CursorParams;
 use chrono::{DateTime, Utc};
@@ -45,7 +46,7 @@ struct CategoryWithStatsRow {
     category_type: String,
     created_at: DateTime<Utc>,
     used_this_month: i64,
-    average_monthly_usage: i64,
+    average_period_usage: i64,
     transaction_count: i64,
 }
 
@@ -64,7 +65,7 @@ impl From<CategoryWithStatsRow> for CategoryWithStats {
             },
             stats: CategoryStats {
                 used_this_month: row.used_this_month,
-                difference_vs_average_percentage: difference_vs_average_percentage(row.used_this_month, row.average_monthly_usage),
+                difference_vs_average_percentage: difference_vs_average_percentage(row.used_this_month, row.average_period_usage),
                 transaction_count: row.transaction_count,
             },
         }
@@ -124,48 +125,53 @@ impl PostgresRepository {
         Ok(row.map(Category::from))
     }
 
-    pub async fn list_categories(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<CategoryWithStats>, AppError> {
+    pub async fn list_categories(&self, params: &CursorParams, user_id: &Uuid, period: &BudgetPeriod) -> Result<Vec<CategoryWithStats>, AppError> {
         let rows = if let Some(cursor) = params.cursor {
             sqlx::query_as::<_, CategoryWithStatsRow>(
                 r#"
-WITH current_month AS (
-    SELECT
-        date_trunc('month', CURRENT_DATE)::date AS start_date,
-        (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AS end_date
+WITH selected_period AS (
+    SELECT $2::date AS start_date, $3::date AS end_date
 ),
-monthly_totals AS (
+period_totals AS (
     SELECT
+        bp.id AS period_id,
         t.category_id,
-        date_trunc('month', t.occurred_at)::date AS month_start,
-        SUM(t.amount)::bigint AS monthly_amount
+        SUM(t.amount)::bigint AS period_amount
     FROM transaction t
+    JOIN budget_period bp
+        ON t.occurred_at >= bp.start_date
+       AND t.occurred_at <= bp.end_date
+       AND bp.user_id = $1
     WHERE t.user_id = $1
-    GROUP BY t.category_id, date_trunc('month', t.occurred_at)
+    GROUP BY bp.id, t.category_id
 ),
 average_totals AS (
     SELECT
         category_id,
-        COALESCE(AVG(monthly_amount), 0)::bigint AS avg_monthly_amount
-    FROM monthly_totals
+        COALESCE(AVG(period_amount), 0)::bigint AS avg_period_amount
+    FROM period_totals
     GROUP BY category_id
 ),
-current_month_totals AS (
+selected_period_totals AS (
     SELECT
         t.category_id,
-        COALESCE(SUM(t.amount), 0)::bigint AS used_this_month
+        COALESCE(SUM(t.amount), 0)::bigint AS used_this_period
     FROM transaction t
-    CROSS JOIN current_month cm
+    CROSS JOIN selected_period sp
     WHERE t.user_id = $1
-      AND t.occurred_at >= cm.start_date
-      AND t.occurred_at < cm.end_date
+      AND t.occurred_at >= sp.start_date
+      AND t.occurred_at <= sp.end_date
     GROUP BY t.category_id
 ),
-transaction_counts AS (
+selected_period_counts AS (
     SELECT
         t.category_id,
         COUNT(*)::bigint AS transaction_count
     FROM transaction t
+    CROSS JOIN selected_period sp
     WHERE t.user_id = $1
+      AND t.occurred_at >= sp.start_date
+      AND t.occurred_at <= sp.end_date
     GROUP BY t.category_id
 )
 SELECT
@@ -177,20 +183,22 @@ SELECT
     c.parent_id,
     c.category_type::text as category_type,
     c.created_at,
-    COALESCE(cmt.used_this_month, 0) AS used_this_month,
-    COALESCE(at.avg_monthly_amount, 0) AS average_monthly_usage,
-    COALESCE(tc.transaction_count, 0) AS transaction_count
+    COALESCE(spt.used_this_period, 0) AS used_this_month,
+    COALESCE(at.avg_period_amount, 0) AS average_period_usage,
+    COALESCE(spc.transaction_count, 0) AS transaction_count
 FROM category c
-LEFT JOIN current_month_totals cmt ON c.id = cmt.category_id
+LEFT JOIN selected_period_totals spt ON c.id = spt.category_id
 LEFT JOIN average_totals at ON c.id = at.category_id
-LEFT JOIN transaction_counts tc ON c.id = tc.category_id
+LEFT JOIN selected_period_counts spc ON c.id = spc.category_id
 WHERE c.user_id = $1
-  AND (c.created_at, c.id) < (SELECT created_at, id FROM category WHERE id = $2)
+  AND (c.created_at, c.id) < (SELECT created_at, id FROM category WHERE id = $4)
 ORDER BY c.created_at DESC, c.id DESC
-LIMIT $3
+LIMIT $5
                 "#,
             )
             .bind(user_id)
+            .bind(period.start_date)
+            .bind(period.end_date)
             .bind(cursor)
             .bind(params.fetch_limit())
             .fetch_all(&self.pool)
@@ -198,44 +206,49 @@ LIMIT $3
         } else {
             sqlx::query_as::<_, CategoryWithStatsRow>(
                 r#"
-WITH current_month AS (
-    SELECT
-        date_trunc('month', CURRENT_DATE)::date AS start_date,
-        (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AS end_date
+WITH selected_period AS (
+    SELECT $2::date AS start_date, $3::date AS end_date
 ),
-monthly_totals AS (
+period_totals AS (
     SELECT
+        bp.id AS period_id,
         t.category_id,
-        date_trunc('month', t.occurred_at)::date AS month_start,
-        SUM(t.amount)::bigint AS monthly_amount
+        SUM(t.amount)::bigint AS period_amount
     FROM transaction t
+    JOIN budget_period bp
+        ON t.occurred_at >= bp.start_date
+       AND t.occurred_at <= bp.end_date
+       AND bp.user_id = $1
     WHERE t.user_id = $1
-    GROUP BY t.category_id, date_trunc('month', t.occurred_at)
+    GROUP BY bp.id, t.category_id
 ),
 average_totals AS (
     SELECT
         category_id,
-        COALESCE(AVG(monthly_amount), 0)::bigint AS avg_monthly_amount
-    FROM monthly_totals
+        COALESCE(AVG(period_amount), 0)::bigint AS avg_period_amount
+    FROM period_totals
     GROUP BY category_id
 ),
-current_month_totals AS (
+selected_period_totals AS (
     SELECT
         t.category_id,
-        COALESCE(SUM(t.amount), 0)::bigint AS used_this_month
+        COALESCE(SUM(t.amount), 0)::bigint AS used_this_period
     FROM transaction t
-    CROSS JOIN current_month cm
+    CROSS JOIN selected_period sp
     WHERE t.user_id = $1
-      AND t.occurred_at >= cm.start_date
-      AND t.occurred_at < cm.end_date
+      AND t.occurred_at >= sp.start_date
+      AND t.occurred_at <= sp.end_date
     GROUP BY t.category_id
 ),
-transaction_counts AS (
+selected_period_counts AS (
     SELECT
         t.category_id,
         COUNT(*)::bigint AS transaction_count
     FROM transaction t
+    CROSS JOIN selected_period sp
     WHERE t.user_id = $1
+      AND t.occurred_at >= sp.start_date
+      AND t.occurred_at <= sp.end_date
     GROUP BY t.category_id
 )
 SELECT
@@ -247,19 +260,21 @@ SELECT
     c.parent_id,
     c.category_type::text as category_type,
     c.created_at,
-    COALESCE(cmt.used_this_month, 0) AS used_this_month,
-    COALESCE(at.avg_monthly_amount, 0) AS average_monthly_usage,
-    COALESCE(tc.transaction_count, 0) AS transaction_count
+    COALESCE(spt.used_this_period, 0) AS used_this_month,
+    COALESCE(at.avg_period_amount, 0) AS average_period_usage,
+    COALESCE(spc.transaction_count, 0) AS transaction_count
 FROM category c
-LEFT JOIN current_month_totals cmt ON c.id = cmt.category_id
+LEFT JOIN selected_period_totals spt ON c.id = spt.category_id
 LEFT JOIN average_totals at ON c.id = at.category_id
-LEFT JOIN transaction_counts tc ON c.id = tc.category_id
+LEFT JOIN selected_period_counts spc ON c.id = spc.category_id
 WHERE c.user_id = $1
 ORDER BY c.created_at DESC, c.id DESC
-LIMIT $2
+LIMIT $4
                 "#,
             )
             .bind(user_id)
+            .bind(period.start_date)
+            .bind(period.end_date)
             .bind(params.fetch_limit())
             .fetch_all(&self.pool)
             .await?
