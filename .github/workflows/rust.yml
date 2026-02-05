@@ -2,7 +2,7 @@ name: Rust (fast PRs, full on main)
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [ opened, synchronize, reopened, ready_for_review ]
     branches: [ "main" ]
   push:
     branches: [ "main" ]
@@ -74,7 +74,7 @@ jobs:
       - name: Run quick unit tests (lib-only)
         env:
           RUSTC_WRAPPER: sccache
-        run: cargo test --lib --workspace --no-run || true
+        run: cargo test --lib --workspace
 
       - name: Show sccache stats
         run: sccache --show-stats || true
