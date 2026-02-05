@@ -1,4 +1,3 @@
-use crate::models::transaction::TransactionResponse;
 use chrono::NaiveDate;
 use rocket::serde::Serialize;
 use schemars::JsonSchema;
@@ -35,11 +34,6 @@ pub struct MonthProgressResponse {
 }
 
 #[derive(Serialize, Debug, JsonSchema)]
-pub struct DashboardResponse {
-    pub budget_per_day: Vec<BudgetPerDayResponse>,
-    pub spent_per_category: Vec<SpentPerCategoryResponse>,
-    pub monthly_burn_in: MonthlyBurnInResponse,
-    pub month_progress: MonthProgressResponse,
-    pub recent_transactions: Vec<TransactionResponse>,
-    pub total_asset: i32,
+pub struct TotalAssetsResponse {
+    pub total_assets: i64,
 }
