@@ -32,10 +32,17 @@ impl<'r, T: DeserializeOwned> FromData<'r> for JsonBody<T> {
     async fn from_data(req: &'r Request<'_>, data: Data<'r>) -> Outcome<'r, Self> {
         let limit = req.limits().get("json").unwrap_or_else(|| 1.mebibytes());
 
+        let request_id = req
+            .local_cache(|| None::<crate::middleware::RequestId>)
+            .as_ref()
+            .map(|r| r.0.as_str())
+            .unwrap_or("unknown");
+
         let bytes = match data.open(limit).into_bytes().await {
             Ok(bytes) if bytes.is_complete() => bytes.into_inner(),
             Ok(_) => {
                 warn!(
+                    request_id = %request_id,
                     method = %req.method(),
                     uri = %req.uri(),
                     "JSON payload exceeded size limit"
@@ -44,6 +51,7 @@ impl<'r, T: DeserializeOwned> FromData<'r> for JsonBody<T> {
             }
             Err(e) => {
                 warn!(
+                    request_id = %request_id,
                     method = %req.method(),
                     uri = %req.uri(),
                     error = %e,
@@ -64,6 +72,7 @@ impl<'r, T: DeserializeOwned> FromData<'r> for JsonBody<T> {
                 };
 
                 warn!(
+                    request_id = %request_id,
                     method = %req.method(),
                     uri = %req.uri(),
                     error_message = %e,
