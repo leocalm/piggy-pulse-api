@@ -82,7 +82,7 @@ fn build_cors(cors_config: &config::CorsConfig) -> CorsOptions {
 
 fn get_swagger_config() -> SwaggerUIConfig {
     SwaggerUIConfig {
-        url: "/api/openapi.json".to_owned(),
+        url: "/api/v1/openapi.json".to_owned(),
         ..Default::default()
     }
 }
@@ -110,7 +110,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
         .attach(stage_db(config.database));
 
     rocket_okapi::mount_endpoints_and_merged_docs! {
-        rocket, "/api".to_owned(), settings,
+        rocket, "/api/v1".to_owned(), settings,
         "/accounts" => app_routes::account::routes(),
         "/users" => app_routes::user::routes(),
         "/currency" => app_routes::currency::routes(),
@@ -124,8 +124,8 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
         "/budget_period" => app_routes::budget_period::routes(),
     }
 
-    rocket.mount("/api/docs", make_swagger_ui(&get_swagger_config())).register(
-        "/api",
+    rocket.mount("/api/v1/docs", make_swagger_ui(&get_swagger_config())).register(
+        "/api/v1",
         catchers![app_routes::error::not_found, app_routes::error::conflict, app_routes::error::too_many_requests],
     )
 }

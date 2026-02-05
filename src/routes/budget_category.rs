@@ -114,7 +114,7 @@ mod tests {
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
-        let response = client.get("/api/budget-categories/invalid-uuid").dispatch().await;
+        let response = client.get("/api/v1/budget-categories/invalid-uuid").dispatch().await;
 
         assert_eq!(response.status(), Status::BadRequest);
     }
@@ -127,7 +127,7 @@ mod tests {
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
-        let response = client.delete("/api/budget-categories/bad-id").dispatch().await;
+        let response = client.delete("/api/v1/budget-categories/bad-id").dispatch().await;
 
         assert_eq!(response.status(), Status::BadRequest);
     }
