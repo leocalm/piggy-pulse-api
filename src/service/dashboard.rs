@@ -284,7 +284,7 @@ mod tests {
 
     #[test]
     fn test_balance_calculation_associativity() {
-        let txs = vec![sample_transaction(), sample_transaction()];
+        let txs = [sample_transaction(), sample_transaction()];
         let sum1: i32 = txs.iter().map(|t| t.amount).sum();
         let sum2 = txs.iter().fold(0, |acc, tx| acc + tx.amount);
         assert_eq!(sum1, sum2);

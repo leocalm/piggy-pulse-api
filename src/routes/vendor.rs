@@ -2,6 +2,7 @@ use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::database::vendor::VendorOrderBy;
 use crate::error::app_error::AppError;
+use crate::middleware::rate_limit::RateLimit;
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use crate::models::vendor::{VendorRequest, VendorResponse, VendorWithStatsResponse};
 use rocket::http::Status;
@@ -15,7 +16,12 @@ use validator::Validate;
 /// Create a new vendor
 #[openapi(tag = "Vendors")]
 #[post("/", data = "<payload>")]
-pub async fn create_vendor(pool: &State<PgPool>, current_user: CurrentUser, payload: Json<VendorRequest>) -> Result<(Status, Json<VendorResponse>), AppError> {
+pub async fn create_vendor(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    payload: Json<VendorRequest>,
+) -> Result<(Status, Json<VendorResponse>), AppError> {
     payload.validate()?;
 
     let repo = PostgresRepository { pool: pool.inner().clone() };
@@ -28,6 +34,7 @@ pub async fn create_vendor(pool: &State<PgPool>, current_user: CurrentUser, payl
 #[get("/?<cursor>&<limit>")]
 pub async fn list_all_vendors(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     cursor: Option<String>,
     limit: Option<i64>,
@@ -43,7 +50,7 @@ pub async fn list_all_vendors(
 /// Get a vendor by ID
 #[openapi(tag = "Vendors")]
 #[get("/<id>")]
-pub async fn get_vendor(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Json<VendorResponse>, AppError> {
+pub async fn get_vendor(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser, id: &str) -> Result<Json<VendorResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid vendor id", e))?;
     if let Some(vendor) = repo.get_vendor_by_id(&uuid, &current_user.id).await? {
@@ -56,7 +63,7 @@ pub async fn get_vendor(pool: &State<PgPool>, current_user: CurrentUser, id: &st
 /// Delete a vendor by ID
 #[openapi(tag = "Vendors")]
 #[delete("/<id>")]
-pub async fn delete_vendor(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+pub async fn delete_vendor(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid vendor id", e))?;
     repo.delete_vendor(&uuid, &current_user.id).await?;
@@ -66,7 +73,13 @@ pub async fn delete_vendor(pool: &State<PgPool>, current_user: CurrentUser, id: 
 /// Update a vendor by ID
 #[openapi(tag = "Vendors")]
 #[put("/<id>", data = "<payload>")]
-pub async fn put_vendor(pool: &State<PgPool>, current_user: CurrentUser, id: &str, payload: Json<VendorRequest>) -> Result<Json<VendorResponse>, AppError> {
+pub async fn put_vendor(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    id: &str,
+    payload: Json<VendorRequest>,
+) -> Result<Json<VendorResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid vendor id", e))?;
     let vendor = repo.update_vendor(&uuid, &payload, &current_user.id).await?;
@@ -78,6 +91,7 @@ pub async fn put_vendor(pool: &State<PgPool>, current_user: CurrentUser, id: &st
 #[get("/with_status?<order_by>")]
 pub async fn get_vendors_with_status(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     order_by: VendorOrderBy,
 ) -> Result<Json<Vec<VendorWithStatsResponse>>, AppError> {

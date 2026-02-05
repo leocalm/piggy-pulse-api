@@ -1,6 +1,7 @@
 use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
+use crate::middleware::rate_limit::RateLimit;
 use crate::models::budget_category::{BudgetCategoryRequest, BudgetCategoryResponse};
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use rocket::http::Status;
@@ -16,6 +17,7 @@ use validator::Validate;
 #[post("/", data = "<payload>")]
 pub async fn create_budget_category(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     payload: Json<BudgetCategoryRequest>,
 ) -> Result<(Status, Json<BudgetCategoryResponse>), AppError> {
@@ -31,6 +33,7 @@ pub async fn create_budget_category(
 #[get("/?<cursor>&<limit>")]
 pub async fn list_all_budget_categories(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     cursor: Option<String>,
     limit: Option<i64>,
@@ -46,7 +49,12 @@ pub async fn list_all_budget_categories(
 /// Get a budget category by ID
 #[openapi(tag = "Budget Categories")]
 #[get("/<id>")]
-pub async fn get_budget_category(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Json<BudgetCategoryResponse>, AppError> {
+pub async fn get_budget_category(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    id: &str,
+) -> Result<Json<BudgetCategoryResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget category id", e))?;
     if let Some(bc) = repo.get_budget_category_by_id(&uuid, &current_user.id).await? {
@@ -59,7 +67,7 @@ pub async fn get_budget_category(pool: &State<PgPool>, current_user: CurrentUser
 /// Delete a budget category by ID
 #[openapi(tag = "Budget Categories")]
 #[delete("/<id>")]
-pub async fn delete_budget_category(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+pub async fn delete_budget_category(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget category id", e))?;
     repo.delete_budget_category(&uuid, &current_user.id).await?;
@@ -69,7 +77,13 @@ pub async fn delete_budget_category(pool: &State<PgPool>, current_user: CurrentU
 /// Update a budget category's budgeted value by ID
 #[openapi(tag = "Budget Categories")]
 #[put("/<id>", data = "<payload>")]
-pub async fn put_budget_category(pool: &State<PgPool>, current_user: CurrentUser, id: &str, payload: Json<i32>) -> Result<Status, AppError> {
+pub async fn put_budget_category(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    id: &str,
+    payload: Json<i32>,
+) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget category id", e))?;
     repo.update_budget_category_value(&uuid, &payload, &current_user.id).await?;

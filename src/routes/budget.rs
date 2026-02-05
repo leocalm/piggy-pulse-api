@@ -1,6 +1,7 @@
 use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
+use crate::middleware::rate_limit::RateLimit;
 use crate::models::budget::{BudgetRequest, BudgetResponse};
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use rocket::http::Status;
@@ -14,7 +15,12 @@ use validator::Validate;
 /// Create a new budget
 #[openapi(tag = "Budgets")]
 #[post("/", data = "<payload>")]
-pub async fn create_budget(pool: &State<PgPool>, current_user: CurrentUser, payload: Json<BudgetRequest>) -> Result<(Status, Json<BudgetResponse>), AppError> {
+pub async fn create_budget(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    payload: Json<BudgetRequest>,
+) -> Result<(Status, Json<BudgetResponse>), AppError> {
     payload.validate()?;
 
     let repo = PostgresRepository { pool: pool.inner().clone() };
@@ -27,6 +33,7 @@ pub async fn create_budget(pool: &State<PgPool>, current_user: CurrentUser, payl
 #[get("/?<cursor>&<limit>")]
 pub async fn list_all_budgets(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     cursor: Option<String>,
     limit: Option<i64>,
@@ -42,7 +49,7 @@ pub async fn list_all_budgets(
 /// Get a budget by ID
 #[openapi(tag = "Budgets")]
 #[get("/<id>")]
-pub async fn get_budget(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Json<BudgetResponse>, AppError> {
+pub async fn get_budget(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser, id: &str) -> Result<Json<BudgetResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget id", e))?;
     if let Some(budget) = repo.get_budget_by_id(&uuid, &current_user.id).await? {
@@ -57,6 +64,7 @@ pub async fn get_budget(pool: &State<PgPool>, current_user: CurrentUser, id: &st
 #[put("/<id>", data = "<payload>")]
 pub async fn put_budget(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     id: &str,
     payload: Json<BudgetRequest>,
@@ -70,7 +78,7 @@ pub async fn put_budget(
 /// Delete a budget by ID
 #[openapi(tag = "Budgets")]
 #[delete("/<id>")]
-pub async fn delete_budget(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+pub async fn delete_budget(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid budget id", e))?;
     repo.delete_budget(&uuid, &current_user.id).await?;

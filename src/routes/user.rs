@@ -1,6 +1,7 @@
 use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
+use crate::middleware::rate_limit::{AuthRateLimit, RateLimit};
 use crate::models::user::{LoginRequest, UserRequest, UserResponse};
 use rocket::http::{Cookie, CookieJar, Status};
 use rocket::serde::json::Json;
@@ -13,7 +14,7 @@ use validator::Validate;
 /// Create a new user (sign up)
 #[openapi(tag = "Users")]
 #[post("/", data = "<payload>")]
-pub async fn post_user(pool: &State<PgPool>, payload: Json<UserRequest>) -> Result<(Status, Json<UserResponse>), AppError> {
+pub async fn post_user(pool: &State<PgPool>, _rate_limit: AuthRateLimit, payload: Json<UserRequest>) -> Result<(Status, Json<UserResponse>), AppError> {
     payload.validate()?;
 
     let repo = PostgresRepository { pool: pool.inner().clone() };
@@ -29,7 +30,13 @@ pub async fn post_user(pool: &State<PgPool>, payload: Json<UserRequest>) -> Resu
 /// Update a user by ID
 #[openapi(tag = "Users")]
 #[put("/<id>", data = "<payload>")]
-pub async fn put_user(pool: &State<PgPool>, _current_user: CurrentUser, id: &str, payload: Json<UserRequest>) -> Result<Json<UserResponse>, AppError> {
+pub async fn put_user(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    _current_user: CurrentUser,
+    id: &str,
+    payload: Json<UserRequest>,
+) -> Result<Json<UserResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid user id", e))?;
     let user = repo.update_user(&uuid, &payload.name, &payload.email, &payload.password).await?;
@@ -39,7 +46,7 @@ pub async fn put_user(pool: &State<PgPool>, _current_user: CurrentUser, id: &str
 /// Delete a user by ID
 #[openapi(tag = "Users")]
 #[delete("/<id>")]
-pub async fn delete_user_route(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+pub async fn delete_user_route(pool: &State<PgPool>, _rate_limit: RateLimit, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid user id", e))?;
     repo.delete_user(&uuid).await?;
@@ -49,7 +56,12 @@ pub async fn delete_user_route(pool: &State<PgPool>, _current_user: CurrentUser,
 /// Log in a user and set authentication cookie
 #[openapi(tag = "Users")]
 #[post("/login", data = "<payload>")]
-pub async fn post_user_login(pool: &State<PgPool>, cookies: &CookieJar<'_>, payload: Json<LoginRequest>) -> Result<Status, AppError> {
+pub async fn post_user_login(
+    pool: &State<PgPool>,
+    _rate_limit: AuthRateLimit,
+    cookies: &CookieJar<'_>,
+    payload: Json<LoginRequest>,
+) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     if let Some(user) = repo.get_user_by_email(&payload.email).await? {
         repo.verify_password(&user, &payload.password).await?;
@@ -63,7 +75,7 @@ pub async fn post_user_login(pool: &State<PgPool>, cookies: &CookieJar<'_>, payl
 /// Log out the current user
 #[openapi(tag = "Users")]
 #[post("/logout")]
-pub fn post_user_logout(cookies: &CookieJar<'_>) -> Status {
+pub async fn post_user_logout(_rate_limit: RateLimit, cookies: &CookieJar<'_>) -> Status {
     cookies.remove_private(Cookie::build("user").build());
     Status::Ok
 }
@@ -71,7 +83,7 @@ pub fn post_user_logout(cookies: &CookieJar<'_>) -> Status {
 /// Get the currently authenticated user
 #[openapi(tag = "Users")]
 #[get("/me")]
-pub async fn get_me(pool: &State<PgPool>, current_user: CurrentUser) -> Result<Json<UserResponse>, AppError> {
+pub async fn get_me(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser) -> Result<Json<UserResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     if let Some(user) = repo.get_user_by_id(&current_user.id).await? {
         Ok(Json(UserResponse::from(&user)))

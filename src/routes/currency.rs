@@ -1,6 +1,7 @@
 use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
+use crate::middleware::rate_limit::RateLimit;
 use crate::models::currency::{CurrencyRequest, CurrencyResponse};
 use rocket::http::Status;
 use rocket::serde::json::Json;
@@ -15,6 +16,7 @@ use validator::Validate;
 #[post("/", data = "<payload>")]
 pub async fn create_currency(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     _current_user: CurrentUser,
     payload: Json<CurrencyRequest>,
 ) -> Result<(Status, Json<CurrencyResponse>), AppError> {
@@ -28,7 +30,7 @@ pub async fn create_currency(
 /// Get a currency by its code (e.g., USD, EUR)
 #[openapi(tag = "Currencies")]
 #[get("/<code>")]
-pub async fn get_currency(pool: &State<PgPool>, _current_user: CurrentUser, code: &str) -> Result<Json<CurrencyResponse>, AppError> {
+pub async fn get_currency(pool: &State<PgPool>, _rate_limit: RateLimit, _current_user: CurrentUser, code: &str) -> Result<Json<CurrencyResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     if let Some(currency) = repo.get_currency_by_code(code).await? {
         Ok(Json(CurrencyResponse::from(&currency)))
@@ -40,7 +42,12 @@ pub async fn get_currency(pool: &State<PgPool>, _current_user: CurrentUser, code
 /// Get currencies by name
 #[openapi(tag = "Currencies")]
 #[get("/name/<name>")]
-pub async fn get_currencies(pool: &State<PgPool>, _current_user: CurrentUser, name: &str) -> Result<Json<Vec<CurrencyResponse>>, AppError> {
+pub async fn get_currencies(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    _current_user: CurrentUser,
+    name: &str,
+) -> Result<Json<Vec<CurrencyResponse>>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let currencies = repo.get_currencies(name).await?;
     Ok(Json(currencies.iter().map(CurrencyResponse::from).collect()))
@@ -49,7 +56,7 @@ pub async fn get_currencies(pool: &State<PgPool>, _current_user: CurrentUser, na
 /// Delete a currency by ID
 #[openapi(tag = "Currencies")]
 #[delete("/<id>")]
-pub async fn delete_currency(pool: &State<PgPool>, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+pub async fn delete_currency(pool: &State<PgPool>, _rate_limit: RateLimit, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid currency id", e))?;
     repo.delete_currency(&uuid).await?;
@@ -61,6 +68,7 @@ pub async fn delete_currency(pool: &State<PgPool>, _current_user: CurrentUser, i
 #[put("/<id>", data = "<payload>")]
 pub async fn put_currency(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     _current_user: CurrentUser,
     id: &str,
     payload: Json<CurrencyRequest>,

@@ -2,6 +2,7 @@ use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::error::json::JsonBody;
+use crate::middleware::rate_limit::RateLimit;
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use crate::models::transaction::{TransactionRequest, TransactionResponse};
 use rocket::http::Status;
@@ -17,6 +18,7 @@ use validator::Validate;
 #[post("/", data = "<payload>")]
 pub async fn create_transaction(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     payload: JsonBody<TransactionRequest>,
 ) -> Result<(Status, Json<TransactionResponse>), AppError> {
@@ -33,6 +35,7 @@ pub async fn create_transaction(
 #[get("/?<period_id>&<cursor>&<limit>")]
 pub async fn list_all_transactions(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     period_id: Option<String>,
     cursor: Option<String>,
@@ -55,7 +58,7 @@ pub async fn list_all_transactions(
 /// Get a transaction by ID
 #[openapi(tag = "Transactions")]
 #[get("/<id>")]
-pub async fn get_transaction(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Json<TransactionResponse>, AppError> {
+pub async fn get_transaction(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser, id: &str) -> Result<Json<TransactionResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid transaction id", e))?;
     if let Some(tx) = repo.get_transaction_by_id(&uuid, &current_user.id).await? {
@@ -68,7 +71,7 @@ pub async fn get_transaction(pool: &State<PgPool>, current_user: CurrentUser, id
 /// Delete a transaction by ID
 #[openapi(tag = "Transactions")]
 #[delete("/<id>")]
-pub async fn delete_transaction(pool: &State<PgPool>, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+pub async fn delete_transaction(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid transaction id", e))?;
     repo.delete_transaction(&uuid, &current_user.id).await?;
@@ -80,6 +83,7 @@ pub async fn delete_transaction(pool: &State<PgPool>, current_user: CurrentUser,
 #[put("/<id>", data = "<payload>")]
 pub async fn put_transaction(
     pool: &State<PgPool>,
+    _rate_limit: RateLimit,
     current_user: CurrentUser,
     id: &str,
     payload: JsonBody<TransactionRequest>,

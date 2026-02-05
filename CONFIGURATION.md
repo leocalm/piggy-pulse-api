@@ -102,6 +102,32 @@ BUDGET_LOGGING_LEVEL=info
 BUDGET_LOGGING_JSON_FORMAT=false
 ```
 
+### Rate Limiting
+
+```toml
+[rate_limit]
+read_limit = 300
+mutation_limit = 60
+auth_limit = 10
+window_seconds = 60
+cleanup_interval_seconds = 60
+require_client_ip = true
+```
+
+Or with environment variables:
+```bash
+BUDGET_RATE_LIMIT_READ_LIMIT=300
+BUDGET_RATE_LIMIT_MUTATION_LIMIT=60
+BUDGET_RATE_LIMIT_AUTH_LIMIT=10
+BUDGET_RATE_LIMIT_WINDOW_SECONDS=60
+BUDGET_RATE_LIMIT_CLEANUP_INTERVAL_SECONDS=60
+BUDGET_RATE_LIMIT_REQUIRE_CLIENT_IP=true
+```
+
+Notes:
+- The limiter uses a fixed window; bursts near the window boundary can exceed the nominal rate.
+- If `require_client_ip` is enabled and the client IP cannot be determined, requests fail with 400.
+
 #### Advanced Logging Configuration with RUST_LOG
 
 For fine-grained control over logging levels per module, use the `RUST_LOG` environment variable.

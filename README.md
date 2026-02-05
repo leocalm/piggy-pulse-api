@@ -13,6 +13,14 @@ Set `DATABASE_URL` in your environment, e.g.:
 export DATABASE_URL=postgres://user:password@localhost:5432/budget_db
 ```
 
+Or copy the example config file and edit as needed:
+
+```bash
+cp Budget.toml.example Budget.toml
+```
+
+See `CONFIGURATION.md` for the full configuration reference (including rate limiting).
+
 ## Running the API
 
 ```bash
