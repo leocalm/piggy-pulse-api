@@ -16,14 +16,14 @@ impl<'a> AccountService<'a> {
         AccountService { repository }
     }
 
-    pub async fn list_accounts(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<AccountListResponse>, AppError> {
-        let accounts = self.repository.list_accounts(params, user_id).await?;
+    pub async fn list_accounts(&self, params: &CursorParams, budget_period_id: &Uuid, user_id: &Uuid) -> Result<Vec<AccountListResponse>, AppError> {
+        let accounts = self.repository.list_accounts(params, budget_period_id, user_id).await?;
         if accounts.is_empty() {
             return Ok(Vec::new());
         }
 
         let account_ids: Vec<Uuid> = accounts.iter().map(|account| account.account.id).collect();
-        let balance_per_day = self.repository.list_account_balance_per_day(&account_ids, user_id).await?;
+        let balance_per_day = self.repository.list_account_balance_per_day(&account_ids, budget_period_id, user_id).await?;
 
         Ok(account_responses(&accounts, &balance_per_day))
     }
