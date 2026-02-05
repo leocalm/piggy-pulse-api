@@ -1,0 +1,28 @@
+# Budget API Configuration (Example)
+#
+# Copy this file to Budget.toml for local development.
+# Environment variables take precedence over this file.
+# Use BUDGET_ prefix for env vars (e.g., BUDGET_DATABASE__URL)
+
+[database]
+url = "postgres://user:password@localhost:5432/budget_db"
+max_connections = 16
+min_connections = 4
+connection_timeout = 5  # seconds
+acquire_timeout = 5     # seconds
+
+[server]
+port = 8000
+address = "127.0.0.1"
+
+[logging]
+level = "info"  # trace, debug, info, warn, error
+json_format = false
+
+[rate_limit]
+read_limit = 300
+mutation_limit = 60
+auth_limit = 10
+window_seconds = 60
+cleanup_interval_seconds = 60
+require_client_ip = true
