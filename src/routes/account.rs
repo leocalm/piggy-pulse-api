@@ -92,7 +92,7 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
 #[cfg(test)]
 mod tests {
     use crate::{Config, build_rocket};
-    use chrono::{Datelike, NaiveDate, Utc};
+    use chrono::{Datelike, Duration, NaiveDate, Utc};
     use rocket::http::{ContentType, Cookie, Status};
     use rocket::local::asynchronous::Client;
     use serde_json::Value;
@@ -208,6 +208,22 @@ mod tests {
         assert_eq!(response.status(), Status::Created);
     }
 
+    async fn create_budget_period(client: &Client, start_date: NaiveDate, end_date: NaiveDate) {
+        let payload = serde_json::json!({
+            "name": format!("Period {}", Uuid::new_v4()),
+            "start_date": start_date.to_string(),
+            "end_date": end_date.to_string()
+        });
+
+        let response = client
+            .post("/api/v1/budget_period/")
+            .header(ContentType::JSON)
+            .body(payload.to_string())
+            .dispatch()
+            .await;
+        assert_eq!(response.status(), Status::Created);
+    }
+
     #[rocket::async_test]
     #[ignore = "requires database"]
     async fn test_create_account_validation_error() {
@@ -263,8 +279,11 @@ mod tests {
         let account_id = create_account(&client, &account_name, "TST", 10_000).await;
 
         let today = Utc::now().date_naive();
-        let first_day = NaiveDate::from_ymd_opt(today.year(), today.month(), 1).expect("valid first day");
-        create_transaction(&client, &category_id, &account_id, first_day, 2_500).await;
+        let start_date = today
+            .checked_sub_signed(Duration::days(2))
+            .unwrap_or_else(|| NaiveDate::from_ymd_opt(today.year(), today.month(), 1).expect("valid fallback date"));
+        create_budget_period(&client, start_date, today).await;
+        create_transaction(&client, &category_id, &account_id, start_date, 2_500).await;
 
         let response = client.get("/api/v1/accounts/").dispatch().await;
         assert_eq!(response.status(), Status::Ok);

@@ -201,6 +201,15 @@ impl PostgresRepository {
         let rows = if let Some(cursor) = params.cursor {
             sqlx::query_as::<_, AccountMetricsRow>(
                 r#"
+                WITH current_period AS (
+                    SELECT start_date, end_date
+                    FROM budget_period
+                    WHERE user_id = $2
+                      AND start_date <= CURRENT_DATE
+                      AND end_date >= CURRENT_DATE
+                    ORDER BY start_date DESC
+                    LIMIT 1
+                )
                 SELECT
                     a.id,
                     a.user_id,
@@ -228,8 +237,9 @@ impl PostgresRepository {
                     ), 0))::bigint AS current_balance,
                     COALESCE(SUM(
                         CASE
-                            WHEN t.occurred_at >= date_trunc('month', CURRENT_DATE)::date
-                             AND t.occurred_at <= CURRENT_DATE THEN
+                            WHEN cp.start_date IS NOT NULL
+                             AND t.occurred_at >= cp.start_date
+                             AND t.occurred_at <= cp.end_date THEN
                                 CASE
                                     WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
                                     WHEN cat.category_type = 'Outgoing'                              THEN -t.amount::bigint
@@ -248,6 +258,7 @@ impl PostgresRepository {
                     ), 0)::bigint AS transaction_count
                 FROM account a
                 JOIN currency c ON c.id = a.currency_id
+                LEFT JOIN current_period cp ON true
                 LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id) AND t.user_id = $2
                 LEFT JOIN category cat ON t.category_id = cat.id
                 WHERE (a.created_at, a.id) < (
@@ -281,6 +292,15 @@ impl PostgresRepository {
         } else {
             sqlx::query_as::<_, AccountMetricsRow>(
                 r#"
+                WITH current_period AS (
+                    SELECT start_date, end_date
+                    FROM budget_period
+                    WHERE user_id = $1
+                      AND start_date <= CURRENT_DATE
+                      AND end_date >= CURRENT_DATE
+                    ORDER BY start_date DESC
+                    LIMIT 1
+                )
                 SELECT
                     a.id,
                     a.user_id,
@@ -308,8 +328,9 @@ impl PostgresRepository {
                     ), 0))::bigint AS current_balance,
                     COALESCE(SUM(
                         CASE
-                            WHEN t.occurred_at >= date_trunc('month', CURRENT_DATE)::date
-                             AND t.occurred_at <= CURRENT_DATE THEN
+                            WHEN cp.start_date IS NOT NULL
+                             AND t.occurred_at >= cp.start_date
+                             AND t.occurred_at <= cp.end_date THEN
                                 CASE
                                     WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
                                     WHEN cat.category_type = 'Outgoing'                              THEN -t.amount::bigint
@@ -328,6 +349,7 @@ impl PostgresRepository {
                     ), 0)::bigint AS transaction_count
                 FROM account a
                 JOIN currency c ON c.id = a.currency_id
+                LEFT JOIN current_period cp ON true
                 LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id) AND t.user_id = $1
                 LEFT JOIN category cat ON t.category_id = cat.id
                 WHERE a.user_id = $1
@@ -376,9 +398,13 @@ impl PostgresRepository {
         let rows = sqlx::query_as::<_, BalancePerDayRow>(
             r#"
 WITH period AS (
-    SELECT
-        date_trunc('month', CURRENT_DATE)::date AS start_date,
-        CURRENT_DATE::date AS end_date
+    SELECT start_date, end_date
+    FROM budget_period
+    WHERE user_id = $2
+      AND start_date <= CURRENT_DATE
+      AND end_date >= CURRENT_DATE
+    ORDER BY start_date DESC
+    LIMIT 1
 ),
 days AS (
     SELECT d::date AS day
