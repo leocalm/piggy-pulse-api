@@ -219,9 +219,20 @@ async fn rate_limit_request(request: &Request<'_>, bucket: RateLimitBucket) -> O
         None => return Outcome::Success(()),
     };
 
+    let request_id = request
+        .local_cache(|| None::<crate::middleware::RequestId>)
+        .as_ref()
+        .map(|r| r.0.as_str())
+        .unwrap_or("unknown");
+
     let ip = request.client_ip().map(|addr| addr.to_string());
     if ip.is_none() {
-        warn!(method = %request.method(), uri = %request.uri(), "client ip unavailable for rate limiting");
+        warn!(
+            request_id = %request_id,
+            method = %request.method(),
+            uri = %request.uri(),
+            "client ip unavailable for rate limiting"
+        );
     }
 
     let mut identities = Vec::new();
@@ -245,6 +256,7 @@ async fn rate_limit_request(request: &Request<'_>, bucket: RateLimitBucket) -> O
             let retry_after_secs = retry_after.as_secs().max(1);
             request.local_cache(|| Some(RateLimitRetryAfter(retry_after_secs)));
             warn!(
+                request_id = %request_id,
                 method = %request.method(),
                 uri = %request.uri(),
                 retry_after_secs = %retry_after_secs,
