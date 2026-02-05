@@ -14,33 +14,29 @@ pub struct Error {
     pub request_id: String,
 }
 
+/// Helper function to extract request ID from the request
+fn get_request_id(req: &Request) -> String {
+    req.local_cache(|| None::<RequestId>)
+        .as_ref()
+        .map(|r| r.0.clone())
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
 // no DB changes required in error routes
 
 #[catch(404)]
 pub fn not_found(req: &Request) -> Json<Error> {
-    let request_id = req
-        .local_cache(|| None::<RequestId>)
-        .as_ref()
-        .map(|r| r.0.clone())
-        .unwrap_or_else(|| "unknown".to_string());
-
     Json(Error {
         message: "Not found".to_string(),
-        request_id,
+        request_id: get_request_id(req),
     })
 }
 
 #[catch(409)]
 pub fn conflict(req: &Request) -> Json<Error> {
-    let request_id = req
-        .local_cache(|| None::<RequestId>)
-        .as_ref()
-        .map(|r| r.0.clone())
-        .unwrap_or_else(|| "unknown".to_string());
-
     Json(Error {
         message: "Conflict".to_string(),
-        request_id,
+        request_id: get_request_id(req),
     })
 }
 
@@ -50,17 +46,19 @@ pub struct TooManyRequests {
 
 impl<'r> Responder<'r, 'static> for TooManyRequests {
     fn respond_to(self, req: &'r Request<'_>) -> ResponseResult<'static> {
-        let request_id = req
-            .local_cache(|| None::<RequestId>)
-            .as_ref()
-            .map(|r| r.0.clone())
-            .unwrap_or_else(|| "unknown".to_string());
-
+        let request_id = get_request_id(req);
         let body = serde_json::to_string(&Error {
             message: "Too Many Requests".to_string(),
             request_id: request_id.clone(),
         })
-        .unwrap_or_else(|_| format!(r#"{{"message":"Too Many Requests","request_id":"{}"}}"#, request_id));
+        .unwrap_or_else(|e| {
+            tracing::error!(
+                request_id = %request_id,
+                error = %e,
+                "Failed to serialize error response"
+            );
+            format!(r#"{{"message":"Error serialization failed","request_id":"{}"}}"#, request_id)
+        });
 
         let mut response = Response::build();
         response.status(Status::TooManyRequests);

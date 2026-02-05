@@ -142,11 +142,19 @@ impl<'r> Responder<'r, 'static> for AppError {
         );
 
         let status = Status::from(&self);
+        let error_message = self.to_string();
         let error_response = ErrorResponse {
-            message: self.to_string(),
+            message: error_message.clone(),
             request_id: request_id.clone(),
         };
-        let body = serde_json::to_string(&error_response).unwrap_or_else(|_| format!(r#"{{"message":"Internal server error","request_id":"{}"}}"#, request_id));
+        let body = serde_json::to_string(&error_response).unwrap_or_else(|e| {
+            error!(
+                request_id = %request_id,
+                error = %e,
+                "Failed to serialize error response"
+            );
+            format!(r#"{{"message":"Error serialization failed","request_id":"{}"}}"#, request_id)
+        });
 
         Response::build()
             .status(status)
@@ -218,15 +226,14 @@ mod tests {
     use rocket::{get, routes};
 
     #[get("/test-error")]
+    #[allow(clippy::result_large_err)]
     fn test_error_route() -> Result<(), AppError> {
         Err(AppError::NotFound("Test resource".to_string()))
     }
 
     #[test]
     fn test_error_response_includes_request_id() {
-        let rocket = rocket::build()
-            .attach(crate::middleware::RequestLogger)
-            .mount("/", routes![test_error_route]);
+        let rocket = rocket::build().attach(crate::middleware::RequestLogger).mount("/", routes![test_error_route]);
 
         let client = Client::tracked(rocket).expect("valid rocket instance");
         let response = client.get("/test-error").dispatch();
