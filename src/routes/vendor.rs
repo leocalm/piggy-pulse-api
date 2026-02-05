@@ -29,23 +29,37 @@ pub async fn create_vendor(
     Ok((Status::Created, Json(VendorResponse::from(&vendor))))
 }
 
-/// List all vendors with cursor-based pagination and stats for the current budget period
+/// List all vendors with cursor-based pagination and stats for a selected budget period
 #[openapi(tag = "Vendors")]
-#[get("/?<cursor>&<limit>")]
+#[get("/?<period_id>&<cursor>&<limit>")]
 pub async fn list_all_vendors(
     pool: &State<PgPool>,
     _rate_limit: RateLimit,
     current_user: CurrentUser,
+    period_id: String,
     cursor: Option<String>,
     limit: Option<i64>,
 ) -> Result<Json<CursorPaginatedResponse<VendorWithPeriodStatsResponse>>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let params = CursorParams::from_query(cursor, limit)?;
-    let period = repo.get_current_budget_period(&current_user.id).await?;
+    let period_uuid = Uuid::parse_str(&period_id).map_err(|e| AppError::uuid("Invalid period id", e))?;
+    let period = repo.get_budget_period(&period_uuid, &current_user.id).await?;
 
     let vendors = repo.list_vendors(&params, &current_user.id, &period).await?;
     let responses: Vec<VendorWithPeriodStatsResponse> = vendors.iter().map(VendorWithPeriodStatsResponse::from).collect();
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.vendor.id)))
+}
+
+/// Return 400 when period_id is missing from vendor list endpoint.
+#[get("/?<cursor>&<limit>")]
+pub async fn list_all_vendors_missing_period(
+    _rate_limit: RateLimit,
+    _current_user: CurrentUser,
+    cursor: Option<String>,
+    limit: Option<i64>,
+) -> Result<Status, AppError> {
+    let _ = (cursor, limit);
+    Err(AppError::BadRequest("Missing period_id".to_string()))
 }
 
 /// Get a vendor by ID
@@ -107,7 +121,10 @@ pub async fn get_vendors_with_status(
 }
 
 pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
-    rocket_okapi::openapi_get_routes_spec![create_vendor, list_all_vendors, get_vendor, delete_vendor, put_vendor, get_vendors_with_status]
+    let (mut routes, spec) =
+        rocket_okapi::openapi_get_routes_spec![create_vendor, list_all_vendors, get_vendor, delete_vendor, put_vendor, get_vendors_with_status];
+    routes.extend(rocket::routes![list_all_vendors_missing_period]);
+    (routes, spec)
 }
 
 #[cfg(test)]
@@ -292,6 +309,8 @@ mod tests {
 
         assert_eq!(response.status(), Status::Created);
 
+        let period_id = response.into_string().await.expect("period id");
+
         let tx_payload = serde_json::json!({
             "amount": 250,
             "description": "Lunch",
@@ -311,7 +330,7 @@ mod tests {
 
         assert_eq!(response.status(), Status::Created);
 
-        let response = client.get("/api/v1/vendors/?limit=50").dispatch().await;
+        let response = client.get(format!("/api/v1/vendors/?period_id={}&limit=50", period_id)).dispatch().await;
         assert_eq!(response.status(), Status::Ok);
 
         let body = response.into_string().await.expect("vendors response body");
@@ -322,5 +341,40 @@ mod tests {
         let expected_last_used = today.to_string();
         assert_eq!(vendor["transaction_count"].as_i64(), Some(1));
         assert_eq!(vendor["last_used_at"].as_str(), Some(expected_last_used.as_str()));
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_list_vendors_missing_period_id() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let user_payload = serde_json::json!({
+            "name": "Test User",
+            "email": "test.vendor.missing@example.com",
+            "password": "password123"
+        });
+
+        let response = client
+            .post("/api/v1/users/")
+            .header(ContentType::JSON)
+            .body(user_payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Created);
+
+        let body = response.into_string().await.expect("user response body");
+        let user_json: Value = serde_json::from_str(&body).expect("valid user json");
+        let user_id = user_json["id"].as_str().expect("user id");
+        let user_email = user_json["email"].as_str().expect("user email");
+
+        let cookie_value = format!("{}:{}", user_id, user_email);
+        client.cookies().add_private(Cookie::build(("user", cookie_value)).path("/").build());
+
+        let response = client.get("/api/v1/vendors/?limit=50").dispatch().await;
+        assert_eq!(response.status(), Status::BadRequest);
     }
 }
