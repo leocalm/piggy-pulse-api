@@ -1,6 +1,6 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
-use crate::models::category::{Category, CategoryRequest, CategoryType};
+use crate::models::category::{Category, CategoryRequest, CategoryStats, CategoryType, CategoryWithStats, difference_vs_average_percentage};
 use crate::models::pagination::CursorParams;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -30,6 +30,43 @@ impl From<CategoryRow> for Category {
             parent_id: row.parent_id,
             category_type: category_type_from_db(&row.category_type),
             created_at: row.created_at,
+        }
+    }
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct CategoryWithStatsRow {
+    id: Uuid,
+    user_id: Uuid,
+    name: String,
+    color: String,
+    icon: String,
+    parent_id: Option<Uuid>,
+    category_type: String,
+    created_at: DateTime<Utc>,
+    used_this_month: i64,
+    average_monthly_usage: i64,
+    transaction_count: i64,
+}
+
+impl From<CategoryWithStatsRow> for CategoryWithStats {
+    fn from(row: CategoryWithStatsRow) -> Self {
+        CategoryWithStats {
+            category: Category {
+                id: row.id,
+                user_id: row.user_id,
+                name: row.name,
+                color: row.color,
+                icon: row.icon,
+                parent_id: row.parent_id,
+                category_type: category_type_from_db(&row.category_type),
+                created_at: row.created_at,
+            },
+            stats: CategoryStats {
+                used_this_month: row.used_this_month,
+                difference_vs_average_percentage: difference_vs_average_percentage(row.used_this_month, row.average_monthly_usage),
+                transaction_count: row.transaction_count,
+            },
         }
     }
 }
@@ -87,24 +124,70 @@ impl PostgresRepository {
         Ok(row.map(Category::from))
     }
 
-    pub async fn list_categories(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Category>, AppError> {
+    pub async fn list_categories(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<CategoryWithStats>, AppError> {
         let rows = if let Some(cursor) = params.cursor {
-            sqlx::query_as::<_, CategoryRow>(
+            sqlx::query_as::<_, CategoryWithStatsRow>(
                 r#"
-                SELECT
-                    id,
-                    user_id,
-                    name,
-                    COALESCE(color, '') as color,
-                    COALESCE(icon, '') as icon,
-                    parent_id,
-                    category_type::text as category_type,
-                    created_at
-                FROM category
-                WHERE user_id = $1
-                    AND (created_at, id) < (SELECT created_at, id FROM category WHERE id = $2)
-                ORDER BY created_at DESC, id DESC
-                LIMIT $3
+WITH current_month AS (
+    SELECT
+        date_trunc('month', CURRENT_DATE)::date AS start_date,
+        (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AS end_date
+),
+monthly_totals AS (
+    SELECT
+        t.category_id,
+        date_trunc('month', t.occurred_at)::date AS month_start,
+        SUM(t.amount)::bigint AS monthly_amount
+    FROM transaction t
+    WHERE t.user_id = $1
+    GROUP BY t.category_id, date_trunc('month', t.occurred_at)
+),
+average_totals AS (
+    SELECT
+        category_id,
+        COALESCE(AVG(monthly_amount), 0)::bigint AS avg_monthly_amount
+    FROM monthly_totals
+    GROUP BY category_id
+),
+current_month_totals AS (
+    SELECT
+        t.category_id,
+        COALESCE(SUM(t.amount), 0)::bigint AS used_this_month
+    FROM transaction t
+    CROSS JOIN current_month cm
+    WHERE t.user_id = $1
+      AND t.occurred_at >= cm.start_date
+      AND t.occurred_at < cm.end_date
+    GROUP BY t.category_id
+),
+transaction_counts AS (
+    SELECT
+        t.category_id,
+        COUNT(*)::bigint AS transaction_count
+    FROM transaction t
+    WHERE t.user_id = $1
+    GROUP BY t.category_id
+)
+SELECT
+    c.id,
+    c.user_id,
+    c.name,
+    COALESCE(c.color, '') as color,
+    COALESCE(c.icon, '') as icon,
+    c.parent_id,
+    c.category_type::text as category_type,
+    c.created_at,
+    COALESCE(cmt.used_this_month, 0) AS used_this_month,
+    COALESCE(at.avg_monthly_amount, 0) AS average_monthly_usage,
+    COALESCE(tc.transaction_count, 0) AS transaction_count
+FROM category c
+LEFT JOIN current_month_totals cmt ON c.id = cmt.category_id
+LEFT JOIN average_totals at ON c.id = at.category_id
+LEFT JOIN transaction_counts tc ON c.id = tc.category_id
+WHERE c.user_id = $1
+  AND (c.created_at, c.id) < (SELECT created_at, id FROM category WHERE id = $2)
+ORDER BY c.created_at DESC, c.id DESC
+LIMIT $3
                 "#,
             )
             .bind(user_id)
@@ -113,21 +196,67 @@ impl PostgresRepository {
             .fetch_all(&self.pool)
             .await?
         } else {
-            sqlx::query_as::<_, CategoryRow>(
+            sqlx::query_as::<_, CategoryWithStatsRow>(
                 r#"
-                SELECT
-                    id,
-                    user_id,
-                    name,
-                    COALESCE(color, '') as color,
-                    COALESCE(icon, '') as icon,
-                    parent_id,
-                    category_type::text as category_type,
-                    created_at
-                FROM category
-                WHERE user_id = $1
-                ORDER BY created_at DESC, id DESC
-                LIMIT $2
+WITH current_month AS (
+    SELECT
+        date_trunc('month', CURRENT_DATE)::date AS start_date,
+        (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date AS end_date
+),
+monthly_totals AS (
+    SELECT
+        t.category_id,
+        date_trunc('month', t.occurred_at)::date AS month_start,
+        SUM(t.amount)::bigint AS monthly_amount
+    FROM transaction t
+    WHERE t.user_id = $1
+    GROUP BY t.category_id, date_trunc('month', t.occurred_at)
+),
+average_totals AS (
+    SELECT
+        category_id,
+        COALESCE(AVG(monthly_amount), 0)::bigint AS avg_monthly_amount
+    FROM monthly_totals
+    GROUP BY category_id
+),
+current_month_totals AS (
+    SELECT
+        t.category_id,
+        COALESCE(SUM(t.amount), 0)::bigint AS used_this_month
+    FROM transaction t
+    CROSS JOIN current_month cm
+    WHERE t.user_id = $1
+      AND t.occurred_at >= cm.start_date
+      AND t.occurred_at < cm.end_date
+    GROUP BY t.category_id
+),
+transaction_counts AS (
+    SELECT
+        t.category_id,
+        COUNT(*)::bigint AS transaction_count
+    FROM transaction t
+    WHERE t.user_id = $1
+    GROUP BY t.category_id
+)
+SELECT
+    c.id,
+    c.user_id,
+    c.name,
+    COALESCE(c.color, '') as color,
+    COALESCE(c.icon, '') as icon,
+    c.parent_id,
+    c.category_type::text as category_type,
+    c.created_at,
+    COALESCE(cmt.used_this_month, 0) AS used_this_month,
+    COALESCE(at.avg_monthly_amount, 0) AS average_monthly_usage,
+    COALESCE(tc.transaction_count, 0) AS transaction_count
+FROM category c
+LEFT JOIN current_month_totals cmt ON c.id = cmt.category_id
+LEFT JOIN average_totals at ON c.id = at.category_id
+LEFT JOIN transaction_counts tc ON c.id = tc.category_id
+WHERE c.user_id = $1
+ORDER BY c.created_at DESC, c.id DESC
+LIMIT $2
                 "#,
             )
             .bind(user_id)
@@ -136,7 +265,7 @@ impl PostgresRepository {
             .await?
         };
 
-        Ok(rows.into_iter().map(Category::from).collect())
+        Ok(rows.into_iter().map(CategoryWithStats::from).collect())
     }
 
     pub async fn delete_category(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {

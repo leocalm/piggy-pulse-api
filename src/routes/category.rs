@@ -2,7 +2,7 @@ use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::RateLimit;
-use crate::models::category::{CategoryRequest, CategoryResponse};
+use crate::models::category::{CategoryRequest, CategoryResponse, CategoryWithStatsResponse};
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use rocket::http::Status;
 use rocket::serde::json::Json;
@@ -37,13 +37,13 @@ pub async fn list_all_categories(
     current_user: CurrentUser,
     cursor: Option<String>,
     limit: Option<i64>,
-) -> Result<Json<CursorPaginatedResponse<CategoryResponse>>, AppError> {
+) -> Result<Json<CursorPaginatedResponse<CategoryWithStatsResponse>>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let params = CursorParams::from_query(cursor, limit)?;
 
     let categories = repo.list_categories(&params, &current_user.id).await?;
-    let responses: Vec<CategoryResponse> = categories.iter().map(CategoryResponse::from).collect();
-    Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.id)))
+    let responses: Vec<CategoryWithStatsResponse> = categories.iter().map(CategoryWithStatsResponse::from).collect();
+    Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.category.id)))
 }
 
 /// Get a category by ID
@@ -117,8 +117,10 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
 #[cfg(test)]
 mod tests {
     use crate::{Config, build_rocket};
-    use rocket::http::{ContentType, Status};
+    use chrono::Utc;
+    use rocket::http::{ContentType, Cookie, Status};
     use rocket::local::asynchronous::Client;
+    use serde_json::Value;
 
     #[rocket::async_test]
     #[ignore = "requires database"]
@@ -169,5 +171,129 @@ mod tests {
         let response = client.delete("/api/v1/categories/bad-uuid").dispatch().await;
 
         assert_eq!(response.status(), Status::BadRequest);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_list_categories_includes_stats() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let user_payload = serde_json::json!({
+            "name": "Test User",
+            "email": "test.user@example.com",
+            "password": "password123"
+        });
+
+        let response = client
+            .post("/api/v1/users/")
+            .header(ContentType::JSON)
+            .body(user_payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Created);
+
+        let body = response.into_string().await.expect("user response body");
+        let user_json: Value = serde_json::from_str(&body).expect("valid user json");
+        let user_id = user_json["id"].as_str().expect("user id");
+        let user_email = user_json["email"].as_str().expect("user email");
+
+        let cookie_value = format!("{}:{}", user_id, user_email);
+        client.cookies().add_private(Cookie::build(("user", cookie_value)).path("/").build());
+
+        let currency_payload = serde_json::json!({
+            "name": "US Dollar",
+            "symbol": "$",
+            "currency": "USD",
+            "decimal_places": 2
+        });
+
+        let response = client
+            .post("/api/v1/currency/")
+            .header(ContentType::JSON)
+            .body(currency_payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Created);
+
+        let account_payload = serde_json::json!({
+            "name": "Checking",
+            "color": "#000000",
+            "icon": "bank",
+            "account_type": "Checking",
+            "currency": "USD",
+            "balance": 1000,
+            "spend_limit": null
+        });
+
+        let response = client
+            .post("/api/v1/accounts/")
+            .header(ContentType::JSON)
+            .body(account_payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Created);
+
+        let body = response.into_string().await.expect("account response body");
+        let account_json: Value = serde_json::from_str(&body).expect("valid account json");
+        let account_id = account_json["id"].as_str().expect("account id");
+
+        let category_payload = serde_json::json!({
+            "name": "Groceries",
+            "color": "#00FF00",
+            "icon": "cart",
+            "parent_id": null,
+            "category_type": "Outgoing"
+        });
+
+        let response = client
+            .post("/api/v1/categories/")
+            .header(ContentType::JSON)
+            .body(category_payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Created);
+
+        let body = response.into_string().await.expect("category response body");
+        let category_json: Value = serde_json::from_str(&body).expect("valid category json");
+        let category_id = category_json["id"].as_str().expect("category id");
+
+        let occurred_at = Utc::now().date_naive().to_string();
+        let tx_payload = serde_json::json!({
+            "amount": 500,
+            "description": "Groceries purchase",
+            "occurred_at": occurred_at,
+            "category_id": category_id,
+            "from_account_id": account_id,
+            "to_account_id": null,
+            "vendor_id": null
+        });
+
+        let response = client
+            .post("/api/v1/transactions/")
+            .header(ContentType::JSON)
+            .body(tx_payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Created);
+
+        let response = client.get("/api/v1/categories/?limit=50").dispatch().await;
+        assert_eq!(response.status(), Status::Ok);
+
+        let body = response.into_string().await.expect("categories response body");
+        let list_json: Value = serde_json::from_str(&body).expect("valid categories json");
+        let data = list_json["data"].as_array().expect("data array");
+        let category = data.iter().find(|item| item["id"].as_str() == Some(category_id)).expect("category in list");
+
+        assert_eq!(category["used_this_month"].as_i64(), Some(500));
+        assert_eq!(category["transaction_count"].as_i64(), Some(1));
+        assert_eq!(category["difference_vs_average_percentage"].as_i64(), Some(100));
     }
 }
