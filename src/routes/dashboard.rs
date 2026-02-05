@@ -2,7 +2,7 @@ use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::RateLimit;
-use crate::models::dashboard::{BudgetPerDayResponse, MonthProgressResponse, MonthlyBurnInResponse, SpentPerCategoryResponse, TotalAssetsResponse};
+use crate::models::dashboard::{BudgetPerDayResponse, MonthProgressResponse, MonthlyBurnInResponse, SpentPerCategoryListResponse, TotalAssetsResponse};
 use crate::models::pagination::CursorParams;
 use crate::models::transaction::TransactionResponse;
 use rocket::serde::json::Json;
@@ -33,6 +33,7 @@ pub async fn get_balance_per_day(
 }
 
 /// Get spending breakdown per category for a budget period.
+/// `percentage_spent` is returned in basis points (percent * 100). Example: 2534 = 25.34%.
 /// Returns 400 if `period_id` is missing ("Missing period_id query parameter") or invalid.
 #[openapi(tag = "Dashboard")]
 #[get("/spent-per-category?<period_id>")]
@@ -41,10 +42,11 @@ pub async fn get_spent_per_category(
     _rate_limit: RateLimit,
     current_user: CurrentUser,
     period_id: Option<String>,
-) -> Result<Json<Vec<SpentPerCategoryResponse>>, AppError> {
+) -> Result<Json<SpentPerCategoryListResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let budget_period_uuid = parse_period_id(period_id)?;
-    Ok(Json(repo.spent_per_category(&budget_period_uuid, &current_user.id).await?))
+    let rows = repo.spent_per_category(&budget_period_uuid, &current_user.id).await?;
+    Ok(Json(SpentPerCategoryListResponse(rows)))
 }
 
 /// Get monthly burn-in statistics for a budget period.

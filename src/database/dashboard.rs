@@ -145,7 +145,16 @@ GROUP BY c.name, bc.budgeted_value
                 category_name: row.category_name,
                 budgeted_value: row.budgeted_value,
                 amount_spent: row.amount_spent,
-                percentage_spent: 0,
+                percentage_spent: {
+                    if row.budgeted_value <= 0 {
+                        0
+                    } else {
+                        let spent = i64::from(row.amount_spent).max(0);
+                        let budgeted = i64::from(row.budgeted_value);
+                        let basis_points = (spent * 10_000) / budgeted;
+                        basis_points.clamp(i32::MIN as i64, i32::MAX as i64) as i32
+                    }
+                },
             })
             .collect())
     }

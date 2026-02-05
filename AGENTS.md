@@ -137,6 +137,7 @@ All endpoints are mounted under `/api`. List endpoints use cursor-based paginati
 - `/api/transactions` — CRUD + cursor-paginated list; list accepts optional `period_id` query filter
 - `/api/vendors` — CRUD + cursor-paginated list; `GET /with_status?order_by=<name|most_used|more_recent>` returns vendors enriched with transaction-count stats
 - `/api/dashboard` — `budget-per-day`, `spent-per-category`, `monthly-burn-in`, `month-progress`, `recent-transactions`, `dashboard` (all accept `period_id`)
+  `spent-per-category` returns `percentage_spent` in basis points (percent * 100). Example: 2534 = 25.34%.
 
 404 and 409 responses are caught under `/api` and returned as `{"message":"..."}` JSON.
 
