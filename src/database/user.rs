@@ -3,8 +3,20 @@ use crate::error::app_error::AppError;
 use crate::models::user::User;
 use argon2::Argon2;
 use password_hash::rand_core::OsRng;
-use password_hash::{PasswordHash, PasswordVerifier, Salt, SaltString};
+use password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, Salt, SaltString};
+use std::sync::LazyLock;
 use uuid::Uuid;
+
+/// A real Argon2 hash generated once at startup, used as a timing decoy
+/// so that login requests for non-existent users take the same time as
+/// requests for existing users.
+static DUMMY_HASH: LazyLock<String> = LazyLock::new(|| {
+    let salt = SaltString::generate(&mut OsRng);
+    Argon2::default()
+        .hash_password(b"dummy-never-matches", Salt::from(&salt))
+        .expect("failed to generate dummy hash")
+        .to_string()
+});
 
 impl PostgresRepository {
     pub async fn create_user(&self, name: &str, email: &str, password: &str) -> Result<User, AppError> {
@@ -64,6 +76,15 @@ impl PostgresRepository {
             .map_err(|_| AppError::InvalidCredentials)?;
 
         Ok(())
+    }
+
+    /// Perform a throwaway Argon2 verification to equalize response timing
+    /// regardless of whether the target account exists. This prevents attackers
+    /// from distinguishing existing vs non-existing accounts by measuring
+    /// response latency.
+    pub fn dummy_verify(password: &str) {
+        let hash = PasswordHash::new(&DUMMY_HASH).expect("invalid dummy hash");
+        let _ = Argon2::default().verify_password(password.as_bytes(), &hash);
     }
 
     pub async fn update_user(&self, id: &Uuid, name: &str, email: &str, password: &str) -> Result<User, AppError> {
