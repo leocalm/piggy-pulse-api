@@ -50,7 +50,7 @@ This will:
 ### 3. Access the Application
 
 - **API**: http://localhost/api/v1/health
-- **API Documentation**: http://localhost/api/v1/swagger (if enabled)
+- **API Documentation**: http://localhost/api/v1/docs (if enabled)
 - **Adminer** (debug mode): http://localhost:8080
 
 ## Configuration
