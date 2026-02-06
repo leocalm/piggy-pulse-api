@@ -122,7 +122,7 @@ impl PostgresRepository {
         }
 
         let currency = self
-            .get_currency_by_code(&request.currency)
+            .get_currency_by_code(&request.currency, user_id)
             .await?
             .ok_or_else(|| AppError::CurrencyDoesNotExist(request.currency.clone()))?;
 
@@ -417,7 +417,7 @@ impl PostgresRepository {
             account_id: Uuid,
             account_name: String,
             date: String,
-            balance: i32,
+            balance: i64,
         }
 
         let rows = sqlx::query_as::<_, BalancePerDayRow>(
@@ -487,7 +487,7 @@ SELECT
         PARTITION BY a.id
         ORDER BY d.day
         ROWS UNBOUNDED PRECEDING
-    ))::int                        AS balance
+    ))::bigint                     AS balance
 FROM account a
 JOIN  base_balances bb ON bb.id = a.id
 CROSS JOIN days d
@@ -544,7 +544,7 @@ ORDER BY a.id, d.day
         }
 
         let currency = self
-            .get_currency_by_code(&request.currency)
+            .get_currency_by_code(&request.currency, user_id)
             .await?
             .ok_or_else(|| AppError::CurrencyDoesNotExist(request.currency.clone()))?;
 

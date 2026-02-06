@@ -46,6 +46,15 @@ impl From<BudgetCategoryRow> for BudgetCategory {
 
 impl PostgresRepository {
     pub async fn create_budget_category(&self, request: &BudgetCategoryRequest, user_id: &Uuid) -> Result<BudgetCategory, AppError> {
+        let category_exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM category WHERE id = $1 AND user_id = $2)")
+            .bind(request.category_id)
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
+        if !category_exists {
+            return Err(AppError::BadRequest("Invalid category_id for current user".to_string()));
+        }
+
         #[derive(sqlx::FromRow)]
         struct IdRow {
             id: Uuid,

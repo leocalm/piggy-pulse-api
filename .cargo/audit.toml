@@ -1,0 +1,6 @@
+[advisories]
+ignore = [
+  # Transitive through sqlx's macro toolchain (sqlx-mysql/rsa), not directly used by this Postgres-only API.
+  # RustSec currently reports no fixed upgrade available.
+  "RUSTSEC-2023-0071",
+]

@@ -37,7 +37,7 @@ pub struct LoggingConfig {
     pub json_format: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct CorsConfig {
     pub allowed_origins: Vec<String>,
     pub allow_credentials: bool,
@@ -51,6 +51,8 @@ pub struct RateLimitConfig {
     pub window_seconds: u64,
     pub cleanup_interval_seconds: u64,
     pub require_client_ip: bool,
+    pub use_forwarded_ip: bool,
+    pub forwarded_ip_header: String,
     pub backend: RateLimitBackend,
     pub redis_url: String,
     pub redis_key_prefix: String,
@@ -66,12 +68,14 @@ pub enum RateLimitBackend {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SessionConfig {
     pub ttl_seconds: i64,
+    pub cookie_secure: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ApiConfig {
     pub base_path: String,
     pub additional_base_paths: Vec<String>,
+    pub expose_docs: bool,
 }
 
 pub const DEFAULT_API_BASE_PATH: &str = "/api/v1";
@@ -106,15 +110,6 @@ impl Default for LoggingConfig {
     }
 }
 
-impl Default for CorsConfig {
-    fn default() -> Self {
-        Self {
-            allowed_origins: vec!["*".to_string()],
-            allow_credentials: false,
-        }
-    }
-}
-
 impl Default for RateLimitConfig {
     fn default() -> Self {
         Self {
@@ -124,6 +119,8 @@ impl Default for RateLimitConfig {
             window_seconds: 60,
             cleanup_interval_seconds: 60,
             require_client_ip: true,
+            use_forwarded_ip: false,
+            forwarded_ip_header: "x-forwarded-for".to_string(),
             backend: RateLimitBackend::InMemory,
             redis_url: "redis://127.0.0.1:6379/0".to_string(),
             redis_key_prefix: "budget:rate_limit:".to_string(),
@@ -135,6 +132,7 @@ impl Default for SessionConfig {
     fn default() -> Self {
         Self {
             ttl_seconds: 60 * 60 * 24 * 30,
+            cookie_secure: true,
         }
     }
 }
@@ -144,6 +142,7 @@ impl Default for ApiConfig {
         Self {
             base_path: DEFAULT_API_BASE_PATH.to_string(),
             additional_base_paths: Vec::new(),
+            expose_docs: false,
         }
     }
 }
