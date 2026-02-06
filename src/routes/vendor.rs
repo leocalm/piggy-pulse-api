@@ -37,30 +37,22 @@ pub async fn list_all_vendors(
     pool: &State<PgPool>,
     _rate_limit: RateLimit,
     current_user: CurrentUser,
-    period_id: String,
+    period_id: Option<String>,
     cursor: Option<String>,
     limit: Option<i64>,
 ) -> Result<Json<CursorPaginatedResponse<VendorWithPeriodStatsResponse>>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let params = CursorParams::from_query(cursor, limit)?;
+    let period_id = match period_id {
+        Some(pid) => pid,
+        None => return Err(AppError::BadRequest("Missing period_id".to_string())),
+    };
     let period_uuid = Uuid::parse_str(&period_id).map_err(|e| AppError::uuid("Invalid period id", e))?;
     let period = repo.get_budget_period(&period_uuid, &current_user.id).await?;
 
     let vendors = repo.list_vendors(&params, &current_user.id, &period).await?;
     let responses: Vec<VendorWithPeriodStatsResponse> = vendors.iter().map(VendorWithPeriodStatsResponse::from).collect();
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.vendor.id)))
-}
-
-/// Return 400 when period_id is missing from vendor list endpoint.
-#[get("/?<cursor>&<limit>")]
-pub async fn list_all_vendors_missing_period(
-    _rate_limit: RateLimit,
-    _current_user: CurrentUser,
-    cursor: Option<String>,
-    limit: Option<i64>,
-) -> Result<Status, AppError> {
-    let _ = (cursor, limit);
-    Err(AppError::BadRequest("Missing period_id".to_string()))
 }
 
 /// Get a vendor by ID
@@ -122,9 +114,8 @@ pub async fn get_vendors_with_status(
 }
 
 pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
-    let (mut routes, spec) =
+    let (routes, spec) =
         rocket_okapi::openapi_get_routes_spec![create_vendor, list_all_vendors, get_vendor, delete_vendor, put_vendor, get_vendors_with_status];
-    routes.extend(rocket::routes![list_all_vendors_missing_period]);
     (routes, spec)
 }
 
