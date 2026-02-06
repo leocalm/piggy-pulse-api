@@ -22,7 +22,7 @@ log = "0.4.28"
 async-trait = "0.1.89"
 validator = { version = "0.20", features = ["derive"] }
 thiserror = "2.0"
-redis = { version = "0.25", features = ["tokio-comp", "connection-manager"] }
+redis = { version = "0.26", features = ["tokio-comp", "connection-manager"] }
 zxcvbn = "2.2"
 # Database access with sqlx
 sqlx = { version = "0.8.6", features = ["chrono", "uuid", "migrate", "postgres", "runtime-tokio-rustls", "macros"] }

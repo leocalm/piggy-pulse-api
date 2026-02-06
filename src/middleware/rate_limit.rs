@@ -257,7 +257,7 @@ impl RateLimiter {
             pipe.cmd("EXPIRE").arg(key).arg(window_secs as usize).arg("NX").ignore();
         }
 
-        if let Err(err) = pipe.query_async::<_, ()>(&mut conn).await {
+        if let Err(err) = pipe.query_async::<()>(&mut conn).await {
             warn!(error = %err, "rate limiter redis increment failed; allowing request");
             return RateLimitDecision::Allow;
         }
