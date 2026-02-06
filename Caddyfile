@@ -1,0 +1,37 @@
+{$CADDY_DOMAIN:localhost} {
+    # Enable logging
+    log {
+        output stdout
+        format json
+        level {$CADDY_LOG_LEVEL:INFO}
+    }
+
+    # Reverse proxy to budget API
+    reverse_proxy {$BUDGET_UPSTREAM:budget:8000} {
+        # Health check
+        health_uri {$BUDGET_HEALTH_URI:/api/v1/health}
+        health_interval 30s
+        health_timeout 5s
+
+        # Pass through real client IP
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+    }
+
+    # Security headers
+    header {
+        # Remove server information
+        -Server
+
+        # Security headers
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+
+        # Optional: Uncomment for HTTPS
+        # Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    }
+}

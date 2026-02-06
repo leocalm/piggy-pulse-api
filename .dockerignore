@@ -1,0 +1,43 @@
+# Git
+.git
+.gitignore
+.github
+
+# Docker
+Dockerfile
+docker-compose.yaml
+.dockerignore
+
+# Development
+target/
+.cargo/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation
+*.md
+!README.md
+
+# Environment and config
+.env
+.env.*
+!.env.example
+
+# CI/CD
+.github/
+
+# IDE
+.claude/
+
+# Build artifacts
+*.log
+*.pid
+*.seed
+*.cover
+
+# OS
+.DS_Store
+Thumbs.db
