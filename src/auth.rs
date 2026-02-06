@@ -48,7 +48,10 @@ impl<'r> FromRequest<'r> for CurrentUser {
                     req.local_cache(|| Some(current_user.clone()));
                     return Outcome::Success(current_user);
                 }
-                Ok(None) => return Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials)),
+                Ok(None) => {
+                    let _ = repo.delete_session_if_expired(&session_id).await;
+                    return Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials));
+                }
                 Err(err) => return Outcome::Error((Status::InternalServerError, err)),
             }
         }

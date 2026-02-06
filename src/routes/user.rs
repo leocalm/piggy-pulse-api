@@ -46,6 +46,7 @@ pub async fn put_user(
     if uuid != current_user.id {
         return Err(AppError::Forbidden);
     }
+    payload.validate()?;
     let user = repo.update_user(&uuid, &payload.name, &payload.email, &payload.password).await?;
     Ok(Json(UserResponse::from(&user)))
 }

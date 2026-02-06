@@ -1,4 +1,4 @@
-use crate::database::postgres_repository::PostgresRepository;
+use crate::database::postgres_repository::{PostgresRepository, is_unique_violation};
 use crate::error::app_error::AppError;
 use crate::models::budget_period::BudgetPeriod;
 use crate::models::category::{Category, CategoryRequest, CategoryStats, CategoryType, CategoryWithStats, difference_vs_average_percentage};
@@ -114,7 +114,15 @@ impl PostgresRepository {
         .bind(request.parent_id)
         .bind(request.category_type_to_db())
         .fetch_one(&self.pool)
-        .await?;
+        .await;
+
+        let row = match row {
+            Ok(row) => row,
+            Err(err) if is_unique_violation(&err) => {
+                return Err(AppError::BadRequest("Category name already exists".to_string()));
+            }
+            Err(err) => return Err(err.into()),
+        };
 
         Ok(Category::from(row))
     }
@@ -355,7 +363,15 @@ LIMIT $4
         .bind(id)
         .bind(user_id)
         .fetch_one(&self.pool)
-        .await?;
+        .await;
+
+        let row = match row {
+            Ok(row) => row,
+            Err(err) if is_unique_violation(&err) => {
+                return Err(AppError::BadRequest("Category name already exists".to_string()));
+            }
+            Err(err) => return Err(err.into()),
+        };
 
         Ok(Category::from(row))
     }

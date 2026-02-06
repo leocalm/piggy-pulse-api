@@ -30,7 +30,7 @@ auth_limit = 10
 window_seconds = 60
 cleanup_interval_seconds = 60
 require_client_ip = true
-backend = "redis"
+backend = "in_memory"
 redis_url = "redis://127.0.0.1:6379/0"
 redis_key_prefix = "budget:rate_limit:"
 

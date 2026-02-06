@@ -1,4 +1,4 @@
-use crate::database::postgres_repository::PostgresRepository;
+use crate::database::postgres_repository::{PostgresRepository, is_unique_violation};
 use crate::error::app_error::AppError;
 use crate::models::account::{Account, AccountBalancePerDay, AccountRequest, AccountType, AccountWithMetrics};
 use crate::models::currency::Currency;
@@ -167,7 +167,15 @@ impl PostgresRepository {
         .bind(request.balance)
         .bind(request.spend_limit)
         .fetch_one(&self.pool)
-        .await?;
+        .await;
+
+        let row = match row {
+            Ok(row) => row,
+            Err(err) if is_unique_violation(&err) => {
+                return Err(AppError::BadRequest("Account name already exists".to_string()));
+            }
+            Err(err) => return Err(err.into()),
+        };
 
         Ok(Account {
             id: row.id,
@@ -582,7 +590,15 @@ ORDER BY a.id, d.day
         .bind(id)
         .bind(user_id)
         .fetch_one(&self.pool)
-        .await?;
+        .await;
+
+        let row = match row {
+            Ok(row) => row,
+            Err(err) if is_unique_violation(&err) => {
+                return Err(AppError::BadRequest("Account name already exists".to_string()));
+            }
+            Err(err) => return Err(err.into()),
+        };
 
         Ok(Account {
             id: row.id,

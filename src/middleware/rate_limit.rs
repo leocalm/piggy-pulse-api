@@ -230,7 +230,17 @@ impl RateLimiter {
                     }
                 };
 
-                let ttl_secs = if ttl_ms <= 0 { window_secs } else { (ttl_ms as u64).div_ceil(1000) };
+                let ttl_secs = match ttl_ms {
+                    -1 => {
+                        warn!(
+                            key = %keys[idx],
+                            "rate limiter redis key has no expiry after EXPIRE NX; using window_secs as fallback"
+                        );
+                        window_secs
+                    }
+                    _ if ttl_ms <= 0 => window_secs,
+                    _ => (ttl_ms as u64).div_ceil(1000),
+                };
 
                 let ttl = Duration::from_secs(ttl_secs.max(1));
                 retry_after = Some(retry_after.map_or(ttl, |current| current.max(ttl)));

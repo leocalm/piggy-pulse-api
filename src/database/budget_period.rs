@@ -1,4 +1,4 @@
-use crate::database::postgres_repository::PostgresRepository;
+use crate::database::postgres_repository::{PostgresRepository, is_unique_violation};
 use crate::error::app_error::AppError;
 use crate::models::budget_period::{BudgetPeriod, BudgetPeriodRequest};
 use crate::models::pagination::CursorParams;
@@ -41,7 +41,15 @@ impl PostgresRepository {
         .bind(request.start_date)
         .bind(request.end_date)
         .fetch_one(&self.pool)
-        .await?;
+        .await;
+
+        let row = match row {
+            Ok(row) => row,
+            Err(err) if is_unique_violation(&err) => {
+                return Err(AppError::BadRequest("Budget period name already exists".to_string()));
+            }
+            Err(err) => return Err(err.into()),
+        };
 
         Ok(row.id)
     }
@@ -151,7 +159,15 @@ impl PostgresRepository {
         .bind(id)
         .bind(user_id)
         .fetch_one(&self.pool)
-        .await?;
+        .await;
+
+        let budget_period = match budget_period {
+            Ok(budget_period) => budget_period,
+            Err(err) if is_unique_violation(&err) => {
+                return Err(AppError::BadRequest("Budget period name already exists".to_string()));
+            }
+            Err(err) => return Err(err.into()),
+        };
 
         Ok(budget_period)
     }

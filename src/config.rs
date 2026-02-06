@@ -124,7 +124,7 @@ impl Default for RateLimitConfig {
             window_seconds: 60,
             cleanup_interval_seconds: 60,
             require_client_ip: true,
-            backend: RateLimitBackend::Redis,
+            backend: RateLimitBackend::InMemory,
             redis_url: "redis://127.0.0.1:6379/0".to_string(),
             redis_key_prefix: "budget:rate_limit:".to_string(),
         }
