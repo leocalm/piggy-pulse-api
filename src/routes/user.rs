@@ -204,4 +204,128 @@ mod tests {
         assert_eq!(me_json["id"].as_str().unwrap(), user_id);
         assert_eq!(me_json["email"].as_str().unwrap(), user_email);
     }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_update_user_returns_forbidden_for_other_user() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        // Create first user
+        let user_a_payload = serde_json::json!({
+            "name": "User A",
+            "email": "user.a@example.com",
+            "password": "StrongPassword123!"
+        });
+
+        let response = client
+            .post("/api/v1/users/")
+            .header(ContentType::JSON)
+            .body(user_a_payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Created);
+        let body = response.into_string().await.expect("user A response body");
+        let user_a_json: Value = serde_json::from_str(&body).expect("valid user A json");
+        let user_a_id = user_a_json["id"].as_str().expect("user A id");
+
+        // Create second user
+        let user_b_payload = serde_json::json!({
+            "name": "User B",
+            "email": "user.b@example.com",
+            "password": "StrongPassword123!"
+        });
+
+        let response = client
+            .post("/api/v1/users/")
+            .header(ContentType::JSON)
+            .body(user_b_payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Created);
+        let body = response.into_string().await.expect("user B response body");
+        let user_b_json: Value = serde_json::from_str(&body).expect("valid user B json");
+        let user_b_id = user_b_json["id"].as_str().expect("user B id");
+        let user_b_email = user_b_json["email"].as_str().expect("user B email");
+
+        // Authenticate as User A
+        let cookie_value = format!("{}:{}", user_a_id, user_a_json["email"].as_str().expect("user A email"));
+        client.cookies().add_private(super::build_auth_cookie(&cookie_value));
+
+        // Attempt to update User B (should return 403)
+        let update_payload = serde_json::json!({
+            "name": "Modified User B",
+            "email": user_b_email,
+            "password": "NewPassword123!"
+        });
+
+        let response = client
+            .put(format!("/api/v1/users/{}", user_b_id))
+            .header(ContentType::JSON)
+            .body(update_payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Forbidden);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_delete_user_returns_forbidden_for_other_user() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        // Create first user
+        let user_a_payload = serde_json::json!({
+            "name": "User A",
+            "email": "user.a.delete@example.com",
+            "password": "StrongPassword123!"
+        });
+
+        let response = client
+            .post("/api/v1/users/")
+            .header(ContentType::JSON)
+            .body(user_a_payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Created);
+        let body = response.into_string().await.expect("user A response body");
+        let user_a_json: Value = serde_json::from_str(&body).expect("valid user A json");
+        let user_a_id = user_a_json["id"].as_str().expect("user A id");
+
+        // Create second user
+        let user_b_payload = serde_json::json!({
+            "name": "User B",
+            "email": "user.b.delete@example.com",
+            "password": "StrongPassword123!"
+        });
+
+        let response = client
+            .post("/api/v1/users/")
+            .header(ContentType::JSON)
+            .body(user_b_payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Created);
+        let body = response.into_string().await.expect("user B response body");
+        let user_b_json: Value = serde_json::from_str(&body).expect("valid user B json");
+        let user_b_id = user_b_json["id"].as_str().expect("user B id");
+
+        // Authenticate as User A
+        let cookie_value = format!("{}:{}", user_a_id, user_a_json["email"].as_str().expect("user A email"));
+        client.cookies().add_private(super::build_auth_cookie(&cookie_value));
+
+        // Attempt to delete User B (should return 403)
+        let response = client.delete(format!("/api/v1/users/{}", user_b_id)).dispatch().await;
+
+        assert_eq!(response.status(), Status::Forbidden);
+    }
 }
