@@ -204,4 +204,93 @@ mod tests {
         assert_eq!(me_json["id"].as_str().unwrap(), user_id);
         assert_eq!(me_json["email"].as_str().unwrap(), user_email);
     }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_put_user_forbidden_when_wrong_user() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let payload = serde_json::json!({
+            "name": "User A",
+            "email": "user.a@example.com",
+            "password": "password123"
+        });
+
+        let response = client
+            .post("/api/v1/users/")
+            .header(ContentType::JSON)
+            .body(payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Created);
+
+        let body = response.into_string().await.expect("user response body");
+        let user_json: Value = serde_json::from_str(&body).expect("valid user json");
+        let user_id = user_json["id"].as_str().expect("user id");
+        let user_email = user_json["email"].as_str().expect("user email");
+
+        let cookie_value = format!("{}:{}", user_id, user_email);
+        client.cookies().add_private(Cookie::build(("user", cookie_value)).path("/").build());
+
+        let other_id = uuid::Uuid::new_v4().to_string();
+        let update_payload = serde_json::json!({
+            "name": "Updated Name",
+            "email": "updated@example.com",
+            "password": "newpass123"
+        });
+
+        let response = client
+            .put(format!("/api/v1/users/{}", other_id))
+            .header(ContentType::JSON)
+            .body(update_payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Forbidden);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_delete_user_forbidden_when_wrong_user() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let payload = serde_json::json!({
+            "name": "User B",
+            "email": "user.b@example.com",
+            "password": "password123"
+        });
+
+        let response = client
+            .post("/api/v1/users/")
+            .header(ContentType::JSON)
+            .body(payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Created);
+
+        let body = response.into_string().await.expect("user response body");
+        let user_json: Value = serde_json::from_str(&body).expect("valid user json");
+        let user_id = user_json["id"].as_str().expect("user id");
+        let user_email = user_json["email"].as_str().expect("user email");
+
+        let cookie_value = format!("{}:{}", user_id, user_email);
+        client.cookies().add_private(Cookie::build(("user", cookie_value)).path("/").build());
+
+        let other_id = uuid::Uuid::new_v4().to_string();
+
+        let response = client
+            .delete(format!("/api/v1/users/{}", other_id))
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Forbidden);
+    }
 }

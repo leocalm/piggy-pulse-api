@@ -104,7 +104,7 @@ Rocket uses `ROCKET_SECRET_KEY` to encrypt private cookies.
 >>>>>>> a22fc0b (Require ROCKET_SECRET_KEY in all profiles)
 
 ```bash
-# Generate once and store securely
+# Generate once and store securely (required in non-debug profiles)
 export ROCKET_SECRET_KEY=$(openssl rand -base64 32)
 ```
 
