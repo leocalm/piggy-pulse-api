@@ -43,3 +43,4 @@ redis_key_prefix = "budget:rate_limit:"
 
 [session]
 ttl_seconds = 2592000
+cookie_secure = true

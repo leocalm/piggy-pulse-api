@@ -8,7 +8,7 @@ use serde_json::json;
 pub struct BudgetPerDayResponse {
     pub account_name: String,
     pub date: String,
-    pub balance: i32,
+    pub balance: i64,
 }
 
 #[derive(Serialize, Debug, Ord, PartialOrd, Eq, PartialEq, Clone, JsonSchema)]

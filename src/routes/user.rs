@@ -85,7 +85,7 @@ pub async fn post_user_login(
             cookies.add_private(
                 Cookie::build(("user", value))
                     .path("/")
-                    .secure(true)
+                    .secure(config.session.cookie_secure)
                     .http_only(true)
                     .same_site(SameSite::Lax)
                     .max_age(Duration::seconds(ttl_seconds))

@@ -11,7 +11,7 @@ impl PostgresRepository {
         struct BalancePerDayRow {
             account_name: String,
             date: String,
-            balance: i32,
+            balance: i64,
         }
 
         let rows = sqlx::query_as::<_, BalancePerDayRow>(
@@ -79,7 +79,7 @@ SELECT
         PARTITION BY a.id
         ORDER BY d.day
         ROWS UNBOUNDED PRECEDING
-    ))::int                          AS balance
+    ))::bigint                       AS balance
 FROM account a
 JOIN  base_balances bb ON bb.id = a.id
 CROSS JOIN days d
@@ -124,7 +124,7 @@ WITH period_transactions AS (
       AND t.occurred_at <= bp.end_date
 )
 SELECT c.name                                AS category_name,
-       bc.budgeted_value,
+       bc.budgeted_value::bigint             AS budgeted_value,
        COALESCE(SUM(pt.amount), 0)::bigint   AS amount_spent
 FROM budget_category bc
 JOIN  category c                ON c.id  = bc.category_id
@@ -163,12 +163,12 @@ GROUP BY c.name, bc.budgeted_value
         let row = sqlx::query_as::<_, MonthlyBurnInResponse>(
             r#"
 WITH total_budget AS (
-    SELECT COALESCE(SUM(bc.budgeted_value), 0)::int AS value
+    SELECT COALESCE(SUM(bc.budgeted_value), 0)::bigint AS value
     FROM budget_category bc
     WHERE bc.user_id = $2
 ),
 spent_budget AS (
-    SELECT COALESCE(SUM(t.amount), 0)::int AS value
+    SELECT COALESCE(SUM(t.amount), 0)::bigint AS value
     FROM transaction t
     JOIN  category c       ON t.category_id = c.id
     CROSS JOIN budget_period bp

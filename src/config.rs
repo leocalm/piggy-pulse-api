@@ -68,6 +68,7 @@ pub enum RateLimitBackend {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SessionConfig {
     pub ttl_seconds: i64,
+    pub cookie_secure: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -131,6 +132,7 @@ impl Default for SessionConfig {
     fn default() -> Self {
         Self {
             ttl_seconds: 60 * 60 * 24 * 30,
+            cookie_secure: true,
         }
     }
 }
