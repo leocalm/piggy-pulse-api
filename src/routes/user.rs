@@ -112,7 +112,8 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
 }
 
 fn build_auth_cookie(value: &str) -> Cookie<'static> {
-    let mut builder = Cookie::build(("user", value.to_string())).path("/").http_only(true).same_site(SameSite::Lax);
+    let same_site = if is_release_profile() { SameSite::Strict } else { SameSite::Lax };
+    let mut builder = Cookie::build(("user", value.to_string())).path("/").http_only(true).same_site(same_site);
     if is_release_profile() {
         builder = builder.secure(true);
     }
