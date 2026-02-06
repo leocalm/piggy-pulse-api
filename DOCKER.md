@@ -108,10 +108,14 @@ docker compose logs -f db
 
 ### Run Database Migrations
 
-Migrations run automatically when the budget container starts. To run manually:
+Migrations run automatically when the budget container starts via the entrypoint script. To run manually:
 
 ```bash
-docker compose exec budget /app/budget migrate
+# Run migrations using sqlx-cli
+docker compose exec budget sqlx migrate run --source /app/migrations
+
+# Check migration status
+docker compose exec budget sqlx migrate info --source /app/migrations
 ```
 
 ### Access Database

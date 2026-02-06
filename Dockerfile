@@ -3,6 +3,9 @@ FROM rust:1.84-bookworm AS builder
 
 WORKDIR /app
 
+# Install sqlx-cli for migrations
+RUN cargo install sqlx-cli --no-default-features --features rustls,postgres
+
 # Copy manifests
 COPY Cargo.toml Cargo.lock ./
 
@@ -21,12 +24,16 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 # Copy the binary from builder
 COPY --from=builder /app/target/release/budget /app/budget
+
+# Copy sqlx-cli for migrations
+COPY --from=builder /usr/local/cargo/bin/sqlx /usr/local/bin/sqlx
 
 # Copy migrations
 COPY --from=builder /app/migrations /app/migrations
@@ -35,12 +42,19 @@ COPY --from=builder /app/migrations /app/migrations
 COPY Budget.toml.example ./Budget.toml
 COPY Rocket.toml ./Rocket.toml
 
-# Create a non-root user
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
-USER appuser
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
+# Create a non-root user and set permissions
+RUN useradd -m -u 1000 appuser \
+    && chmod +x /usr/local/bin/docker-entrypoint.sh \
+    && chown -R appuser:appuser /app
 
 # Expose the default port
 EXPOSE 8000
 
-# Run the binary
-CMD ["/app/budget"]
+# Switch to non-root user
+USER appuser
+
+# Use entrypoint script
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
