@@ -4,7 +4,7 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::{AuthRateLimit, RateLimit};
 use crate::models::user::{LoginRequest, UserRequest, UserResponse};
-use rocket::http::{Cookie, CookieJar, Status};
+use rocket::http::{Cookie, CookieJar, SameSite, Status};
 use rocket::serde::json::Json;
 use rocket::time::Duration;
 use rocket::{State, delete, get, post, put};
@@ -82,7 +82,15 @@ pub async fn post_user_login(
             let expires_at = chrono::Utc::now() + chrono::Duration::seconds(ttl_seconds);
             let session = repo.create_session(&user.id, expires_at).await?;
             let value = format!("{}:{}", session.id, user.id);
-            cookies.add_private(Cookie::build(("user", value)).path("/").max_age(Duration::seconds(ttl_seconds)).build());
+            cookies.add_private(
+                Cookie::build(("user", value))
+                    .path("/")
+                    .secure(config.session.cookie_secure)
+                    .http_only(true)
+                    .same_site(SameSite::Lax)
+                    .max_age(Duration::seconds(ttl_seconds))
+                    .build(),
+            );
         }
         None => {
             // Equalize response timing so attackers cannot distinguish

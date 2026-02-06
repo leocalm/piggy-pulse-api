@@ -17,22 +17,22 @@ use validator::Validate;
 pub async fn create_currency(
     pool: &State<PgPool>,
     _rate_limit: RateLimit,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     payload: Json<CurrencyRequest>,
 ) -> Result<(Status, Json<CurrencyResponse>), AppError> {
     payload.validate()?;
 
     let repo = PostgresRepository { pool: pool.inner().clone() };
-    let currency = repo.create_currency(&payload).await?;
+    let currency = repo.create_currency(&payload, &current_user.id).await?;
     Ok((Status::Created, Json(CurrencyResponse::from(&currency))))
 }
 
 /// Get a currency by its code (e.g., USD, EUR)
 #[openapi(tag = "Currencies")]
 #[get("/<code>")]
-pub async fn get_currency(pool: &State<PgPool>, _rate_limit: RateLimit, _current_user: CurrentUser, code: &str) -> Result<Json<CurrencyResponse>, AppError> {
+pub async fn get_currency(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser, code: &str) -> Result<Json<CurrencyResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
-    if let Some(currency) = repo.get_currency_by_code(code).await? {
+    if let Some(currency) = repo.get_currency_by_code(code, &current_user.id).await? {
         Ok(Json(CurrencyResponse::from(&currency)))
     } else {
         Err(AppError::NotFound(format!("Currency not found: {}", code)))
@@ -45,21 +45,21 @@ pub async fn get_currency(pool: &State<PgPool>, _rate_limit: RateLimit, _current
 pub async fn get_currencies(
     pool: &State<PgPool>,
     _rate_limit: RateLimit,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     name: &str,
 ) -> Result<Json<Vec<CurrencyResponse>>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
-    let currencies = repo.get_currencies(name).await?;
+    let currencies = repo.get_currencies(name, &current_user.id).await?;
     Ok(Json(currencies.iter().map(CurrencyResponse::from).collect()))
 }
 
 /// Delete a currency by ID
 #[openapi(tag = "Currencies")]
 #[delete("/<id>")]
-pub async fn delete_currency(pool: &State<PgPool>, _rate_limit: RateLimit, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+pub async fn delete_currency(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid currency id", e))?;
-    repo.delete_currency(&uuid).await?;
+    repo.delete_currency(&uuid, &current_user.id).await?;
     Ok(Status::Ok)
 }
 
@@ -69,13 +69,13 @@ pub async fn delete_currency(pool: &State<PgPool>, _rate_limit: RateLimit, _curr
 pub async fn put_currency(
     pool: &State<PgPool>,
     _rate_limit: RateLimit,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     id: &str,
     payload: Json<CurrencyRequest>,
 ) -> Result<Json<CurrencyResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid currency id", e))?;
-    let currency = repo.update_currency(&uuid, &payload).await?;
+    let currency = repo.update_currency(&uuid, &payload, &current_user.id).await?;
     Ok(Json(CurrencyResponse::from(&currency)))
 }
 

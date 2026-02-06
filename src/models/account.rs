@@ -107,5 +107,5 @@ pub struct AccountBalancePerDay {
     pub account_id: Uuid,
     pub account_name: String,
     pub date: String,
-    pub balance: i32,
+    pub balance: i64,
 }

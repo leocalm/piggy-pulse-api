@@ -18,6 +18,11 @@ address = "127.0.0.1"
 [api]
 base_path = "/api/v1"
 additional_base_paths = []
+expose_docs = false
+
+[cors]
+allowed_origins = ["http://localhost:3000"]
+allow_credentials = true
 
 [logging]
 level = "info"  # trace, debug, info, warn, error
@@ -30,9 +35,12 @@ auth_limit = 10
 window_seconds = 60
 cleanup_interval_seconds = 60
 require_client_ip = true
+use_forwarded_ip = false
+forwarded_ip_header = "x-forwarded-for"
 backend = "in_memory"
 redis_url = "redis://127.0.0.1:6379/0"
 redis_key_prefix = "budget:rate_limit:"
 
 [session]
 ttl_seconds = 2592000
+cookie_secure = true

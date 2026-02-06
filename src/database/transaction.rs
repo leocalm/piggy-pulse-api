@@ -217,7 +217,53 @@ fn build_transaction_query(from_clause: &str, where_clause: &str, order_by: &str
 }
 
 impl PostgresRepository {
+    async fn validate_transaction_ownership(&self, transaction: &TransactionRequest, user_id: &Uuid) -> Result<(), AppError> {
+        let category_exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM category WHERE id = $1 AND user_id = $2)")
+            .bind(transaction.category_id)
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
+        if !category_exists {
+            return Err(AppError::BadRequest("Invalid category_id for current user".to_string()));
+        }
+
+        let from_account_exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM account WHERE id = $1 AND user_id = $2)")
+            .bind(transaction.from_account_id)
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
+        if !from_account_exists {
+            return Err(AppError::BadRequest("Invalid from_account_id for current user".to_string()));
+        }
+
+        if let Some(to_account_id) = transaction.to_account_id {
+            let to_account_exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM account WHERE id = $1 AND user_id = $2)")
+                .bind(to_account_id)
+                .bind(user_id)
+                .fetch_one(&self.pool)
+                .await?;
+            if !to_account_exists {
+                return Err(AppError::BadRequest("Invalid to_account_id for current user".to_string()));
+            }
+        }
+
+        if let Some(vendor_id) = transaction.vendor_id {
+            let vendor_exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM vendor WHERE id = $1 AND user_id = $2)")
+                .bind(vendor_id)
+                .bind(user_id)
+                .fetch_one(&self.pool)
+                .await?;
+            if !vendor_exists {
+                return Err(AppError::BadRequest("Invalid vendor_id for current user".to_string()));
+            }
+        }
+
+        Ok(())
+    }
+
     pub async fn create_transaction(&self, transaction: &TransactionRequest, user_id: &Uuid) -> Result<Transaction, AppError> {
+        self.validate_transaction_ownership(transaction, user_id).await?;
+
         let to_account_id = if let Some(acc_id) = &transaction.to_account_id { Some(acc_id) } else { None };
         let vendor_id = if let Some(v_id) = &transaction.vendor_id { Some(v_id) } else { None };
 
@@ -347,6 +393,8 @@ impl PostgresRepository {
     }
 
     pub async fn update_transaction(&self, id: &Uuid, transaction: &TransactionRequest, user_id: &Uuid) -> Result<Transaction, AppError> {
+        self.validate_transaction_ownership(transaction, user_id).await?;
+
         let select_query = build_transaction_query("updated t", "", "");
         let query = format!(
             r#"
