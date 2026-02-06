@@ -191,20 +191,19 @@ fn stage_rate_limiter(rate_limit_config: config::RateLimitConfig) -> AdHoc {
     })
 }
 
-fn api_routes() -> Vec<rocket::Route> {
-    let mut routes = Vec::new();
-    routes.extend(app_routes::account::routes().0);
-    routes.extend(app_routes::user::routes().0);
-    routes.extend(app_routes::currency::routes().0);
-    routes.extend(app_routes::category::routes().0);
-    routes.extend(app_routes::budget::routes().0);
-    routes.extend(app_routes::budget_category::routes().0);
-    routes.extend(app_routes::transaction::routes().0);
-    routes.extend(app_routes::vendor::routes().0);
-    routes.extend(app_routes::health::routes().0);
-    routes.extend(app_routes::dashboard::routes().0);
-    routes.extend(app_routes::budget_period::routes().0);
-    routes
+fn mount_api_routes(mut rocket: Rocket<Build>, base_path: &str) -> Rocket<Build> {
+    rocket = rocket.mount(join_base_path(base_path, "accounts"), app_routes::account::routes().0);
+    rocket = rocket.mount(join_base_path(base_path, "users"), app_routes::user::routes().0);
+    rocket = rocket.mount(join_base_path(base_path, "currency"), app_routes::currency::routes().0);
+    rocket = rocket.mount(join_base_path(base_path, "categories"), app_routes::category::routes().0);
+    rocket = rocket.mount(join_base_path(base_path, "budgets"), app_routes::budget::routes().0);
+    rocket = rocket.mount(join_base_path(base_path, "budget-categories"), app_routes::budget_category::routes().0);
+    rocket = rocket.mount(join_base_path(base_path, "transactions"), app_routes::transaction::routes().0);
+    rocket = rocket.mount(join_base_path(base_path, "vendors"), app_routes::vendor::routes().0);
+    rocket = rocket.mount(join_base_path(base_path, "health"), app_routes::health::routes().0);
+    rocket = rocket.mount(join_base_path(base_path, "dashboard"), app_routes::dashboard::routes().0);
+    rocket = rocket.mount(join_base_path(base_path, "budget_period"), app_routes::budget_period::routes().0);
+    rocket
 }
 
 pub fn build_rocket(config: Config) -> Rocket<Build> {
@@ -245,7 +244,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
         let primary_openapi_url = join_base_path(primary_base_path, "openapi.json");
         rocket = rocket.mount(docs_path, make_swagger_ui(&get_swagger_config(&primary_openapi_url)));
     } else {
-        rocket = rocket.mount(primary_base_path.clone(), api_routes());
+        rocket = mount_api_routes(rocket, primary_base_path);
     }
 
     rocket = rocket.register(
@@ -275,7 +274,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
             let docs_openapi_url = join_base_path(base_path, "openapi.json");
             rocket = rocket.mount(docs_path, make_swagger_ui(&get_swagger_config(&docs_openapi_url)));
         } else {
-            rocket = rocket.mount(base_path.clone(), api_routes());
+            rocket = mount_api_routes(rocket, base_path);
         }
 
         rocket = rocket.register(
