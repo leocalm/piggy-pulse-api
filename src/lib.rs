@@ -44,20 +44,13 @@ fn init_tracing(log_level: &str, json_format: bool) {
 }
 
 fn ensure_rocket_secret_key() {
-    if cfg!(test) {
-        return;
-    }
-
-    if std::env::var("ROCKET_SECRET_KEY").is_err() {
-        let profile = std::env::var("ROCKET_PROFILE").unwrap_or_else(|_| "debug".to_string());
-        if profile == "test" {
-            return;
-        }
-        eprintln!(
-            "ROCKET_SECRET_KEY is required (profile: {}). Generate one with: openssl rand -base64 32",
+    // Only require ROCKET_SECRET_KEY for non-debug profiles (e.g., release builds).
+    let profile = std::env::var("ROCKET_PROFILE").unwrap_or_else(|_| "debug".to_string());
+    if profile != "debug" && std::env::var("ROCKET_SECRET_KEY").is_err() {
+        panic!(
+            "ROCKET_SECRET_KEY is required for profile '{}' — generate one with: openssl rand -base64 32",
             profile
         );
-        std::process::exit(1);
     }
 }
 

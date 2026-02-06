@@ -11,7 +11,7 @@ Configuration is loaded from multiple sources in this priority order (later sour
 3. **Environment variables** (prefixed with `BUDGET_`)
 4. **DATABASE_URL** env var (for backwards compatibility)
 
-Rocket requires a `ROCKET_SECRET_KEY` environment variable to encrypt private cookies.
+Rocket requires a `ROCKET_SECRET_KEY` environment variable in non-debug profiles to encrypt private cookies. Local development (debug profile) does not require this value, but generating and setting one is recommended when testing authentication flows.
 
 ## Quick Start
 
@@ -93,10 +93,18 @@ BUDGET_SERVER_ADDRESS=127.0.0.1
 
 ### Rocket Secret Key
 
+<<<<<<< HEAD
+<<<<<<< HEAD
 Rocket uses `ROCKET_SECRET_KEY` to encrypt private cookies.
+=======
+Rocket uses `ROCKET_SECRET_KEY` to encrypt private cookies. This is required for non-debug profiles.
+>>>>>>> 591f38d (Fix critical security items)
+=======
+Rocket uses `ROCKET_SECRET_KEY` to encrypt private cookies.
+>>>>>>> a22fc0b (Require ROCKET_SECRET_KEY in all profiles)
 
 ```bash
-# Generate once and store securely
+# Generate once and store securely (required in non-debug profiles)
 export ROCKET_SECRET_KEY=$(openssl rand -base64 32)
 ```
 

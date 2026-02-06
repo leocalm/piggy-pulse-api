@@ -7,11 +7,12 @@ Rust backend for a budgeting tool, using Rocket for the HTTP server and PostgreS
 - Rust (stable)
 - PostgreSQL running locally or remotely
 
-Set `DATABASE_URL` and `ROCKET_SECRET_KEY` in your environment, e.g.:
+Set `DATABASE_URL` in your environment. `ROCKET_SECRET_KEY` is required in non-debug profiles (recommended for local testing of auth flows). Example:
 
 ```bash
 export DATABASE_URL=postgres://user:password@localhost:5432/budget_db
-export ROCKET_SECRET_KEY=$(openssl rand -base64 32)
+# Optional for local debug; required for non-debug profiles:
+# export ROCKET_SECRET_KEY=$(openssl rand -base64 32)
 ```
 
 Or copy the example config file and edit as needed:
