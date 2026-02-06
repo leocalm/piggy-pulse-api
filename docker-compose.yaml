@@ -1,4 +1,5 @@
 # Use postgres/example user/password credentials
+# For production: use strong credentials and do not expose ports
 
 services:
 
@@ -23,3 +24,5 @@ services:
     restart: always
     ports:
       - 8080:8080
+    profiles:
+      - debug

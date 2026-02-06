@@ -80,6 +80,11 @@ impl Fairing for RequestLogger {
         // Add request_id to response headers for client tracking
         response.set_header(Header::new("X-Request-Id", request_id.clone()));
 
+        // Add security headers
+        response.set_header(Header::new("X-Content-Type-Options", "nosniff"));
+        response.set_header(Header::new("X-Frame-Options", "DENY"));
+        response.set_header(Header::new("Cache-Control", "no-store"));
+
         // Log response with appropriate level based on status
         if status.class().is_server_error() || status.class().is_client_error() {
             warn!(

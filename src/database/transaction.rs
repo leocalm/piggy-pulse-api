@@ -15,7 +15,7 @@ use uuid::Uuid;
 struct TransactionRow {
     id: Uuid,
     user_id: Uuid,
-    amount: i32,
+    amount: i64,
     description: String,
     occurred_at: NaiveDate,
     // Category fields

@@ -158,8 +158,8 @@ impl PostgresRepository {
                 spend_limit
             "#,
         )
-        .bind(&request.name)
         .bind(user_id)
+        .bind(&request.name)
         .bind(&request.color)
         .bind(&request.icon)
         .bind(&account_type_str)

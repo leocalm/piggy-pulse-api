@@ -14,7 +14,7 @@ pub struct CursorParams {
 }
 
 impl CursorParams {
-    pub const DEFAULT_LIMIT: i64 = 50;
+    pub const DEFAULT_LIMIT: i64 = 200;
     pub const MAX_LIMIT: i64 = 200;
 
     /// Parse a cursor from the raw query-string value (which Rocket gives us as `Option<String>`).
@@ -74,8 +74,8 @@ mod tests {
     #[test]
     fn test_effective_limit_default() {
         let params = CursorParams { cursor: None, limit: None };
-        assert_eq!(params.effective_limit(), 50);
-        assert_eq!(params.fetch_limit(), 51);
+        assert_eq!(params.effective_limit(), 200);
+        assert_eq!(params.fetch_limit(), 201);
     }
 
     #[test]
