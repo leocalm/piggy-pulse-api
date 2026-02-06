@@ -135,7 +135,7 @@ fn is_unique_violation(err: &sqlx::error::Error) -> bool {
 #[cfg(test)]
 mod tests {
     use crate::{Config, build_rocket};
-    use rocket::http::{ContentType, Status};
+    use rocket::http::{ContentType, Cookie, Status};
     use rocket::local::asynchronous::Client;
     use serde_json::Value;
 
@@ -286,10 +286,7 @@ mod tests {
 
         let other_id = uuid::Uuid::new_v4().to_string();
 
-        let response = client
-            .delete(format!("/api/v1/users/{}", other_id))
-            .dispatch()
-            .await;
+        let response = client.delete(format!("/api/v1/users/{}", other_id)).dispatch().await;
 
         assert_eq!(response.status(), Status::Forbidden);
     }
