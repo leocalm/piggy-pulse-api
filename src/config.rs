@@ -36,7 +36,7 @@ pub struct LoggingConfig {
     pub json_format: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct CorsConfig {
     pub allowed_origins: Vec<String>,
     pub allow_credentials: bool,
@@ -56,6 +56,7 @@ pub struct RateLimitConfig {
 pub struct ApiConfig {
     pub base_path: String,
     pub additional_base_paths: Vec<String>,
+    pub enable_swagger: bool,
 }
 
 pub const DEFAULT_API_BASE_PATH: &str = "/api/v1";
@@ -90,15 +91,6 @@ impl Default for LoggingConfig {
     }
 }
 
-impl Default for CorsConfig {
-    fn default() -> Self {
-        Self {
-            allowed_origins: vec!["*".to_string()],
-            allow_credentials: false,
-        }
-    }
-}
-
 impl Default for RateLimitConfig {
     fn default() -> Self {
         Self {
@@ -117,6 +109,7 @@ impl Default for ApiConfig {
         Self {
             base_path: DEFAULT_API_BASE_PATH.to_string(),
             additional_base_paths: Vec::new(),
+            enable_swagger: false,
         }
     }
 }

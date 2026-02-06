@@ -120,16 +120,47 @@ BUDGET_LOGGING_JSON_FORMAT=false
 [api]
 base_path = "/api/v1"
 additional_base_paths = ["/api/v2"]
+enable_swagger = false
 ```
 
 Or with environment variables:
 ```bash
 BUDGET_API__BASE_PATH=/api/v1
+BUDGET_API__ENABLE_SWAGGER=false
 ```
 
 Notes:
 - `additional_base_paths` is easiest to set in `Budget.toml` as a list.
 - If you need to set multiple base paths via environment variables, prefer the config file to avoid platform-specific list syntax.
+- `enable_swagger` defaults to `false` to keep `/docs` and `/openapi.json` hidden unless explicitly enabled.
+
+### CORS
+
+```toml
+[cors]
+allowed_origins = ["https://app.example.com"]
+allow_credentials = false
+```
+
+Or with environment variables:
+```bash
+BUDGET_CORS__ALLOWED_ORIGINS=["https://app.example.com"]
+BUDGET_CORS__ALLOW_CREDENTIALS=false
+```
+
+Notes:
+- An empty `allowed_origins` list disables cross-origin requests by default.
+- Do not combine wildcard origins (`*`) with `allow_credentials = true` (this will panic at startup).
+
+### Authentication Cookies
+
+The private `user` cookie is configured with:
+
+- `HttpOnly` always
+- `SameSite=Lax` in non-release profiles
+- `SameSite=Strict` and `Secure` in `release` profile
+
+Set `ROCKET_PROFILE=release` in production to enable the stricter settings.
 
 ### Rate Limiting
 

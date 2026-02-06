@@ -120,8 +120,9 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
 mod tests {
     use super::parse_period_id;
     use crate::error::app_error::AppError;
+    use crate::routes::user::build_auth_cookie;
     use crate::{Config, build_rocket};
-    use rocket::http::{ContentType, Cookie, Status};
+    use rocket::http::{ContentType, Status};
     use rocket::local::asynchronous::Client;
     use serde_json::Value;
     use uuid::Uuid;
@@ -154,7 +155,7 @@ mod tests {
         let user_email = user_json["email"].as_str().expect("user email").to_string();
 
         let cookie_value = format!("{}:{}", user_id, user_email);
-        client.cookies().add_private(Cookie::build(("user", cookie_value)).path("/").build());
+        client.cookies().add_private(build_auth_cookie(&cookie_value));
 
         (user_id, user_email)
     }

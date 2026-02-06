@@ -40,10 +40,23 @@ All API endpoints are versioned and mounted under `/api/v1` by default. The curr
 
 #### API Documentation
 
-- Swagger/OpenAPI documentation is available at `/api/v1/docs` by default
-- OpenAPI spec is available at `/api/v1/openapi.json` by default
+- Swagger/OpenAPI documentation is hidden by default
+- Enable it by setting `BUDGET_API__ENABLE_SWAGGER=true` (then `/api/v1/docs` and `/api/v1/openapi.json` are available)
 
 For complete API lifecycle information including deprecation policies and migration guides, see [API_LIFECYCLE.md](API_LIFECYCLE.md).
+
+### Security Defaults
+
+- CORS is denied by default (empty `allowed_origins`). Set `BUDGET_CORS__ALLOWED_ORIGINS` to your frontend origin(s).
+- Auth cookies are `HttpOnly` always. In `release` profile they are also `Secure` and `SameSite=Strict`. In non-release profiles they use `SameSite=Lax`.
+
+### Docker Compose (Development)
+
+The `docker-compose.yaml` file only provisions PostgreSQL and requires explicit environment variables:
+
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `POSTGRES_DB`
 
 ## Database schema & migrations
 

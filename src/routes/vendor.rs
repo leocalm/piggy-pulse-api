@@ -130,9 +130,9 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
 
 #[cfg(test)]
 mod tests {
+    use crate::routes::user::build_auth_cookie;
     use crate::{Config, build_rocket};
     use chrono::{Duration, Utc};
-    use rocket::http::Cookie;
     use rocket::http::{ContentType, Status};
     use rocket::local::asynchronous::Client;
     use serde_json::Value;
@@ -215,7 +215,7 @@ mod tests {
         let user_email = user_json["email"].as_str().expect("user email");
 
         let cookie_value = format!("{}:{}", user_id, user_email);
-        client.cookies().add_private(Cookie::build(("user", cookie_value)).path("/").build());
+        client.cookies().add_private(build_auth_cookie(&cookie_value));
 
         let currency_payload = serde_json::json!({
             "name": "US Dollar",
@@ -373,7 +373,7 @@ mod tests {
         let user_email = user_json["email"].as_str().expect("user email");
 
         let cookie_value = format!("{}:{}", user_id, user_email);
-        client.cookies().add_private(Cookie::build(("user", cookie_value)).path("/").build());
+        client.cookies().add_private(build_auth_cookie(&cookie_value));
 
         let response = client.get("/api/v1/vendors/?limit=50").dispatch().await;
         assert_eq!(response.status(), Status::BadRequest);

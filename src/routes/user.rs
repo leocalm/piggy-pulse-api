@@ -3,7 +3,7 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::{AuthRateLimit, RateLimit};
 use crate::models::user::{LoginRequest, UserRequest, UserResponse};
-use rocket::http::{Cookie, CookieJar, Status};
+use rocket::http::{Cookie, CookieJar, SameSite, Status};
 use rocket::serde::json::Json;
 use rocket::{State, delete, get, post, put};
 use rocket_okapi::openapi;
@@ -75,7 +75,7 @@ pub async fn post_user_login(
         Some(user) => {
             repo.verify_password(&user, &payload.password).await?;
             let value = format!("{}:{}", user.id, user.email);
-            cookies.add_private(Cookie::build(("user", value)).path("/").build());
+            cookies.add_private(build_auth_cookie(&value));
         }
         None => {
             // Equalize response timing so attackers cannot distinguish
@@ -91,7 +91,7 @@ pub async fn post_user_login(
 #[openapi(tag = "Users")]
 #[post("/logout")]
 pub async fn post_user_logout(_rate_limit: RateLimit, cookies: &CookieJar<'_>) -> Status {
-    cookies.remove_private(Cookie::build("user").build());
+    cookies.remove_private(build_auth_cookie_removal());
     Status::Ok
 }
 
@@ -111,6 +111,30 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
     rocket_okapi::openapi_get_routes_spec![post_user, post_user_login, post_user_logout, put_user, delete_user_route, get_me]
 }
 
+pub(crate) fn build_auth_cookie(value: &str) -> Cookie<'static> {
+    let is_release = is_release_profile();
+    let same_site = if is_release { SameSite::Strict } else { SameSite::Lax };
+    let mut builder = Cookie::build(("user", value.to_string())).path("/").http_only(true).same_site(same_site);
+    if is_release {
+        builder = builder.secure(true);
+    }
+    builder.build()
+}
+
+fn is_release_profile() -> bool {
+    matches!(std::env::var("ROCKET_PROFILE").as_deref(), Ok("release"))
+}
+
+fn build_auth_cookie_removal() -> Cookie<'static> {
+    let is_release = is_release_profile();
+    let same_site = if is_release { SameSite::Strict } else { SameSite::Lax };
+    let mut builder = Cookie::build("user").path("/").http_only(true).same_site(same_site);
+    if is_release {
+        builder = builder.secure(true);
+    }
+    builder.build()
+}
+
 /// Check whether a sqlx error is a PostgreSQL unique-constraint violation (error code 23505).
 fn is_unique_violation(err: &sqlx::error::Error) -> bool {
     if let sqlx::error::Error::Database(db_err) = err {
@@ -122,7 +146,7 @@ fn is_unique_violation(err: &sqlx::error::Error) -> bool {
 #[cfg(test)]
 mod tests {
     use crate::{Config, build_rocket};
-    use rocket::http::{ContentType, Cookie, Status};
+    use rocket::http::{ContentType, Status};
     use rocket::local::asynchronous::Client;
     use serde_json::Value;
 
@@ -168,7 +192,7 @@ mod tests {
         let user_email = user_json["email"].as_str().expect("user email");
 
         let cookie_value = format!("{}:{}", user_id, user_email);
-        client.cookies().add_private(Cookie::build(("user", cookie_value)).path("/").build());
+        client.cookies().add_private(super::build_auth_cookie(&cookie_value));
 
         let response = client.get("/api/v1/users/me").dispatch().await;
 

@@ -21,6 +21,7 @@ use rocket::fairing::AdHoc;
 use rocket::{Build, Rocket, catchers, http::Method};
 use rocket_cors::{AllowedOrigins, CorsOptions};
 use rocket_okapi::swagger_ui::{SwaggerUIConfig, make_swagger_ui};
+use rocket_okapi::{get_openapi_route, okapi::merge::marge_spec_list};
 use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
 
@@ -65,7 +66,9 @@ fn build_cors(cors_config: &config::CorsConfig) -> CorsOptions {
         );
     }
 
-    let allowed_origins = if is_wildcard {
+    let allowed_origins = if cors_config.allowed_origins.is_empty() {
+        AllowedOrigins::some_exact::<&str>(&[])
+    } else if is_wildcard {
         AllowedOrigins::all()
     } else {
         AllowedOrigins::some_exact(&cors_config.allowed_origins.iter().map(String::as_str).collect::<Vec<_>>())
@@ -148,6 +151,114 @@ fn collect_base_paths(api_config: &config::ApiConfig) -> Vec<String> {
     normalized
 }
 
+struct RouteSpec {
+    path: &'static str,
+    routes: Vec<rocket::Route>,
+    openapi: rocket_okapi::okapi::openapi3::OpenApi,
+}
+
+fn collect_route_specs() -> Vec<RouteSpec> {
+    let (account_routes, account_openapi) = app_routes::account::routes();
+    let (user_routes, user_openapi) = app_routes::user::routes();
+    let (currency_routes, currency_openapi) = app_routes::currency::routes();
+    let (category_routes, category_openapi) = app_routes::category::routes();
+    let (budget_routes, budget_openapi) = app_routes::budget::routes();
+    let (budget_category_routes, budget_category_openapi) = app_routes::budget_category::routes();
+    let (transaction_routes, transaction_openapi) = app_routes::transaction::routes();
+    let (vendor_routes, vendor_openapi) = app_routes::vendor::routes();
+    let (health_routes, health_openapi) = app_routes::health::routes();
+    let (dashboard_routes, dashboard_openapi) = app_routes::dashboard::routes();
+    let (budget_period_routes, budget_period_openapi) = app_routes::budget_period::routes();
+
+    vec![
+        RouteSpec {
+            path: "/accounts",
+            routes: account_routes,
+            openapi: account_openapi,
+        },
+        RouteSpec {
+            path: "/users",
+            routes: user_routes,
+            openapi: user_openapi,
+        },
+        RouteSpec {
+            path: "/currency",
+            routes: currency_routes,
+            openapi: currency_openapi,
+        },
+        RouteSpec {
+            path: "/categories",
+            routes: category_routes,
+            openapi: category_openapi,
+        },
+        RouteSpec {
+            path: "/budgets",
+            routes: budget_routes,
+            openapi: budget_openapi,
+        },
+        RouteSpec {
+            path: "/budget-categories",
+            routes: budget_category_routes,
+            openapi: budget_category_openapi,
+        },
+        RouteSpec {
+            path: "/transactions",
+            routes: transaction_routes,
+            openapi: transaction_openapi,
+        },
+        RouteSpec {
+            path: "/vendors",
+            routes: vendor_routes,
+            openapi: vendor_openapi,
+        },
+        RouteSpec {
+            path: "/health",
+            routes: health_routes,
+            openapi: health_openapi,
+        },
+        RouteSpec {
+            path: "/dashboard",
+            routes: dashboard_routes,
+            openapi: dashboard_openapi,
+        },
+        RouteSpec {
+            path: "/budget_period",
+            routes: budget_period_routes,
+            openapi: budget_period_openapi,
+        },
+    ]
+}
+
+fn mount_api_routes(mut rocket: Rocket<Build>, base_path: &str, enable_swagger: bool) -> Rocket<Build> {
+    let route_specs = collect_route_specs();
+
+    if enable_swagger {
+        let mut openapi_list = Vec::new();
+        for spec in route_specs {
+            rocket = rocket.mount(format!("{}{}", base_path, spec.path), spec.routes);
+            openapi_list.push((spec.path, spec.openapi));
+        }
+
+        let openapi_docs = match marge_spec_list(&openapi_list) {
+            Ok(docs) => docs,
+            Err(err) => panic!("Could not merge OpenAPI spec: {}", err),
+        };
+
+        let settings = rocket_okapi::settings::OpenApiSettings::default();
+        rocket = rocket.mount(base_path, vec![get_openapi_route(openapi_docs, &settings)]);
+
+        let docs_path = join_base_path(base_path, "docs");
+        let openapi_url = join_base_path(base_path, "openapi.json");
+        rocket = rocket.mount(docs_path, make_swagger_ui(&get_swagger_config(&openapi_url)));
+    } else {
+        for spec in route_specs {
+            rocket = rocket.mount(format!("{}{}", base_path, spec.path), spec.routes);
+        }
+    }
+
+    rocket
+}
+
 fn stage_rate_limiter(rate_limit_config: config::RateLimitConfig) -> AdHoc {
     AdHoc::on_ignite("Rate Limiter", move |rocket| {
         let limiter = Arc::new(RateLimiter::new(rate_limit_config.clone()));
@@ -172,26 +283,8 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
         .attach(stage_db(config.database));
 
     let (primary_base_path, additional_base_paths) = base_paths.split_first().expect("API base paths must include at least one entry");
-
-    let settings = rocket_okapi::settings::OpenApiSettings::default();
-    rocket_okapi::mount_endpoints_and_merged_docs! {
-        rocket, primary_base_path.clone(), settings,
-        "/accounts" => app_routes::account::routes(),
-        "/users" => app_routes::user::routes(),
-        "/currency" => app_routes::currency::routes(),
-        "/categories" => app_routes::category::routes(),
-        "/budgets" => app_routes::budget::routes(),
-        "/budget-categories" => app_routes::budget_category::routes(),
-        "/transactions" => app_routes::transaction::routes(),
-        "/vendors" => app_routes::vendor::routes(),
-        "/health" => app_routes::health::routes(),
-        "/dashboard" => app_routes::dashboard::routes(),
-        "/budget_period" => app_routes::budget_period::routes(),
-    }
-
-    let docs_path = join_base_path(primary_base_path, "docs");
-    let primary_openapi_url = join_base_path(primary_base_path, "openapi.json");
-    rocket = rocket.mount(docs_path, make_swagger_ui(&get_swagger_config(&primary_openapi_url)));
+    let enable_swagger = config.api.enable_swagger;
+    rocket = mount_api_routes(rocket, primary_base_path, enable_swagger);
 
     rocket = rocket.register(
         primary_base_path.as_str(),
@@ -199,25 +292,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
     );
 
     for base_path in additional_base_paths {
-        let settings = rocket_okapi::settings::OpenApiSettings::default();
-        rocket_okapi::mount_endpoints_and_merged_docs! {
-            rocket, base_path.clone(), settings,
-            "/accounts" => app_routes::account::routes(),
-            "/users" => app_routes::user::routes(),
-            "/currency" => app_routes::currency::routes(),
-            "/categories" => app_routes::category::routes(),
-            "/budgets" => app_routes::budget::routes(),
-            "/budget-categories" => app_routes::budget_category::routes(),
-            "/transactions" => app_routes::transaction::routes(),
-            "/vendors" => app_routes::vendor::routes(),
-            "/health" => app_routes::health::routes(),
-            "/dashboard" => app_routes::dashboard::routes(),
-            "/budget_period" => app_routes::budget_period::routes(),
-        }
-
-        let docs_path = join_base_path(base_path, "docs");
-        let docs_openapi_url = join_base_path(base_path, "openapi.json");
-        rocket = rocket.mount(docs_path, make_swagger_ui(&get_swagger_config(&docs_openapi_url)));
+        rocket = mount_api_routes(rocket, base_path, enable_swagger);
 
         rocket = rocket.register(
             base_path.as_str(),

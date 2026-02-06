@@ -18,6 +18,11 @@ address = "127.0.0.1"
 [api]
 base_path = "/api/v1"
 additional_base_paths = []
+enable_swagger = false
+
+[cors]
+allowed_origins = []
+allow_credentials = false
 
 [logging]
 level = "info"  # trace, debug, info, warn, error
