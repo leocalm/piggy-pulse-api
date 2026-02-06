@@ -94,10 +94,14 @@ BUDGET_SERVER_ADDRESS=127.0.0.1
 ### Rocket Secret Key
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 Rocket uses `ROCKET_SECRET_KEY` to encrypt private cookies.
 =======
 Rocket uses `ROCKET_SECRET_KEY` to encrypt private cookies. This is required for non-debug profiles.
 >>>>>>> 591f38d (Fix critical security items)
+=======
+Rocket uses `ROCKET_SECRET_KEY` to encrypt private cookies.
+>>>>>>> a22fc0b (Require ROCKET_SECRET_KEY in all profiles)
 
 ```bash
 # Generate once and store securely
