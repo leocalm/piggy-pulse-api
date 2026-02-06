@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::net::IpAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -354,7 +356,7 @@ async fn rate_limit_request(request: &Request<'_>, bucket: RateLimitBucket) -> O
         .map(|r| r.0.as_str())
         .unwrap_or("unknown");
 
-    let ip = request.client_ip().map(|addr| addr.to_string());
+    let ip = extract_client_ip(request, &limiter.config);
     if ip.is_none() {
         warn!(
             request_id = %request_id,
@@ -394,6 +396,19 @@ async fn rate_limit_request(request: &Request<'_>, bucket: RateLimitBucket) -> O
             Outcome::Error((RateLimitError::TooManyRequests.status(), RateLimitError::TooManyRequests))
         }
     }
+}
+
+fn extract_client_ip(request: &Request<'_>, config: &RateLimitConfig) -> Option<String> {
+    if config.use_forwarded_ip
+        && let Some(forwarded) = request.headers().get_one(config.forwarded_ip_header.as_str())
+        && let Some(candidate) = forwarded.split(',').next().map(str::trim)
+        && !candidate.is_empty()
+        && IpAddr::from_str(candidate).is_ok()
+    {
+        return Some(candidate.to_string());
+    }
+
+    request.client_ip().map(|addr| addr.to_string())
 }
 
 fn extract_user_id(request: &Request<'_>) -> Option<String> {
