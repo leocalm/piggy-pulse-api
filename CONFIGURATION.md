@@ -11,6 +11,8 @@ Configuration is loaded from multiple sources in this priority order (later sour
 3. **Environment variables** (prefixed with `BUDGET_`)
 4. **DATABASE_URL** env var (for backwards compatibility)
 
+Rocket also requires a `ROCKET_SECRET_KEY` environment variable for non-debug profiles to encrypt private cookies.
+
 ## Quick Start
 
 ### Option 1: Environment Variables Only (Simplest)
@@ -21,6 +23,7 @@ cp .env.example .env
 
 # Edit .env with your values
 export DATABASE_URL=postgres://user:password@localhost:5432/budget_db
+export ROCKET_SECRET_KEY=replace-with-random-base64-32-bytes
 
 # Run the app
 cargo run
@@ -86,6 +89,15 @@ Or with environment variables:
 ```bash
 BUDGET_SERVER_PORT=8000
 BUDGET_SERVER_ADDRESS=127.0.0.1
+```
+
+### Rocket Secret Key
+
+Rocket uses `ROCKET_SECRET_KEY` to encrypt private cookies. This is required for non-debug profiles.
+
+```bash
+# Generate once and store securely
+export ROCKET_SECRET_KEY=$(openssl rand -base64 32)
 ```
 
 ### Logging

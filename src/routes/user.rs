@@ -35,12 +35,15 @@ pub async fn post_user(pool: &State<PgPool>, _rate_limit: AuthRateLimit, payload
 pub async fn put_user(
     pool: &State<PgPool>,
     _rate_limit: RateLimit,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
     id: &str,
     payload: Json<UserRequest>,
 ) -> Result<Json<UserResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid user id", e))?;
+    if uuid != current_user.id {
+        return Err(AppError::Forbidden);
+    }
     let user = repo.update_user(&uuid, &payload.name, &payload.email, &payload.password).await?;
     Ok(Json(UserResponse::from(&user)))
 }
@@ -48,9 +51,12 @@ pub async fn put_user(
 /// Delete a user by ID
 #[openapi(tag = "Users")]
 #[delete("/<id>")]
-pub async fn delete_user_route(pool: &State<PgPool>, _rate_limit: RateLimit, _current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
+pub async fn delete_user_route(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid user id", e))?;
+    if uuid != current_user.id {
+        return Err(AppError::Forbidden);
+    }
     repo.delete_user(&uuid).await?;
     Ok(Status::Ok)
 }

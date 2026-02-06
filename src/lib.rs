@@ -43,6 +43,13 @@ fn init_tracing(log_level: &str, json_format: bool) {
     }
 }
 
+fn ensure_rocket_secret_key() {
+    let profile = std::env::var("ROCKET_PROFILE").unwrap_or_else(|_| "debug".to_string());
+    if profile != "debug" && std::env::var("ROCKET_SECRET_KEY").is_err() {
+        panic!("ROCKET_SECRET_KEY must be set for non-debug profiles. Generate one with: openssl rand -base64 32");
+    }
+}
+
 fn build_cors(cors_config: &config::CorsConfig) -> CorsOptions {
     let is_wildcard = cors_config.allowed_origins.len() == 1 && cors_config.allowed_origins[0] == "*";
 
@@ -148,6 +155,7 @@ fn stage_rate_limiter(rate_limit_config: config::RateLimitConfig) -> AdHoc {
 
 pub fn build_rocket(config: Config) -> Rocket<Build> {
     init_tracing(&config.logging.level, config.logging.json_format);
+    ensure_rocket_secret_key();
 
     let cors = build_cors(&config.cors).to_cors().expect("Failed to create CORS fairing");
 
