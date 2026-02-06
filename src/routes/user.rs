@@ -18,13 +18,15 @@ pub async fn post_user(pool: &State<PgPool>, _rate_limit: AuthRateLimit, payload
     payload.validate()?;
 
     let repo = PostgresRepository { pool: pool.inner().clone() };
-    let user = repo.get_user_by_email(&payload.email).await?;
-    if user.is_some() {
-        return Err(AppError::UserAlreadyExists(payload.email.clone()));
-    }
 
-    let user = repo.create_user(&payload.name, &payload.email, &payload.password).await?;
-    Ok((Status::Created, Json(UserResponse::from(&user))))
+    // Attempt the insert directly and let the DB unique constraint on email
+    // handle duplicates. This avoids a separate SELECT that would leak timing
+    // information about whether an account exists.
+    match repo.create_user(&payload.name, &payload.email, &payload.password).await {
+        Ok(user) => Ok((Status::Created, Json(UserResponse::from(&user)))),
+        Err(AppError::Db { ref source, .. }) if is_unique_violation(source) => Err(AppError::BadRequest("Unable to create account".to_string())),
+        Err(e) => Err(e),
+    }
 }
 
 /// Update a user by ID
@@ -63,10 +65,17 @@ pub async fn post_user_login(
     payload: Json<LoginRequest>,
 ) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
-    if let Some(user) = repo.get_user_by_email(&payload.email).await? {
-        repo.verify_password(&user, &payload.password).await?;
-        let value = format!("{}:{}", user.id, user.email);
-        cookies.add_private(Cookie::build(("user", value)).path("/").build());
+    match repo.get_user_by_email(&payload.email).await? {
+        Some(user) => {
+            repo.verify_password(&user, &payload.password).await?;
+            let value = format!("{}:{}", user.id, user.email);
+            cookies.add_private(Cookie::build(("user", value)).path("/").build());
+        }
+        None => {
+            // Equalize response timing so attackers cannot distinguish
+            // existing from non-existing accounts by measuring latency.
+            PostgresRepository::dummy_verify(&payload.password);
+        }
     }
 
     Ok(Status::Ok)
@@ -94,6 +103,14 @@ pub async fn get_me(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: 
 
 pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
     rocket_okapi::openapi_get_routes_spec![post_user, post_user_login, post_user_logout, put_user, delete_user_route, get_me]
+}
+
+/// Check whether a sqlx error is a PostgreSQL unique-constraint violation (error code 23505).
+fn is_unique_violation(err: &sqlx::error::Error) -> bool {
+    if let sqlx::error::Error::Database(db_err) = err {
+        return db_err.code().is_some_and(|code| code == "23505");
+    }
+    false
 }
 
 #[cfg(test)]
