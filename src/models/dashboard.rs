@@ -14,8 +14,8 @@ pub struct BudgetPerDayResponse {
 #[derive(Serialize, Debug, Ord, PartialOrd, Eq, PartialEq, Clone, JsonSchema)]
 pub struct SpentPerCategoryResponse {
     pub category_name: String,
-    pub budgeted_value: i32,
-    pub amount_spent: i32,
+    pub budgeted_value: i64,
+    pub amount_spent: i64,
     /// Percentage spent in basis points (percent * 100). Example: 2534 = 25.34%.
     #[schemars(description = "Percentage spent in basis points (percent * 100). Example: 2534 = 25.34%.")]
     pub percentage_spent: i32,
@@ -51,8 +51,8 @@ fn spent_per_category_list_schema(generator: &mut schemars::r#gen::SchemaGenerat
 
 #[derive(Serialize, Debug, sqlx::FromRow, JsonSchema)]
 pub struct MonthlyBurnInResponse {
-    pub total_budget: i32,
-    pub spent_budget: i32,
+    pub total_budget: i64,
+    pub spent_budget: i64,
     pub current_day: i32,
     pub days_in_period: i32,
 }

@@ -4,7 +4,7 @@ use crate::models::transaction::Transaction;
 use chrono::NaiveDate;
 
 #[allow(dead_code)]
-pub fn add_transaction(tx: &Transaction, account: &Account) -> i32 {
+pub fn add_transaction(tx: &Transaction, account: &Account) -> i64 {
     match tx.category.category_type {
         CategoryType::Incoming => tx.amount,
         CategoryType::Outgoing => -tx.amount,
@@ -25,11 +25,11 @@ pub fn account_involved(account: &Account, transaction: &Transaction) -> bool {
 }
 
 #[allow(dead_code)]
-pub fn balance_on_date(date: Option<&NaiveDate>, account: &Account, transactions: &[Transaction]) -> i32 {
+pub fn balance_on_date(date: Option<&NaiveDate>, account: &Account, transactions: &[Transaction]) -> i64 {
     transactions
         .iter()
         .filter(|tx| account_involved(account, tx) && (date.is_none() || &tx.occurred_at < date.unwrap()))
-        .fold(account.balance as i32, |acc, tx| acc + add_transaction(tx, account))
+        .fold(account.balance, |acc, tx| acc + add_transaction(tx, account))
 }
 
 #[cfg(test)]

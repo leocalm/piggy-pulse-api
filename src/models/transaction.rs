@@ -11,7 +11,7 @@ use validator::Validate;
 pub struct Transaction {
     pub id: Uuid,
     pub user_id: Uuid,
-    pub amount: i32,
+    pub amount: i64,
     pub description: String,
     pub occurred_at: NaiveDate,
     pub category: Category,
@@ -23,7 +23,7 @@ pub struct Transaction {
 #[derive(Deserialize, Debug, Validate, JsonSchema)]
 pub struct TransactionRequest {
     #[validate(range(min = 0))]
-    pub amount: i32,
+    pub amount: i64,
     #[validate(length(min = 3))]
     pub description: String,
     pub occurred_at: NaiveDate,
@@ -36,7 +36,7 @@ pub struct TransactionRequest {
 #[derive(Serialize, Debug, JsonSchema)]
 pub struct TransactionResponse {
     pub id: Uuid,
-    pub amount: i32,
+    pub amount: i64,
     pub description: String,
     pub occurred_at: NaiveDate,
     pub category: CategoryResponse,

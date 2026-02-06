@@ -208,7 +208,7 @@ mod tests {
         account_json["id"].as_str().expect("account id").to_string()
     }
 
-    async fn create_transaction(client: &Client, category_id: &str, from_account_id: &str, occurred_at: NaiveDate, amount: i32) {
+    async fn create_transaction(client: &Client, category_id: &str, from_account_id: &str, occurred_at: NaiveDate, amount: i64) {
         let payload = serde_json::json!({
             "amount": amount,
             "description": "Test transaction",

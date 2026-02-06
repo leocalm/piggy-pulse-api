@@ -107,8 +107,8 @@ ORDER BY a.name, d.day
         #[derive(sqlx::FromRow)]
         struct SpentPerCategoryRow {
             category_name: String,
-            budgeted_value: i32,
-            amount_spent: i32,
+            budgeted_value: i64,
+            amount_spent: i64,
         }
 
         let rows = sqlx::query_as::<_, SpentPerCategoryRow>(
@@ -125,7 +125,7 @@ WITH period_transactions AS (
 )
 SELECT c.name                                AS category_name,
        bc.budgeted_value,
-       COALESCE(SUM(pt.amount), 0)::int      AS amount_spent
+       COALESCE(SUM(pt.amount), 0)::bigint   AS amount_spent
 FROM budget_category bc
 JOIN  category c                ON c.id  = bc.category_id
 LEFT JOIN period_transactions pt ON c.id = pt.category_id
@@ -149,8 +149,8 @@ GROUP BY c.name, bc.budgeted_value
                     if row.budgeted_value <= 0 {
                         0
                     } else {
-                        let spent = i64::from(row.amount_spent).max(0);
-                        let budgeted = i64::from(row.budgeted_value);
+                        let spent = row.amount_spent.max(0);
+                        let budgeted = row.budgeted_value;
                         let basis_points = (spent * 10_000) / budgeted;
                         basis_points.clamp(i32::MIN as i64, i32::MAX as i64) as i32
                     }
