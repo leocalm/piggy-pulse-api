@@ -1,3 +1,4 @@
+-- Add down migration script here
 DROP TABLE IF EXISTS budget_period;
 DROP TABLE IF EXISTS budget_category;
 DROP TABLE IF EXISTS budget;
