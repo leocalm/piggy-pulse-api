@@ -31,7 +31,6 @@ pub struct CategoryRequest {
     pub name: String,
     #[validate(length(min = 3))]
     pub color: String,
-    #[validate(length(min = 3))]
     pub icon: String,
     pub parent_id: Option<Uuid>,
     pub category_type: CategoryType,
