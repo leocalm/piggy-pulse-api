@@ -84,7 +84,7 @@ impl<'a> OpenApiFromRequest<'a> for CurrentUser {
         responses.responses.insert(
             "401".to_string(),
             RefOr::Object(Response {
-                description: "Unauthorized - Authentication required".to_string(),
+                description: "Unauthorized".to_string(),
                 ..Default::default()
             }),
         );
