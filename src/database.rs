@@ -5,6 +5,7 @@ pub mod budget_period;
 pub mod category;
 pub mod currency;
 pub mod dashboard;
+pub mod overlay;
 pub mod postgres_repository;
 pub mod session;
 pub mod transaction;

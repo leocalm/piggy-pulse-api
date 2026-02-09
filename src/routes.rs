@@ -7,6 +7,7 @@ pub mod currency;
 pub mod dashboard;
 pub mod error;
 pub mod health;
+pub mod overlay;
 pub mod transaction;
 pub mod user;
 pub mod vendor;

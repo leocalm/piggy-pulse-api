@@ -41,7 +41,7 @@ pub async fn list_budget_periods(
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let params = CursorParams::from_query(cursor, limit)?;
 
-    let list = repo.list_budget_periods(&params, &current_user.id).await?;
+    let list = repo.list_budget_periods_with_metrics(&params, &current_user.id).await?;
     let responses: Vec<BudgetPeriodResponse> = list.iter().map(BudgetPeriodResponse::from).collect();
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.id)))
 }
@@ -55,7 +55,7 @@ pub async fn get_current_budget_period(
     current_user: CurrentUser,
 ) -> Result<Json<BudgetPeriodResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
-    let budget_period = repo.get_current_budget_period(&current_user.id).await?;
+    let budget_period = repo.get_current_budget_period_with_metrics(&current_user.id).await?;
     Ok(Json(BudgetPeriodResponse::from(&budget_period)))
 }
 
@@ -91,7 +91,12 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
         list_budget_periods,
         get_current_budget_period,
         put_budget_period,
-        delete_budget_period
+        delete_budget_period,
+        get_period_schedule,
+        create_period_schedule,
+        update_period_schedule,
+        delete_period_schedule,
+        get_period_gaps
     ]
 }
 
@@ -126,4 +131,71 @@ mod tests {
 
         assert_eq!(response.status(), Status::BadRequest);
     }
+}
+
+// ===== Period Schedule Routes =====
+
+/// Get period schedule configuration
+#[openapi(tag = "Budget Periods")]
+#[get("/schedule")]
+pub async fn get_period_schedule(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+) -> Result<Json<crate::models::budget_period::PeriodScheduleResponse>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let schedule = repo.get_period_schedule(&current_user.id).await?;
+    Ok(Json(crate::models::budget_period::PeriodScheduleResponse::from(&schedule)))
+}
+
+/// Create period schedule configuration
+#[openapi(tag = "Budget Periods")]
+#[post("/schedule", data = "<payload>")]
+pub async fn create_period_schedule(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    payload: Json<crate::models::budget_period::PeriodScheduleRequest>,
+) -> Result<Json<crate::models::budget_period::PeriodScheduleResponse>, AppError> {
+    payload.validate()?;
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let schedule = repo.create_period_schedule(&payload, &current_user.id).await?;
+    Ok(Json(crate::models::budget_period::PeriodScheduleResponse::from(&schedule)))
+}
+
+/// Update period schedule configuration
+#[openapi(tag = "Budget Periods")]
+#[put("/schedule", data = "<payload>")]
+pub async fn update_period_schedule(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    payload: Json<crate::models::budget_period::PeriodScheduleRequest>,
+) -> Result<Json<crate::models::budget_period::PeriodScheduleResponse>, AppError> {
+    payload.validate()?;
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let schedule = repo.update_period_schedule(&payload, &current_user.id).await?;
+    Ok(Json(crate::models::budget_period::PeriodScheduleResponse::from(&schedule)))
+}
+
+/// Delete period schedule configuration
+#[openapi(tag = "Budget Periods")]
+#[delete("/schedule")]
+pub async fn delete_period_schedule(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser) -> Result<Status, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    repo.delete_period_schedule(&current_user.id).await?;
+    Ok(Status::NoContent)
+}
+
+/// Get unassigned transactions (gaps)
+#[openapi(tag = "Budget Periods")]
+#[get("/gaps")]
+pub async fn get_period_gaps(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+) -> Result<Json<crate::models::budget_period::GapsResponse>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let gaps = repo.get_period_gaps(&current_user.id).await?;
+    Ok(Json(gaps))
 }

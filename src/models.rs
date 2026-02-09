@@ -5,6 +5,7 @@ pub mod budget_period;
 pub mod category;
 pub mod currency;
 pub mod dashboard;
+pub mod overlay;
 pub mod pagination;
 pub mod session;
 pub mod transaction;
