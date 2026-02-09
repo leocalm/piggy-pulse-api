@@ -71,8 +71,6 @@ pub struct BudgetPeriodRequest {
     pub name: String,
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
-    #[serde(default)]
-    pub copy_budgets_from_previous: bool,
 }
 
 fn validate_date_range(request: &BudgetPeriodRequest) -> Result<(), ValidationError> {
