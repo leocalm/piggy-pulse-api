@@ -131,17 +131,29 @@ All endpoints are mounted under `/api/v1` by default (configurable via `api.base
 - `/api/v1/health` — `GET /` runs `SELECT 1` against the pool; returns `{"status":"ok","database":"connected"}` or `503`
 - `/api/v1/users` — create, login, logout, update, delete, `GET /me`
 - `/api/v1/accounts` — CRUD + cursor-paginated list; list requires mandatory `period_id` query parameter to filter accounts by budget period. Returns 400 if `period_id` is missing ("Missing period_id query parameter") or invalid.
+  - `GET /summary` (PR #89) — Returns account totals: `total_net_worth`, `total_assets`, `total_liabilities`
+  - `GET /options` (PR #90) — Returns account options for dropdowns: `[{id, name, icon}, ...]`
 - `/api/v1/currency` — CRUD; lookup by code (`GET /<code>`) or name (`GET /name/<name>`)
 - `/api/v1/categories` — CRUD + cursor-paginated list; `GET /not-in-budget` returns Outgoing categories not yet associated with a budget
+  - `GET /options` (PR #91) — Returns category options for dropdowns: `[{id, name, icon, category_type}, ...]`
 - `/api/v1/budgets` — CRUD + cursor-paginated list
 - `/api/v1/budget-categories` — CRUD + cursor-paginated list
 - `/api/v1/budget_period` — CRUD + cursor-paginated list; `GET /current` returns the period whose date range covers today
 - `/api/v1/transactions` — CRUD + cursor-paginated list; list accepts optional `period_id` query filter
-- `/api/v1/vendors` — CRUD + cursor-paginated list; `GET /with_status?order_by=<name|most_used|more_recent>` returns vendors enriched with transaction-count stats
+  - `GET /summary?period_id=<uuid>` (PR #88) — Returns transaction summary statistics for the specified period
+- `/api/v1/vendors` — CRUD + cursor-paginated list; `GET /with_status?order_by=<name|most_used|more_recent>` returns vendors enriched with transaction-count stats (PR #92)
 - `/api/v1/dashboard` — `budget-per-day`, `spent-per-category`, `monthly-burn-in`, `month-progress`, `recent-transactions`, `dashboard` (all accept `period_id`)
   `spent-per-category` returns `percentage_spent` in basis points (percent * 100). Example: 2534 = 25.34%.
+- `/api/v1/overlays` — period schedule management and overlay features
 
 404 and 409 responses are caught under `/api/v1` by default and returned as `{"message":"..."}` JSON.
+
+#### OpenAPI Documentation
+
+All endpoints are automatically documented in OpenAPI 3.0 format via `rocket_okapi`:
+- **Spec**: Available at `GET /api/v1/openapi.json`
+- **Interactive UI**: Available at `GET /api/v1/docs` (Swagger UI)
+- **Source**: Annotations in route handlers using `#[openapi(tag = "...")]` and doc comments
 
 ### Pagination
 
@@ -173,6 +185,36 @@ List endpoints use keyset (cursor-based) pagination via `CursorParams` (`src/mod
 3. Add concrete methods on `PostgresRepository` in `src/database/<entity>.rs`.
 4. Add route handlers in `src/routes/<entity>.rs` and mount in `src/lib.rs`.
 5. Add any needed sample data helpers in `src/test_utils.rs` for unit tests.
+
+### Adding a New Endpoint
+
+When adding a new endpoint, ensure it includes:
+
+1. **OpenAPI Documentation**: Add `#[openapi(tag = "...")]` annotation above the route macro
+   ```rust
+   /// Brief description of what the endpoint does
+   #[openapi(tag = "Accounts")]
+   #[get("/summary")]
+   pub async fn get_accounts_summary(...) -> Result<...> { ... }
+   ```
+
+2. **Route Registration**: Ensure the handler is included in `rocket_okapi::openapi_get_routes_spec![]` macro in `src/routes/<entity>.rs`
+   ```rust
+   pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
+       rocket_okapi::openapi_get_routes_spec![
+           existing_handler,
+           new_handler,  // Add new handler here
+       ]
+   }
+   ```
+
+3. **OpenAPI Type Schemas**: Response types must derive `JsonSchema` for automatic OpenAPI documentation
+   ```rust
+   #[derive(Serialize, Deserialize, JsonSchema)]
+   pub struct MyResponse { ... }
+   ```
+
+4. **Documentation**: The OpenAPI spec is automatically generated from code annotations and will be available at `/api/v1/openapi.json` after the next build.
 
 ### Route Handler Pattern
 
