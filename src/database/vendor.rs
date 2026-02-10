@@ -276,4 +276,20 @@ LIMIT $4
 
         Ok(vendor)
     }
+
+    pub async fn list_all_vendors(&self, user_id: &Uuid) -> Result<Vec<Vendor>, AppError> {
+        let vendors = sqlx::query_as::<_, Vendor>(
+            r#"
+            SELECT id, user_id, name, created_at
+            FROM vendor
+            WHERE user_id = $1
+            ORDER BY name ASC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(vendors)
+    }
 }
