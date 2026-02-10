@@ -47,6 +47,14 @@ pub struct CategoryResponse {
 }
 
 #[derive(Serialize, Debug, Clone, JsonSchema)]
+pub struct CategoryOption {
+    pub id: Uuid,
+    pub name: String,
+    pub icon: String,
+    pub category_type: CategoryType,
+}
+
+#[derive(Serialize, Debug, Clone, JsonSchema)]
 pub struct CategoryStats {
     #[schemars(description = "Total amount used in the selected budget period.", example = "category_used_in_period_example")]
     pub used_in_period: i64,
@@ -90,6 +98,17 @@ impl From<&Category> for CategoryResponse {
             color: category.color.clone(),
             icon: category.icon.clone(),
             parent_id: category.parent_id,
+            category_type: category.category_type,
+        }
+    }
+}
+
+impl From<&Category> for CategoryOption {
+    fn from(category: &Category) -> Self {
+        Self {
+            id: category.id,
+            name: category.name.clone(),
+            icon: category.icon.clone(),
             category_type: category.category_type,
         }
     }
