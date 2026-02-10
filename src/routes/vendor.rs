@@ -55,6 +55,16 @@ pub async fn list_all_vendors(
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.vendor.id)))
 }
 
+/// Get vendor options (list of all vendors for dropdowns/selection)
+#[openapi(tag = "Vendors")]
+#[get("/options")]
+pub async fn get_vendor_options(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser) -> Result<Json<Vec<VendorResponse>>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let vendors = repo.list_all_vendors(&current_user.id).await?;
+    let responses: Vec<VendorResponse> = vendors.iter().map(VendorResponse::from).collect();
+    Ok(Json(responses))
+}
+
 /// Get a vendor by ID
 #[openapi(tag = "Vendors")]
 #[get("/<id>")]
@@ -114,8 +124,15 @@ pub async fn get_vendors_with_status(
 }
 
 pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
-    let (routes, spec) =
-        rocket_okapi::openapi_get_routes_spec![create_vendor, list_all_vendors, get_vendor, delete_vendor, put_vendor, get_vendors_with_status];
+    let (routes, spec) = rocket_okapi::openapi_get_routes_spec![
+        create_vendor,
+        list_all_vendors,
+        get_vendor_options,
+        get_vendor,
+        delete_vendor,
+        put_vendor,
+        get_vendors_with_status
+    ];
     (routes, spec)
 }
 
@@ -387,5 +404,18 @@ mod tests {
 
         let response = client.get("/api/v1/vendors/?limit=50").dispatch().await;
         assert_eq!(response.status(), Status::BadRequest);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_get_vendor_options() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let response = client.get("/api/v1/vendors/options").dispatch().await;
+
+        assert_eq!(response.status(), Status::Ok);
     }
 }
