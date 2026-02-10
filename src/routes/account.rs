@@ -2,7 +2,7 @@ use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::RateLimit;
-use crate::models::account::{AccountListResponse, AccountRequest, AccountResponse};
+use crate::models::account::{AccountListResponse, AccountRequest, AccountResponse, AccountsSummaryResponse};
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use crate::service::account::AccountService;
 use rocket::serde::json::Json;
@@ -94,8 +94,28 @@ pub async fn put_account(
     Ok(Json(AccountResponse::from(&account)))
 }
 
+/// Get accounts summary (Total Net Worth, Total Assets, Total Liabilities)
+#[openapi(tag = "Accounts")]
+#[get("/summary")]
+pub async fn get_accounts_summary(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser) -> Result<Json<AccountsSummaryResponse>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let (total_net_worth, total_assets, total_liabilities) = repo.get_accounts_summary(&current_user.id).await?;
+    Ok(Json(AccountsSummaryResponse {
+        total_net_worth,
+        total_assets,
+        total_liabilities,
+    }))
+}
+
 pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
-    rocket_okapi::openapi_get_routes_spec![create_account, list_all_accounts, get_account, delete_account, put_account]
+    rocket_okapi::openapi_get_routes_spec![
+        create_account,
+        list_all_accounts,
+        get_account,
+        delete_account,
+        put_account,
+        get_accounts_summary
+    ]
 }
 
 #[cfg(test)]
@@ -377,5 +397,90 @@ mod tests {
         let nonexistent_id = Uuid::new_v4();
         let response = client.get(format!("/api/v1/accounts/?period_id={}", nonexistent_id)).dispatch().await;
         assert_eq!(response.status(), Status::NotFound);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_accounts_summary() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+        create_user_and_auth(&client).await;
+        create_currency(&client, "TST").await;
+
+        // Create asset accounts: Checking, Savings, Wallet
+        create_account(&client, &format!("Checking {}", Uuid::new_v4()), "TST", 100_000).await;
+        create_account(&client, &format!("Savings {}", Uuid::new_v4()), "TST", 50_000).await;
+
+        // Create wallet account
+        let wallet_payload = serde_json::json!({
+            "name": format!("Wallet {}", Uuid::new_v4()),
+            "color": "#123456",
+            "icon": "wallet",
+            "account_type": "Wallet",
+            "currency": "TST",
+            "balance": 25_000,
+            "spend_limit": null
+        });
+        let wallet_response = client
+            .post("/api/v1/accounts/")
+            .header(ContentType::JSON)
+            .body(wallet_payload.to_string())
+            .dispatch()
+            .await;
+        assert_eq!(wallet_response.status(), Status::Created);
+
+        // Create credit card liability
+        let credit_card_payload = serde_json::json!({
+            "name": format!("Credit Card {}", Uuid::new_v4()),
+            "color": "#654321",
+            "icon": "card",
+            "account_type": "CreditCard",
+            "currency": "TST",
+            "balance": 15_000,
+            "spend_limit": null
+        });
+        let cc_response = client
+            .post("/api/v1/accounts/")
+            .header(ContentType::JSON)
+            .body(credit_card_payload.to_string())
+            .dispatch()
+            .await;
+        assert_eq!(cc_response.status(), Status::Created);
+
+        // Get summary
+        let response = client.get("/api/v1/accounts/summary").dispatch().await;
+        assert_eq!(response.status(), Status::Ok);
+
+        let body = response.into_string().await.expect("summary response body");
+        let json: Value = serde_json::from_str(&body).expect("valid summary json");
+
+        // Total assets: 100_000 + 50_000 + 25_000 = 175_000
+        // Total liabilities: 15_000
+        // Total net worth: 175_000 - 15_000 = 160_000
+        assert_eq!(json["total_assets"].as_i64().unwrap_or_default(), 175_000);
+        assert_eq!(json["total_liabilities"].as_i64().unwrap_or_default(), 15_000);
+        assert_eq!(json["total_net_worth"].as_i64().unwrap_or_default(), 160_000);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_accounts_summary_empty() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+        create_user_and_auth(&client).await;
+
+        let response = client.get("/api/v1/accounts/summary").dispatch().await;
+        assert_eq!(response.status(), Status::Ok);
+
+        let body = response.into_string().await.expect("summary response body");
+        let json: Value = serde_json::from_str(&body).expect("valid summary json");
+
+        assert_eq!(json["total_assets"].as_i64().unwrap_or_default(), 0);
+        assert_eq!(json["total_liabilities"].as_i64().unwrap_or_default(), 0);
+        assert_eq!(json["total_net_worth"].as_i64().unwrap_or_default(), 0);
     }
 }

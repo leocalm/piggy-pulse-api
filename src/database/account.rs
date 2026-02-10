@@ -523,6 +523,36 @@ ORDER BY a.id, d.day
         Ok(())
     }
 
+    pub async fn get_accounts_summary(&self, user_id: &Uuid) -> Result<(i64, i64, i64), AppError> {
+        #[derive(sqlx::FromRow)]
+        struct SummaryRow {
+            total_assets: i64,
+            total_liabilities: i64,
+        }
+
+        let row = sqlx::query_as::<_, SummaryRow>(
+            r#"
+            SELECT
+                COALESCE(SUM(CASE
+                    WHEN account_type::text IN ('Checking', 'Savings', 'Wallet') THEN balance
+                    ELSE 0
+                END), 0)::bigint AS total_assets,
+                COALESCE(SUM(CASE
+                    WHEN account_type::text = 'CreditCard' THEN balance
+                    ELSE 0
+                END), 0)::bigint AS total_liabilities
+            FROM account
+            WHERE user_id = $1
+            "#,
+        )
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let total_net_worth = row.total_assets - row.total_liabilities;
+        Ok((total_net_worth, row.total_assets, row.total_liabilities))
+    }
+
     pub async fn update_account(&self, id: &Uuid, request: &AccountRequest, user_id: &Uuid) -> Result<Account, AppError> {
         let name_exists: bool = sqlx::query_scalar(
             r#"
