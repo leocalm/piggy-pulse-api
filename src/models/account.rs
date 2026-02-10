@@ -109,3 +109,10 @@ pub struct AccountBalancePerDay {
     pub date: String,
     pub balance: i64,
 }
+
+#[derive(Serialize, Debug, JsonSchema)]
+pub struct AccountsSummaryResponse {
+    pub total_net_worth: i64,
+    pub total_assets: i64,
+    pub total_liabilities: i64,
+}
