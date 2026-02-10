@@ -16,7 +16,13 @@ use validator::Validate;
 /// Create a new user (sign up)
 #[openapi(tag = "Users")]
 #[post("/", data = "<payload>")]
-pub async fn post_user(pool: &State<PgPool>, _rate_limit: AuthRateLimit, payload: Json<UserRequest>) -> Result<(Status, Json<UserResponse>), AppError> {
+pub async fn post_user(
+    pool: &State<PgPool>,
+    config: &State<Config>,
+    _rate_limit: AuthRateLimit,
+    cookies: &CookieJar<'_>,
+    payload: Json<UserRequest>,
+) -> Result<(Status, Json<UserResponse>), AppError> {
     payload.validate()?;
 
     let repo = PostgresRepository { pool: pool.inner().clone() };
@@ -25,7 +31,22 @@ pub async fn post_user(pool: &State<PgPool>, _rate_limit: AuthRateLimit, payload
     // handle duplicates. This avoids a separate SELECT that would leak timing
     // information about whether an account exists.
     match repo.create_user(&payload.name, &payload.email, &payload.password).await {
-        Ok(user) => Ok((Status::Created, Json(UserResponse::from(&user)))),
+        Ok(user) => {
+            let ttl_seconds = config.session.ttl_seconds.max(60);
+            let expires_at = chrono::Utc::now() + chrono::Duration::seconds(ttl_seconds);
+            let session = repo.create_session(&user.id, expires_at).await?;
+            let value = format!("{}:{}", session.id, user.id);
+            cookies.add_private(
+                Cookie::build(("user", value))
+                    .path("/")
+                    .secure(config.session.cookie_secure)
+                    .http_only(true)
+                    .same_site(SameSite::Lax)
+                    .max_age(Duration::seconds(ttl_seconds))
+                    .build(),
+            );
+            Ok((Status::Created, Json(UserResponse::from(&user))))
+        }
         Err(AppError::Db { ref source, .. }) if is_unique_violation(source) => Err(AppError::BadRequest("Unable to create account".to_string())),
         Err(e) => Err(e),
     }
