@@ -1,5 +1,4 @@
 pub mod account;
-pub mod budget;
 pub mod budget_category;
 pub mod budget_period;
 pub mod category;
@@ -8,6 +7,7 @@ pub mod dashboard;
 pub mod overlay;
 pub mod pagination;
 pub mod session;
+pub mod settings;
 pub mod transaction;
 pub mod transaction_summary;
 pub mod user;

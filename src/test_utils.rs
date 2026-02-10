@@ -1,5 +1,4 @@
 use crate::models::account::{Account, AccountRequest, AccountType};
-use crate::models::budget::{Budget, BudgetRequest};
 use crate::models::budget_category::{BudgetCategory, BudgetCategoryRequest};
 use crate::models::budget_period::BudgetPeriod;
 use crate::models::category::{Category, CategoryType};
@@ -72,17 +71,6 @@ impl From<&BudgetCategoryRequest> for BudgetCategory {
             },
             budgeted_value: request.budgeted_value,
             ..BudgetCategory::default()
-        }
-    }
-}
-
-impl From<&BudgetRequest> for Budget {
-    fn from(request: &BudgetRequest) -> Self {
-        Budget {
-            id: Uuid::new_v4(),
-            name: request.name.clone(),
-            start_day: request.start_day,
-            ..Budget::default()
         }
     }
 }

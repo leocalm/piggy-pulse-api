@@ -130,13 +130,13 @@ All endpoints are mounted under `/api/v1` by default (configurable via `api.base
 
 - `/api/v1/health` — `GET /` runs `SELECT 1` against the pool; returns `{"status":"ok","database":"connected"}` or `503`
 - `/api/v1/users` — create, login, logout, update, delete, `GET /me`
+- `/api/v1/settings` — GET (retrieve user settings), PUT (create/update settings). Settings are automatically created with defaults on user signup. Valid themes: `light`, `dark`, `auto`. Valid languages: `en`, `es`, `pt`, `fr`, `de`.
 - `/api/v1/accounts` — CRUD + cursor-paginated list; list requires mandatory `period_id` query parameter to filter accounts by budget period. Returns 400 if `period_id` is missing ("Missing period_id query parameter") or invalid.
   - `GET /summary` (PR #89) — Returns account totals: `total_net_worth`, `total_assets`, `total_liabilities`
   - `GET /options` (PR #90) — Returns account options for dropdowns: `[{id, name, icon}, ...]`
 - `/api/v1/currency` — CRUD; lookup by code (`GET /<code>`) or name (`GET /name/<name>`)
 - `/api/v1/categories` — CRUD + cursor-paginated list; `GET /not-in-budget` returns Outgoing categories not yet associated with a budget
   - `GET /options` (PR #91) — Returns category options for dropdowns: `[{id, name, icon, category_type}, ...]`
-- `/api/v1/budgets` — CRUD + cursor-paginated list
 - `/api/v1/budget-categories` — CRUD + cursor-paginated list
 - `/api/v1/budget_period` — CRUD + cursor-paginated list; `GET /current` returns the period whose date range covers today
 - `/api/v1/transactions` — CRUD + cursor-paginated list; list accepts optional `period_id` query filter

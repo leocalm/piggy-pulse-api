@@ -32,6 +32,11 @@ pub async fn post_user(
     // information about whether an account exists.
     match repo.create_user(&payload.name, &payload.email, &payload.password).await {
         Ok(user) => {
+            // Create default settings for the new user (best-effort, non-critical)
+            if let Err(e) = repo.create_default_settings(&user.id).await {
+                tracing::warn!("Failed to create default settings for user {}: {}", user.id, e);
+            }
+
             let ttl_seconds = config.session.ttl_seconds.max(60);
             let expires_at = chrono::Utc::now() + chrono::Duration::seconds(ttl_seconds);
             let session = repo.create_session(&user.id, expires_at).await?;

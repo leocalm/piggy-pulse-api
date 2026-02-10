@@ -1,5 +1,4 @@
 pub mod account;
-pub mod budget;
 pub mod budget_category;
 pub mod budget_period;
 pub mod category;
@@ -8,6 +7,7 @@ pub mod dashboard;
 pub mod error;
 pub mod health;
 pub mod overlay;
+pub mod settings;
 pub mod transaction;
 pub mod user;
 pub mod vendor;
