@@ -2,7 +2,7 @@ use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::RateLimit;
-use crate::models::account::{AccountListResponse, AccountRequest, AccountResponse, AccountsSummaryResponse};
+use crate::models::account::{AccountListResponse, AccountOptionResponse, AccountRequest, AccountResponse, AccountsSummaryResponse};
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use crate::service::account::AccountService;
 use rocket::serde::json::Json;
@@ -107,6 +107,20 @@ pub async fn get_accounts_summary(pool: &State<PgPool>, _rate_limit: RateLimit, 
     }))
 }
 
+/// Get account options for dropdowns (id, name, icon)
+#[openapi(tag = "Accounts")]
+#[get("/options")]
+pub async fn get_account_options(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+) -> Result<Json<Vec<AccountOptionResponse>>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let options = repo.get_account_options(&current_user.id).await?;
+    let responses = options.into_iter().map(|(id, name, icon)| AccountOptionResponse { id, name, icon }).collect();
+    Ok(Json(responses))
+}
+
 pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
     rocket_okapi::openapi_get_routes_spec![
         create_account,
@@ -114,7 +128,8 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
         get_account,
         delete_account,
         put_account,
-        get_accounts_summary
+        get_accounts_summary,
+        get_account_options
     ]
 }
 
@@ -482,5 +497,62 @@ mod tests {
         assert_eq!(json["total_assets"].as_i64().unwrap_or_default(), 0);
         assert_eq!(json["total_liabilities"].as_i64().unwrap_or_default(), 0);
         assert_eq!(json["total_net_worth"].as_i64().unwrap_or_default(), 0);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_account_options_empty() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+        create_user_and_auth(&client).await;
+
+        let response = client.get("/api/v1/accounts/options").dispatch().await;
+        assert_eq!(response.status(), Status::Ok);
+
+        let body = response.into_string().await.expect("options response body");
+        let json: Value = serde_json::from_str(&body).expect("valid options json");
+
+        assert!(json.is_array());
+        assert_eq!(json.as_array().unwrap().len(), 0);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_account_options_multiple_accounts() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+        create_user_and_auth(&client).await;
+        create_currency(&client, "TST").await;
+
+        // Create multiple accounts to test sorting
+        create_account(&client, "Zebra Account", "TST", 100_000).await;
+        create_account(&client, "Apple Account", "TST", 50_000).await;
+        create_account(&client, "Banana Account", "TST", 25_000).await;
+
+        let response = client.get("/api/v1/accounts/options").dispatch().await;
+        assert_eq!(response.status(), Status::Ok);
+
+        let body = response.into_string().await.expect("options response body");
+        let json: Value = serde_json::from_str(&body).expect("valid options json");
+
+        assert!(json.is_array());
+        let accounts = json.as_array().unwrap();
+        assert_eq!(accounts.len(), 3);
+
+        // Verify sorting by name (alphabetically)
+        assert_eq!(accounts[0]["name"].as_str().unwrap_or_default(), "Apple Account");
+        assert_eq!(accounts[1]["name"].as_str().unwrap_or_default(), "Banana Account");
+        assert_eq!(accounts[2]["name"].as_str().unwrap_or_default(), "Zebra Account");
+
+        // Verify all required fields are present
+        for account in accounts {
+            assert!(account["id"].as_str().is_some());
+            assert!(account["name"].as_str().is_some());
+            assert!(account["icon"].as_str().is_some());
+        }
     }
 }
