@@ -2,7 +2,7 @@ use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::RateLimit;
-use crate::models::category::{CategoryRequest, CategoryResponse, CategoryWithStatsResponse};
+use crate::models::category::{CategoryOption, CategoryRequest, CategoryResponse, CategoryWithStatsResponse};
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use rocket::http::Status;
 use rocket::serde::json::Json;
@@ -47,6 +47,16 @@ pub async fn list_all_categories(
     let categories = repo.list_categories(&params, &current_user.id, &period).await?;
     let responses: Vec<CategoryWithStatsResponse> = categories.iter().map(CategoryWithStatsResponse::from).collect();
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.category.id)))
+}
+
+/// Get category options (list of all categories for dropdowns/selection)
+#[openapi(tag = "Categories")]
+#[get("/options")]
+pub async fn get_category_options(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser) -> Result<Json<Vec<CategoryOption>>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let categories = repo.list_all_categories(&current_user.id).await?;
+    let options: Vec<CategoryOption> = categories.iter().map(CategoryOption::from).collect();
+    Ok(Json(options))
 }
 
 /// Get a category by ID
@@ -110,6 +120,7 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
     rocket_okapi::openapi_get_routes_spec![
         create_category,
         list_all_categories,
+        get_category_options,
         get_category,
         delete_category,
         put_category,
@@ -326,5 +337,18 @@ mod tests {
         assert_eq!(category["used_in_period"].as_i64(), Some(500));
         assert_eq!(category["transaction_count"].as_i64(), Some(1));
         assert_eq!(category["difference_vs_average_percentage"].as_i64(), Some(100));
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_get_category_options() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let response = client.get("/api/v1/categories/options").dispatch().await;
+
+        assert_eq!(response.status(), Status::Ok);
     }
 }
