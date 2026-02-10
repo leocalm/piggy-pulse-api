@@ -2,10 +2,11 @@ use crate::database::category::category_type_from_db;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::account::Account;
-use crate::models::category::Category;
+use crate::models::category::{Category, CategoryType};
 use crate::models::currency::Currency;
 use crate::models::pagination::CursorParams;
 use crate::models::transaction::{Transaction, TransactionRequest};
+use crate::models::transaction_summary::TransactionSummary;
 use crate::models::vendor::Vendor;
 use chrono::{DateTime, NaiveDate, Utc};
 use uuid::Uuid;
@@ -430,5 +431,53 @@ impl PostgresRepository {
             .await?;
 
         Ok(Transaction::from(row))
+    }
+
+    pub async fn get_transaction_summary(&self, period_id: &Uuid, user_id: &Uuid) -> Result<TransactionSummary, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct SummaryRow {
+            category_type: String,
+            total_amount: i64,
+        }
+
+        let rows = sqlx::query_as::<_, SummaryRow>(
+            r#"
+            SELECT c.category_type::text, COALESCE(SUM(t.amount), 0) as total_amount
+            FROM transaction t
+            JOIN category c ON t.category_id = c.id
+            CROSS JOIN budget_period bp
+            WHERE bp.id = $1
+                AND t.user_id = $2
+                AND t.occurred_at >= bp.start_date
+                AND t.occurred_at <= bp.end_date
+            GROUP BY c.category_type
+            "#,
+        )
+        .bind(period_id)
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut total_income = 0i32;
+        let mut total_expense = 0i32;
+
+        for row in rows {
+            let category_type = category_type_from_db(&row.category_type);
+            let amount = row.total_amount as i32;
+
+            match category_type {
+                CategoryType::Incoming => total_income += amount,
+                CategoryType::Outgoing => total_expense += amount,
+                CategoryType::Transfer => {} // Transfers are not counted in summary
+            }
+        }
+
+        let net_difference = total_income - total_expense;
+
+        Ok(TransactionSummary {
+            total_income,
+            total_expense,
+            net_difference,
+        })
     }
 }
