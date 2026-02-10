@@ -11,6 +11,15 @@ use crate::models::vendor::VendorResponse;
 use chrono::{DateTime, NaiveDate, Utc};
 use uuid::Uuid;
 
+// Helper struct to group a few transaction fields so we don't exceed the function
+// parameter limit when checking overlay inclusion rules.
+struct SimpleTransactionRef<'a> {
+    id: &'a Uuid,
+    category_id: &'a Uuid,
+    from_account_id: &'a Uuid,
+    vendor_id: &'a Option<Uuid>,
+}
+
 impl PostgresRepository {
     // ===== Create Overlay =====
 
@@ -22,23 +31,13 @@ impl PostgresRepository {
         #[derive(sqlx::FromRow)]
         struct OverlayRow {
             id: Uuid,
-            user_id: Uuid,
-            name: String,
-            icon: Option<String>,
-            start_date: NaiveDate,
-            end_date: NaiveDate,
-            inclusion_mode: InclusionMode,
-            total_cap_amount: Option<i64>,
-            rules: sqlx::types::Json<OverlayRules>,
-            created_at: DateTime<Utc>,
-            updated_at: DateTime<Utc>,
         }
 
         let overlay_row = sqlx::query_as::<_, OverlayRow>(
             r#"
             INSERT INTO overlays (user_id, name, icon, start_date, end_date, inclusion_mode, total_cap_amount, rules)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id, user_id, name, icon, start_date, end_date, inclusion_mode, total_cap_amount, rules, created_at, updated_at
+            RETURNING id
             "#,
         )
         .bind(user_id)
@@ -258,13 +257,7 @@ impl PostgresRepository {
     pub async fn update_overlay(&self, overlay_id: &Uuid, request: &OverlayRequest, user_id: &Uuid) -> Result<OverlayWithMetrics, AppError> {
         let mut tx = self.pool.begin().await?;
 
-        // Update overlay
-        #[derive(sqlx::FromRow)]
-        struct OverlayRow {
-            id: Uuid,
-        }
-
-        let _overlay_row = sqlx::query_as::<_, OverlayRow>(
+        sqlx::query_as::<_, ()>(
             r#"
             UPDATE overlays
             SET name = $1, icon = $2, start_date = $3, end_date = $4,
@@ -486,8 +479,15 @@ impl PostgresRepository {
         let mut transaction_count = 0i64;
 
         for tx in transactions {
-            let (is_included, _) =
-                self.determine_transaction_membership_simple(&tx.id, inclusion_mode, rules, &tx.category_id, &tx.from_account_id, &tx.vendor_id, &manual_map);
+            // Build a small reference struct to avoid passing many parameters
+            let simple_tx = SimpleTransactionRef {
+                id: &tx.id,
+                category_id: &tx.category_id,
+                from_account_id: &tx.from_account_id,
+                vendor_id: &tx.vendor_id,
+            };
+
+            let (is_included, _) = self.determine_transaction_membership_simple(&simple_tx, inclusion_mode, rules, &manual_map);
 
             if is_included {
                 spent_amount += tx.amount;
@@ -528,16 +528,13 @@ impl PostgresRepository {
 
     fn determine_transaction_membership_simple(
         &self,
-        transaction_id: &Uuid,
+        tx: &SimpleTransactionRef,
         inclusion_mode: &InclusionMode,
         rules: &OverlayRules,
-        category_id: &Uuid,
-        from_account_id: &Uuid,
-        vendor_id: &Option<Uuid>,
         manual_map: &std::collections::HashMap<Uuid, bool>,
     ) -> (bool, Option<InclusionSource>) {
         // Check manual override first
-        if let Some(&is_manually_included) = manual_map.get(transaction_id) {
+        if let Some(&is_manually_included) = manual_map.get(tx.id) {
             if is_manually_included {
                 return (true, Some(InclusionSource::Manual));
             } else {
@@ -550,7 +547,7 @@ impl PostgresRepository {
             InclusionMode::Manual => (false, None),
             InclusionMode::All => (true, Some(InclusionSource::All)),
             InclusionMode::Rules => {
-                let matches_rules = self.transaction_matches_rules_simple(category_id, from_account_id, vendor_id, rules);
+                let matches_rules = self.transaction_matches_rules_simple(tx.category_id, tx.from_account_id, tx.vendor_id, rules);
                 if matches_rules { (true, Some(InclusionSource::Rules)) } else { (false, None) }
             }
         }
@@ -567,9 +564,10 @@ impl PostgresRepository {
         // Check vendor
         if !rules.vendor_ids.is_empty()
             && let Some(ref vendor) = tx.vendor
-                && rules.vendor_ids.contains(&vendor.id) {
-                    matches = true;
-                }
+            && rules.vendor_ids.contains(&vendor.id)
+        {
+            matches = true;
+        }
 
         // Check account
         if !rules.account_ids.is_empty() && rules.account_ids.contains(&tx.from_account.id) {
@@ -590,9 +588,10 @@ impl PostgresRepository {
         // Check vendor
         if !rules.vendor_ids.is_empty()
             && let Some(v_id) = vendor_id
-                && rules.vendor_ids.contains(v_id) {
-                    matches = true;
-                }
+            && rules.vendor_ids.contains(v_id)
+        {
+            matches = true;
+        }
 
         // Check account
         if !rules.account_ids.is_empty() && rules.account_ids.contains(from_account_id) {
@@ -701,7 +700,7 @@ impl PostgresRepository {
         // Fetch currency
         let currency = sqlx::query_as::<_, crate::models::currency::Currency>(
             r#"
-            SELECT id, name, code, symbol
+            SELECT id, name, symbol, currency, decimal_places, created_at
             FROM currency
             WHERE id = $1
             "#,

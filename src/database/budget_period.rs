@@ -56,61 +56,6 @@ impl PostgresRepository {
         Ok(row.id)
     }
 
-    pub async fn list_budget_periods(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<BudgetPeriod>, AppError> {
-        let budget_periods = if let Some(cursor) = params.cursor {
-            sqlx::query_as::<_, BudgetPeriod>(
-                r#"
-                SELECT id, user_id, name, start_date, end_date, is_auto_generated, created_at
-                FROM budget_period
-                WHERE user_id = $1
-                    AND (start_date, id) > (
-                        SELECT start_date, id FROM budget_period WHERE id = $2
-                    )
-                ORDER BY start_date ASC, id ASC
-                LIMIT $3
-                "#,
-            )
-            .bind(user_id)
-            .bind(cursor)
-            .bind(params.fetch_limit())
-            .fetch_all(&self.pool)
-            .await?
-        } else {
-            sqlx::query_as::<_, BudgetPeriod>(
-                r#"
-                SELECT id, user_id, name, start_date, end_date, is_auto_generated, created_at
-                FROM budget_period
-                WHERE user_id = $1
-                ORDER BY start_date ASC, id ASC
-                LIMIT $2
-                "#,
-            )
-            .bind(user_id)
-            .bind(params.fetch_limit())
-            .fetch_all(&self.pool)
-            .await?
-        };
-
-        Ok(budget_periods)
-    }
-
-    pub async fn get_current_budget_period(&self, user_id: &Uuid) -> Result<BudgetPeriod, AppError> {
-        let budget_period = sqlx::query_as::<_, BudgetPeriod>(
-            r#"
-            SELECT id, user_id, name, start_date, end_date, is_auto_generated, created_at
-            FROM budget_period
-            WHERE user_id = $1
-                AND start_date <= now()
-                AND end_date >= now()
-            "#,
-        )
-        .bind(user_id)
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(budget_period)
-    }
-
     pub async fn get_budget_period(&self, budget_period_id: &Uuid, user_id: &Uuid) -> Result<BudgetPeriod, AppError> {
         let budget_period = sqlx::query_as::<_, BudgetPeriod>(
             r#"
@@ -300,17 +245,14 @@ impl PostgresRepository {
                     bp.is_auto_generated,
                     bp.created_at,
                     COUNT(DISTINCT t.id) as transaction_count,
-                    COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0) as total_spent,
-                    COALESCE(SUM(bc.budgeted_amount), 0) as total_budgeted
+                    COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::INT8 as total_spent,
+                    COALESCE(SUM(bc.budgeted_value), 0) as total_budgeted
                 FROM budget_period bp
                 LEFT JOIN transaction t ON t.user_id = bp.user_id
                     AND t.occurred_at >= bp.start_date
                     AND t.occurred_at <= bp.end_date
                 LEFT JOIN category c ON t.category_id = c.id
                 LEFT JOIN budget_category bc ON bc.user_id = bp.user_id
-                    AND bc.budget_id IN (
-                        SELECT b.id FROM budget b WHERE b.user_id = bp.user_id AND b.period_id = bp.id
-                    )
                 WHERE bp.user_id = $1
                     AND (bp.start_date, bp.id) > (
                         SELECT start_date, id FROM budget_period WHERE id = $2
@@ -337,17 +279,14 @@ impl PostgresRepository {
                     bp.is_auto_generated,
                     bp.created_at,
                     COUNT(DISTINCT t.id) as transaction_count,
-                    COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0) as total_spent,
-                    COALESCE(SUM(bc.budgeted_amount), 0) as total_budgeted
+                    COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::INT8 as total_spent,
+                    COALESCE(SUM(bc.budgeted_value), 0) as total_budgeted
                 FROM budget_period bp
                 LEFT JOIN transaction t ON t.user_id = bp.user_id
                     AND t.occurred_at >= bp.start_date
                     AND t.occurred_at <= bp.end_date
                 LEFT JOIN category c ON t.category_id = c.id
                 LEFT JOIN budget_category bc ON bc.user_id = bp.user_id
-                    AND bc.budget_id IN (
-                        SELECT b.id FROM budget b WHERE b.user_id = bp.user_id AND b.period_id = bp.id
-                    )
                 WHERE bp.user_id = $1
                 GROUP BY bp.id, bp.user_id, bp.name, bp.start_date, bp.end_date, bp.is_auto_generated, bp.created_at
                 ORDER BY bp.start_date ASC, bp.id ASC
@@ -416,17 +355,14 @@ impl PostgresRepository {
                 bp.is_auto_generated,
                 bp.created_at,
                 COUNT(DISTINCT t.id) as transaction_count,
-                COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0) as total_spent,
-                COALESCE(SUM(bc.budgeted_amount), 0) as total_budgeted
+                COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::INT8 as total_spent,
+                COALESCE(SUM(bc.budgeted_value), 0) as total_budgeted
             FROM budget_period bp
             LEFT JOIN transaction t ON t.user_id = bp.user_id
                 AND t.occurred_at >= bp.start_date
                 AND t.occurred_at <= bp.end_date
             LEFT JOIN category c ON t.category_id = c.id
             LEFT JOIN budget_category bc ON bc.user_id = bp.user_id
-                AND bc.budget_id IN (
-                    SELECT b.id FROM budget b WHERE b.user_id = bp.user_id AND b.period_id = bp.id
-                )
             WHERE bp.user_id = $1
                 AND bp.start_date <= now()
                 AND bp.end_date >= now()
