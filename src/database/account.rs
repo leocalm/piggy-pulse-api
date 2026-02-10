@@ -523,6 +523,29 @@ ORDER BY a.id, d.day
         Ok(())
     }
 
+    pub async fn get_account_options(&self, user_id: &Uuid) -> Result<Vec<(Uuid, String, String)>, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct AccountOptionRow {
+            id: Uuid,
+            name: String,
+            icon: String,
+        }
+
+        let rows = sqlx::query_as::<_, AccountOptionRow>(
+            r#"
+            SELECT id, name, icon
+            FROM account
+            WHERE user_id = $1
+            ORDER BY name ASC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|row| (row.id, row.name, row.icon)).collect())
+    }
+
     pub async fn get_accounts_summary(&self, user_id: &Uuid) -> Result<(i64, i64, i64), AppError> {
         #[derive(sqlx::FromRow)]
         struct SummaryRow {

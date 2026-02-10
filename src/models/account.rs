@@ -116,3 +116,10 @@ pub struct AccountsSummaryResponse {
     pub total_assets: i64,
     pub total_liabilities: i64,
 }
+
+#[derive(Serialize, Debug, JsonSchema)]
+pub struct AccountOptionResponse {
+    pub id: Uuid,
+    pub name: String,
+    pub icon: String,
+}
