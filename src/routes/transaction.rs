@@ -5,6 +5,7 @@ use crate::error::json::JsonBody;
 use crate::middleware::rate_limit::RateLimit;
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use crate::models::transaction::{TransactionRequest, TransactionResponse};
+use crate::models::transaction_summary::TransactionSummaryResponse;
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{State, delete, get, post, put};
@@ -55,6 +56,21 @@ pub async fn list_all_transactions(
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.id)))
 }
 
+/// Get transaction summary for a period
+#[openapi(tag = "Transactions")]
+#[get("/summary?<period_id>")]
+pub async fn transaction_summary(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    period_id: String,
+) -> Result<Json<TransactionSummaryResponse>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let uuid = Uuid::parse_str(&period_id).map_err(|e| AppError::uuid("Invalid period id", e))?;
+    let summary = repo.get_transaction_summary(&uuid, &current_user.id).await?;
+    Ok(Json(TransactionSummaryResponse::from(&summary)))
+}
+
 /// Get a transaction by ID
 #[openapi(tag = "Transactions")]
 #[get("/<id>")]
@@ -95,7 +111,14 @@ pub async fn put_transaction(
 }
 
 pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
-    rocket_okapi::openapi_get_routes_spec![create_transaction, list_all_transactions, get_transaction, delete_transaction, put_transaction]
+    rocket_okapi::openapi_get_routes_spec![
+        create_transaction,
+        list_all_transactions,
+        transaction_summary,
+        get_transaction,
+        delete_transaction,
+        put_transaction
+    ]
 }
 
 #[cfg(test)]
@@ -139,6 +162,19 @@ mod tests {
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
         let response = client.get("/api/v1/transactions/?period_id=invalid-uuid").dispatch().await;
+
+        assert_eq!(response.status(), Status::BadRequest);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_transaction_summary_invalid_period_id() {
+        let mut config = Config::default();
+        config.database.url = "postgresql://test:test@localhost/test".to_string();
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+
+        let response = client.get("/api/transactions/summary?period_id=invalid-uuid").dispatch().await;
 
         assert_eq!(response.status(), Status::BadRequest);
     }

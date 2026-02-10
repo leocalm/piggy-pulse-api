@@ -9,5 +9,6 @@ pub mod overlay;
 pub mod pagination;
 pub mod session;
 pub mod transaction;
+pub mod transaction_summary;
 pub mod user;
 pub mod vendor;
