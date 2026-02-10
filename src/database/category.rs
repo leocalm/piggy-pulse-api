@@ -433,6 +433,30 @@ LIMIT $4
 
         Ok(rows.into_iter().map(Category::from).collect())
     }
+
+    pub async fn list_all_categories(&self, user_id: &Uuid) -> Result<Vec<Category>, AppError> {
+        let rows = sqlx::query_as::<_, CategoryRow>(
+            r#"
+            SELECT
+                c.id,
+                c.user_id,
+                c.name,
+                COALESCE(c.color, '') as color,
+                COALESCE(c.icon, '') as icon,
+                c.parent_id,
+                c.category_type::text as category_type,
+                c.created_at
+            FROM category c
+            WHERE c.user_id = $1
+            ORDER BY c.created_at DESC, c.id DESC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(Category::from).collect())
+    }
 }
 
 pub fn category_type_from_db<T: AsRef<str>>(value: T) -> CategoryType {
