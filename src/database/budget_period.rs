@@ -1,9 +1,11 @@
 use crate::database::postgres_repository::{PostgresRepository, is_unique_violation};
 use crate::error::app_error::AppError;
 use crate::models::budget_period::{
-    BudgetPeriod, BudgetPeriodRequest, BudgetPeriodWithMetrics, GapsResponse, PeriodSchedule, PeriodScheduleRequest, UnassignedTransaction,
+    AutoPeriodGenerationResponse, BudgetPeriod, BudgetPeriodRequest, BudgetPeriodWithMetrics, DurationUnit, GapsResponse, PeriodSchedule,
+    PeriodScheduleRequest, UnassignedTransaction, WeekendAdjustment,
 };
 use crate::models::pagination::CursorParams;
+use chrono::{Datelike, Days, Months, NaiveDate, Weekday};
 use uuid::Uuid;
 
 impl PostgresRepository {
@@ -214,6 +216,143 @@ impl PostgresRepository {
             .await?;
 
         Ok(())
+    }
+
+    pub async fn generate_automatic_budget_periods(&self) -> Result<AutoPeriodGenerationResponse, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct ScheduleRow {
+            user_id: Uuid,
+            start_day: i32,
+            duration_value: i32,
+            duration_unit: DurationUnit,
+            saturday_adjustment: WeekendAdjustment,
+            sunday_adjustment: WeekendAdjustment,
+            name_pattern: String,
+            generate_ahead: i32,
+        }
+
+        let schedules = sqlx::query_as::<_, ScheduleRow>(
+            r#"
+            SELECT user_id, start_day, duration_value, duration_unit,
+                   saturday_adjustment, sunday_adjustment, name_pattern, generate_ahead
+            FROM period_schedule
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let today = chrono::Utc::now().date_naive();
+        let mut periods_created = 0_i64;
+
+        for schedule in &schedules {
+            let existing_future_count: i64 = sqlx::query_scalar(
+                r#"
+                SELECT COUNT(*)
+                FROM budget_period
+                WHERE user_id = $1
+                  AND end_date >= $2
+                "#,
+            )
+            .bind(schedule.user_id)
+            .bind(today)
+            .fetch_one(&self.pool)
+            .await?;
+
+            let missing = (schedule.generate_ahead as i64) - existing_future_count;
+            if missing <= 0 {
+                continue;
+            }
+
+            let max_end_date: Option<NaiveDate> = sqlx::query_scalar(
+                r#"
+                SELECT MAX(end_date)
+                FROM budget_period
+                WHERE user_id = $1
+                "#,
+            )
+            .bind(schedule.user_id)
+            .fetch_one(&self.pool)
+            .await?;
+
+            let mut anchor_start = if let Some(end_date) = max_end_date {
+                end_date
+                    .checked_add_days(Days::new(1))
+                    .ok_or_else(|| AppError::BadRequest("Invalid end date when generating automatic periods".to_string()))?
+            } else {
+                compute_initial_anchor_start(
+                    today,
+                    schedule.start_day,
+                    schedule.duration_value,
+                    &schedule.duration_unit,
+                    schedule.saturday_adjustment,
+                    schedule.sunday_adjustment,
+                )
+                .ok_or_else(|| AppError::BadRequest("Unable to compute automatic period start from schedule".to_string()))?
+            };
+
+            for _ in 0..missing {
+                let start_date = apply_weekend_adjustment(anchor_start, schedule.saturday_adjustment, schedule.sunday_adjustment)
+                    .ok_or_else(|| AppError::BadRequest("Date overflow while applying weekend adjustment".to_string()))?;
+                let anchor_end_exclusive = add_duration(anchor_start, schedule.duration_value, &schedule.duration_unit)
+                    .ok_or_else(|| AppError::BadRequest("Date overflow while generating automatic period".to_string()))?;
+                let raw_end_date = anchor_end_exclusive
+                    .checked_sub_days(Days::new(1))
+                    .ok_or_else(|| AppError::BadRequest("Invalid period end date during automatic generation".to_string()))?;
+                let end_date = apply_weekend_adjustment(raw_end_date, schedule.saturday_adjustment, schedule.sunday_adjustment)
+                    .ok_or_else(|| AppError::BadRequest("Date overflow while applying weekend adjustment".to_string()))?;
+
+                let generated_name = render_period_name(&schedule.name_pattern, start_date, end_date);
+                let insert_result = sqlx::query_scalar::<_, Uuid>(
+                    r#"
+                    INSERT INTO budget_period (user_id, name, start_date, end_date, is_auto_generated)
+                    VALUES ($1, $2, $3, $4, TRUE)
+                    RETURNING id
+                    "#,
+                )
+                .bind(schedule.user_id)
+                .bind(&generated_name)
+                .bind(start_date)
+                .bind(end_date)
+                .fetch_one(&self.pool)
+                .await;
+
+                match insert_result {
+                    Ok(_) => {
+                        periods_created += 1;
+                    }
+                    Err(err) if is_unique_violation(&err) => {
+                        let fallback_name = format!("{} ({})", generated_name, start_date.format("%Y-%m-%d"));
+                        let fallback_insert = sqlx::query_scalar::<_, Uuid>(
+                            r#"
+                            INSERT INTO budget_period (user_id, name, start_date, end_date, is_auto_generated)
+                            VALUES ($1, $2, $3, $4, TRUE)
+                            RETURNING id
+                            "#,
+                        )
+                        .bind(schedule.user_id)
+                        .bind(fallback_name)
+                        .bind(start_date)
+                        .bind(end_date)
+                        .fetch_one(&self.pool)
+                        .await;
+
+                        match fallback_insert {
+                            Ok(_) => periods_created += 1,
+                            Err(err) if is_unique_violation(&err) => {}
+                            Err(err) => return Err(err.into()),
+                        }
+                    }
+                    Err(err) => return Err(err.into()),
+                }
+
+                anchor_start = anchor_end_exclusive;
+            }
+        }
+
+        Ok(AutoPeriodGenerationResponse {
+            users_processed: schedules.len() as i64,
+            periods_created,
+        })
     }
 
     // ===== Budget Period with Metrics =====
@@ -442,5 +581,114 @@ impl PostgresRepository {
             unassigned_count,
             transactions,
         })
+    }
+}
+
+fn compute_initial_anchor_start(
+    today: NaiveDate,
+    start_day: i32,
+    duration_value: i32,
+    duration_unit: &DurationUnit,
+    saturday_adjustment: WeekendAdjustment,
+    sunday_adjustment: WeekendAdjustment,
+) -> Option<NaiveDate> {
+    let mut candidate = base_month_start_date(today.year(), today.month(), start_day)
+        .and_then(|date| apply_weekend_adjustment(date, saturday_adjustment, sunday_adjustment))?;
+
+    let mut iterations = 0_usize;
+    while candidate > today {
+        candidate = subtract_duration(candidate, duration_value, duration_unit)?;
+        iterations += 1;
+        if iterations > 1200 {
+            return None;
+        }
+    }
+
+    Some(candidate)
+}
+
+fn add_duration(date: NaiveDate, duration_value: i32, duration_unit: &DurationUnit) -> Option<NaiveDate> {
+    match duration_unit {
+        DurationUnit::Days => date.checked_add_days(Days::new(duration_value as u64)),
+        DurationUnit::Weeks => date.checked_add_days(Days::new((duration_value * 7) as u64)),
+        DurationUnit::Months => date.checked_add_months(Months::new(duration_value as u32)),
+    }
+}
+
+fn subtract_duration(date: NaiveDate, duration_value: i32, duration_unit: &DurationUnit) -> Option<NaiveDate> {
+    match duration_unit {
+        DurationUnit::Days => date.checked_sub_days(Days::new(duration_value as u64)),
+        DurationUnit::Weeks => date.checked_sub_days(Days::new((duration_value * 7) as u64)),
+        DurationUnit::Months => date.checked_sub_months(Months::new(duration_value as u32)),
+    }
+}
+
+fn base_month_start_date(year: i32, month: u32, start_day: i32) -> Option<NaiveDate> {
+    let day = start_day.clamp(1, 31) as u32;
+    for candidate_day in (1..=day).rev() {
+        if let Some(date) = NaiveDate::from_ymd_opt(year, month, candidate_day) {
+            return Some(date);
+        }
+    }
+    None
+}
+
+fn apply_weekend_adjustment(date: NaiveDate, saturday_adjustment: WeekendAdjustment, sunday_adjustment: WeekendAdjustment) -> Option<NaiveDate> {
+    match date.weekday() {
+        Weekday::Sat => apply_day_adjustment(date, saturday_adjustment, true),
+        Weekday::Sun => apply_day_adjustment(date, sunday_adjustment, false),
+        _ => Some(date),
+    }
+}
+
+fn apply_day_adjustment(date: NaiveDate, adjustment: WeekendAdjustment, is_saturday: bool) -> Option<NaiveDate> {
+    match adjustment {
+        WeekendAdjustment::Keep => Some(date),
+        WeekendAdjustment::Friday => date.checked_sub_days(Days::new(if is_saturday { 1 } else { 2 })),
+        WeekendAdjustment::Monday => date.checked_add_days(Days::new(if is_saturday { 2 } else { 1 })),
+    }
+}
+
+fn render_period_name(pattern: &str, start_date: NaiveDate, end_date: NaiveDate) -> String {
+    let rendered = pattern
+        .replace("{start_date}", &start_date.format("%Y-%m-%d").to_string())
+        .replace("{end_date}", &end_date.format("%Y-%m-%d").to_string())
+        .replace("{year}", &start_date.format("%Y").to_string())
+        .replace("{month}", &start_date.format("%m").to_string());
+
+    if rendered == pattern {
+        format!("{} {}", rendered, start_date.format("%Y-%m-%d"))
+    } else {
+        rendered
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{apply_weekend_adjustment, render_period_name};
+    use crate::models::budget_period::WeekendAdjustment;
+    use chrono::NaiveDate;
+
+    #[test]
+    fn weekend_adjustment_friday_and_monday() {
+        let saturday = NaiveDate::from_ymd_opt(2026, 1, 31).expect("valid date");
+        let adjusted = apply_weekend_adjustment(saturday, WeekendAdjustment::Friday, WeekendAdjustment::Keep).expect("adjusted");
+        assert_eq!(adjusted, NaiveDate::from_ymd_opt(2026, 1, 30).expect("valid date"));
+
+        let sunday = NaiveDate::from_ymd_opt(2026, 2, 1).expect("valid date");
+        let adjusted = apply_weekend_adjustment(sunday, WeekendAdjustment::Keep, WeekendAdjustment::Monday).expect("adjusted");
+        assert_eq!(adjusted, NaiveDate::from_ymd_opt(2026, 2, 2).expect("valid date"));
+    }
+
+    #[test]
+    fn render_name_with_and_without_placeholders() {
+        let start = NaiveDate::from_ymd_opt(2026, 2, 1).expect("valid date");
+        let end = NaiveDate::from_ymd_opt(2026, 2, 28).expect("valid date");
+
+        let templated = render_period_name("Period {month}/{year}", start, end);
+        assert_eq!(templated, "Period 02/2026");
+
+        let plain = render_period_name("Period", start, end);
+        assert_eq!(plain, "Period 2026-02-01");
     }
 }

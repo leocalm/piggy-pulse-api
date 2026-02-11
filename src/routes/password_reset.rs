@@ -3,14 +3,13 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::AuthRateLimit;
 use crate::models::password_reset::{
-    audit_events, PasswordResetConfirmRequest, PasswordResetRequest, PasswordResetResponse, PasswordResetValidateRequest,
-    PasswordResetValidateResponse,
+    PasswordResetConfirmRequest, PasswordResetRequest, PasswordResetResponse, PasswordResetValidateRequest, PasswordResetValidateResponse, audit_events,
 };
 use crate::service::email::EmailService;
 use chrono::Utc;
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket::{post, State};
+use rocket::{State, post};
 use rocket_okapi::openapi;
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
@@ -54,8 +53,7 @@ pub async fn request_password_reset(
 
                 // Still return success to prevent email enumeration
                 return Ok(Json(PasswordResetResponse {
-                    message: "If your email address exists in our system, you will receive a password reset link shortly."
-                        .to_string(),
+                    message: "If your email address exists in our system, you will receive a password reset link shortly.".to_string(),
                 }));
             }
 
@@ -144,9 +142,7 @@ pub async fn validate_password_reset_token(
                     audit_events::PASSWORD_RESET_TOKEN_INVALID
                 };
 
-                let _ = repo
-                    .create_security_audit_log(Some(&reset.user_id), reason, false, None, None, None)
-                    .await;
+                let _ = repo.create_security_audit_log(Some(&reset.user_id), reason, false, None, None, None).await;
 
                 return Ok(Json(PasswordResetValidateResponse { valid: false, email: None }));
             }
@@ -154,14 +150,7 @@ pub async fn validate_password_reset_token(
             // Token is valid, fetch user email
             if let Some(user) = repo.get_user_by_id(&reset.user_id).await? {
                 let _ = repo
-                    .create_security_audit_log(
-                        Some(&user.id),
-                        audit_events::PASSWORD_RESET_TOKEN_VALIDATED,
-                        true,
-                        None,
-                        None,
-                        None,
-                    )
+                    .create_security_audit_log(Some(&user.id), audit_events::PASSWORD_RESET_TOKEN_VALIDATED, true, None, None, None)
                     .await;
 
                 return Ok(Json(PasswordResetValidateResponse {
@@ -186,11 +175,7 @@ pub async fn validate_password_reset_token(
 /// Confirm password reset and set new password (Step 3: Complete the reset)
 #[openapi(tag = "Password Reset")]
 #[post("/password-reset/confirm", data = "<payload>")]
-pub async fn confirm_password_reset(
-    pool: &State<PgPool>,
-    _rate_limit: AuthRateLimit,
-    payload: Json<PasswordResetConfirmRequest>,
-) -> Result<Status, AppError> {
+pub async fn confirm_password_reset(pool: &State<PgPool>, _rate_limit: AuthRateLimit, payload: Json<PasswordResetConfirmRequest>) -> Result<Status, AppError> {
     payload.validate()?;
 
     let repo = PostgresRepository { pool: pool.inner().clone() };
@@ -276,8 +261,7 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{build_rocket, Config};
+    use crate::{Config, build_rocket};
     use rocket::http::{ContentType, Status};
     use rocket::local::asynchronous::Client;
 

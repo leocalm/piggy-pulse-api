@@ -5,7 +5,7 @@ use rocket::figment::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct Config {
     pub database: DatabaseConfig,
     pub server: ServerConfig,
@@ -14,6 +14,7 @@ pub struct Config {
     pub rate_limit: RateLimitConfig,
     pub session: SessionConfig,
     pub api: ApiConfig,
+    pub cron: CronConfig,
     pub email: EmailConfig,
     pub password_reset: PasswordResetConfig,
 }
@@ -78,6 +79,11 @@ pub struct ApiConfig {
     pub base_path: String,
     pub additional_base_paths: Vec<String>,
     pub expose_docs: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CronConfig {
+    pub auth_token: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -167,6 +173,12 @@ impl Default for ApiConfig {
     }
 }
 
+impl Default for CronConfig {
+    fn default() -> Self {
+        Self { auth_token: "".to_string() }
+    }
+}
+
 impl Default for EmailConfig {
     fn default() -> Self {
         Self {
@@ -187,22 +199,6 @@ impl Default for PasswordResetConfig {
             token_ttl_seconds: 900, // 15 minutes
             max_attempts_per_hour: 3,
             frontend_reset_url: "http://localhost:3000/reset-password".to_string(),
-        }
-    }
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            database: DatabaseConfig::default(),
-            server: ServerConfig::default(),
-            logging: LoggingConfig::default(),
-            cors: CorsConfig::default(),
-            rate_limit: RateLimitConfig::default(),
-            session: SessionConfig::default(),
-            api: ApiConfig::default(),
-            email: EmailConfig::default(),
-            password_reset: PasswordResetConfig::default(),
         }
     }
 }

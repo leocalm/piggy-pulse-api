@@ -205,6 +205,7 @@ fn mount_api_routes(mut rocket: Rocket<Build>, base_path: &str) -> Rocket<Build>
     rocket = rocket.mount(join_base_path(base_path, "dashboard"), app_routes::dashboard::routes().0);
     rocket = rocket.mount(join_base_path(base_path, "budget_period"), app_routes::budget_period::routes().0);
     rocket = rocket.mount(join_base_path(base_path, "overlays"), app_routes::overlay::routes().0);
+    rocket = rocket.mount(join_base_path(base_path, "cron"), app_routes::cron::routes());
     rocket
 }
 
@@ -243,6 +244,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
             "/budget_period" => app_routes::budget_period::routes(),
             "/overlays" => app_routes::overlay::routes(),
         }
+        rocket = rocket.mount(join_base_path(primary_base_path, "cron"), app_routes::cron::routes());
 
         let docs_path = join_base_path(primary_base_path, "docs");
         let primary_openapi_url = join_base_path(primary_base_path, "openapi.json");
@@ -275,6 +277,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
                 "/budget_period" => app_routes::budget_period::routes(),
                 "/overlays" => app_routes::overlay::routes(),
             }
+            rocket = rocket.mount(join_base_path(base_path, "cron"), app_routes::cron::routes());
 
             let docs_path = join_base_path(base_path, "docs");
             let docs_openapi_url = join_base_path(base_path, "openapi.json");

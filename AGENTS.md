@@ -63,8 +63,19 @@ Key sections and their defaults:
 | | `require_client_ip` | `true` |
 | `[api]` | `base_path` | `/api/v1` |
 | | `additional_base_paths` | `[]` |
+| `[email]` | `smtp_host` | `localhost` |
+| | `smtp_port` | 587 |
+| | `smtp_username` | `""` |
+| | `smtp_password` | `""` |
+| | `from_address` | `noreply@piggypulse.com` |
+| | `from_name` | `PiggyPulse` |
+| | `enabled` | `false` |
+| `[password_reset]` | `token_ttl_seconds` | 900 (15 min) |
+| | `max_attempts_per_hour` | 3 |
+| | `frontend_reset_url` | `http://localhost:3000/reset-password` |
 
 > Wildcard origins (`*`) combined with `allow_credentials = true` is an invalid combination and will panic at startup.
+> Email must be enabled (`email.enabled = true`) and configured for password reset functionality to work.
 
 ## Database Setup
 
@@ -130,6 +141,10 @@ All endpoints are mounted under `/api/v1` by default (configurable via `api.base
 
 - `/api/v1/health` — `GET /` runs `SELECT 1` against the pool; returns `{"status":"ok","database":"connected"}` or `503`
 - `/api/v1/users` — create, login, logout, update, delete, `GET /me`
+- `/api/v1/password-reset` (PR #94) — Token-based password recovery with email verification
+  - `POST /request` — Request password reset email (always returns success to prevent email enumeration)
+  - `POST /validate` — Validate reset token and return user email if valid
+  - `POST /confirm` — Complete password reset with new password (invalidates all user sessions)
 - `/api/v1/settings` — GET (retrieve user settings), PUT (create/update settings). Settings are automatically created with defaults on user signup. Valid themes: `light`, `dark`, `auto`. Valid languages: `en`, `es`, `pt`, `fr`, `de`.
 - `/api/v1/accounts` — CRUD + cursor-paginated list; list requires mandatory `period_id` query parameter to filter accounts by budget period. Returns 400 if `period_id` is missing ("Missing period_id query parameter") or invalid.
   - `GET /summary` (PR #89) — Returns account totals: `total_net_worth`, `total_assets`, `total_liabilities`
