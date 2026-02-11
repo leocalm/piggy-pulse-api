@@ -20,6 +20,9 @@ base_path = "/api/v1"
 additional_base_paths = []
 expose_docs = false
 
+[cron]
+auth_token = "replace-with-strong-token"
+
 [cors]
 allowed_origins = ["http://localhost:3000"]
 allow_credentials = true

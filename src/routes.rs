@@ -2,6 +2,7 @@ pub mod account;
 pub mod budget_category;
 pub mod budget_period;
 pub mod category;
+pub mod cron;
 pub mod currency;
 pub mod dashboard;
 pub mod error;

@@ -192,3 +192,9 @@ pub struct GapsResponse {
     pub unassigned_count: i64,
     pub transactions: Vec<UnassignedTransaction>,
 }
+
+#[derive(Serialize, Debug)]
+pub struct AutoPeriodGenerationResponse {
+    pub users_processed: i64,
+    pub periods_created: i64,
+}
