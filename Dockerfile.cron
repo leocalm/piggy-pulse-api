@@ -1,0 +1,16 @@
+FROM alpine:3.22
+
+RUN apk add --no-cache curl tzdata
+
+WORKDIR /app
+
+COPY docker-cron-entrypoint.sh /usr/local/bin/docker-cron-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-cron-entrypoint.sh
+
+ENV CRON_SCHEDULE="*/15 * * * *"
+ENV CRON_BASE_URL="http://budget:8000"
+ENV CRON_API_BASE_PATH="/api/v1"
+ENV CRON_TOKEN=""
+ENV TZ="UTC"
+
+ENTRYPOINT ["/usr/local/bin/docker-cron-entrypoint.sh"]

@@ -8,6 +8,7 @@ The Docker Compose setup includes:
 
 - **PostgreSQL**: Database server with persistent storage
 - **Budget API**: Rust/Rocket application running on port 8000 (internal)
+- **Cron Worker**: Lightweight cron container that calls `/api/v1/cron/generate-periods`
 - **Caddy**: Reverse proxy and web server (ports 80/443)
 - **Adminer**: Database management UI (debug profile only, port 8080)
 
@@ -25,6 +26,7 @@ cp .env .env.local
 
 1. **ROCKET_SECRET_KEY**: Generate with `openssl rand -base64 32`
 2. **POSTGRES_PASSWORD**: Choose a strong password for production
+3. **CRON_TOKEN**: Must match `BUDGET_CRON__AUTH_TOKEN` configured on the API
 
 ```bash
 # Generate a secret key
@@ -33,6 +35,7 @@ openssl rand -base64 32
 # Update .env file with the generated key
 # ROCKET_SECRET_KEY=<generated-key>
 # POSTGRES_PASSWORD=<strong-password>
+# CRON_TOKEN=<same token as BUDGET_CRON__AUTH_TOKEN>
 ```
 
 ### 2. Start the Full Stack
@@ -44,8 +47,9 @@ docker compose up -d
 This will:
 1. Start PostgreSQL database
 2. Build and start the Budget API
-3. Start Caddy reverse proxy
-4. Run database migrations automatically
+3. Build and start the cron worker
+4. Start Caddy reverse proxy
+5. Run database migrations automatically
 
 ### 3. Access the Application
 

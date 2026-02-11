@@ -93,6 +93,23 @@ services:
     networks:
       - budget_network
 
+  # Cron worker for automatic period generation
+  cron:
+    build:
+      context: .
+      dockerfile: Dockerfile.cron
+    restart: unless-stopped
+    depends_on:
+      budget:
+        condition: service_healthy
+    environment:
+      CRON_SCHEDULE: "${CRON_SCHEDULE:-*/15 * * * *}"
+      CRON_BASE_URL: ${CRON_BASE_URL:-http://budget:8000}
+      CRON_API_BASE_PATH: ${CRON_API_BASE_PATH:-/api/v1}
+      CRON_TOKEN: ${CRON_TOKEN:?CRON_TOKEN is required}
+    networks:
+      - budget_network
+
   # Adminer for database management (debug profile only)
   adminer:
     image: adminer:${ADMINER_VERSION:-latest}
