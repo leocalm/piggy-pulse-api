@@ -1,0 +1,18 @@
+---
+# Copy to vault.yml and encrypt with ansible-vault.
+# Example:
+#   cp vault.yml.example vault.yml
+#   ansible-vault encrypt vault.yml
+
+vault_piggypulse_postgres_password: REPLACE_WITH_STRONG_DB_PASSWORD
+vault_piggypulse_redis_password: REPLACE_WITH_STRONG_REDIS_PASSWORD
+vault_piggypulse_rocket_secret_key: REPLACE_WITH_OPENSSL_RAND_BASE64_32
+
+vault_piggypulse_email_smtp_host: smtp.example.com
+vault_piggypulse_email_smtp_username: smtp-user
+vault_piggypulse_email_smtp_password: smtp-password
+
+# Optional for private repository checkout over HTTPS.
+# If unset, Ansible will use piggypulse_repo_url as-is.
+vault_piggypulse_repo_username: your-github-username
+vault_piggypulse_repo_token: ""

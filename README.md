@@ -31,6 +31,16 @@ cargo run
 
 The server will start (by default) on `http://127.0.0.1:8000`.
 
+## Production Infrastructure (Hetzner)
+
+For a hardened single-VM production setup on Hetzner (`API + cron + PostgreSQL + Redis`) with WireGuard-based SSH lockdown:
+
+- Terraform provisioning (+ Cloudflare DNS IaC): `infra/hetzner/README.md`
+- Ansible host hardening + deploy orchestration (+ Vault): `ansible/README.md`
+- Production compose stack: `deploy/production/README.md`
+- CI image publish + automated production deploy: `.github/workflows/publish-images.yml`, `.github/workflows/deploy-production.yml`
+- Manual end-to-end deploy runbook: `MANUAL_PRODUCTION_DEPLOY.md`
+
 ## Running Cron Jobs
 
 Periodic jobs are executed by a dedicated binary instead of an HTTP endpoint.

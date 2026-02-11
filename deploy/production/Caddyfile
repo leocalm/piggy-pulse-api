@@ -1,0 +1,35 @@
+{
+    email {$CADDY_ACME_EMAIL}
+}
+
+{$CADDY_DOMAIN} {
+    log {
+        output stdout
+        format json
+        level {$CADDY_LOG_LEVEL:INFO}
+    }
+
+    encode zstd gzip
+
+    reverse_proxy budget:8000 {
+        health_uri /api/v1/health
+        health_interval 30s
+        health_timeout 5s
+
+        # Preserve client identity for API rate limiting and security logs.
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+    }
+
+    header {
+        -Server
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+    }
+}

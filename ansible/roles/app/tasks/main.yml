@@ -1,0 +1,120 @@
+---
+- name: Ensure PiggyPulse root directory exists
+  ansible.builtin.file:
+    path: "{{ piggypulse_project_root }}"
+    state: directory
+    owner: "{{ security_deploy_user }}"
+    group: "{{ security_deploy_group }}"
+    mode: "0750"
+
+- name: Ensure repository credentials are configured when required
+  ansible.builtin.assert:
+    that:
+      - (vault_piggypulse_repo_token | default('') | length) > 0
+      - (vault_piggypulse_repo_username | default('') | length) > 0
+    fail_msg: >-
+      Repository authentication is required. Set vault_piggypulse_repo_username and
+      vault_piggypulse_repo_token in ansible vault.
+  when: piggypulse_repo_requires_auth | default(false)
+
+- name: Install temporary git askpass helper for private repository auth
+  ansible.builtin.copy:
+    dest: "/home/{{ security_deploy_user }}/.git-askpass.sh"
+    owner: "{{ security_deploy_user }}"
+    group: "{{ security_deploy_group }}"
+    mode: "0700"
+    content: |
+      #!/usr/bin/env sh
+      case "$1" in
+        *sername*) printf '%s' "$GIT_USERNAME" ;;
+        *assword*) printf '%s' "$GIT_PASSWORD" ;;
+        *) printf '' ;;
+      esac
+  when: (vault_piggypulse_repo_token | default('') | length) > 0
+
+- name: Checkout PiggyPulse repository (authenticated HTTPS)
+  ansible.builtin.git:
+    repo: "{{ piggypulse_repo_url }}"
+    dest: "{{ piggypulse_repo_dest }}"
+    version: "{{ piggypulse_repo_version }}"
+    update: "{{ piggypulse_repo_update }}"
+    accept_hostkey: true
+  become_user: "{{ security_deploy_user }}"
+  environment:
+    GIT_TERMINAL_PROMPT: "0"
+    GIT_ASKPASS: "/home/{{ security_deploy_user }}/.git-askpass.sh"
+    GIT_USERNAME: "{{ vault_piggypulse_repo_username }}"
+    GIT_PASSWORD: "{{ vault_piggypulse_repo_token }}"
+  no_log: true
+  when: (vault_piggypulse_repo_token | default('') | length) > 0
+  notify: Restart piggypulse stack
+
+- name: Checkout PiggyPulse repository (unauthenticated URL)
+  ansible.builtin.git:
+    repo: "{{ piggypulse_repo_url }}"
+    dest: "{{ piggypulse_repo_dest }}"
+    version: "{{ piggypulse_repo_version }}"
+    update: "{{ piggypulse_repo_update }}"
+    accept_hostkey: true
+  become_user: "{{ security_deploy_user }}"
+  when: (vault_piggypulse_repo_token | default('') | length) == 0
+  notify: Restart piggypulse stack
+
+- name: Check production compose directory exists in checked-out repository
+  ansible.builtin.stat:
+    path: "{{ piggypulse_compose_dir }}"
+  register: piggypulse_compose_dir_stat
+
+- name: Fail when repository revision does not contain deploy/production assets
+  ansible.builtin.assert:
+    that:
+      - piggypulse_compose_dir_stat.stat.exists
+      - piggypulse_compose_dir_stat.stat.isdir
+    fail_msg: >-
+      Expected {{ piggypulse_compose_dir }} to exist after repository checkout,
+      but it does not. Ensure piggypulse_repo_version points to a branch/tag/commit
+      that includes deploy/production files and that those changes are pushed to origin.
+
+- name: Check required production files exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: piggypulse_required_files
+  loop:
+    - "{{ piggypulse_compose_dir }}/docker-compose.yml"
+    - "{{ piggypulse_compose_dir }}/Caddyfile"
+    - "{{ piggypulse_compose_dir }}/.env.example"
+
+- name: Fail when required production files are missing
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isreg
+    fail_msg: "Missing required file in checked-out repository: {{ item.stat.path }}"
+  loop: "{{ piggypulse_required_files.results }}"
+
+- name: Ensure production env file is rendered from vault vars
+  ansible.builtin.template:
+    src: production.env.j2
+    dest: "{{ piggypulse_env_path }}"
+    owner: "{{ security_deploy_user }}"
+    group: "{{ security_deploy_group }}"
+    mode: "0600"
+  notify: Restart piggypulse stack
+
+- name: Install PiggyPulse systemd unit
+  ansible.builtin.template:
+    src: piggypulse-stack.service.j2
+    dest: "/etc/systemd/system/{{ piggypulse_systemd_unit }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart piggypulse stack
+
+- name: Ensure PiggyPulse service is enabled and started
+  ansible.builtin.systemd:
+    name: "{{ piggypulse_systemd_unit }}"
+    enabled: true
+    state: started
+    daemon_reload: true

@@ -1,0 +1,7 @@
+[sshd]
+enabled = true
+backend = systemd
+maxretry = {{ security_fail2ban_maxretry }}
+findtime = {{ security_fail2ban_findtime }}
+bantime = {{ security_fail2ban_bantime }}
+bantime.increment = true

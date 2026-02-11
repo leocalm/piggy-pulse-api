@@ -1,0 +1,97 @@
+name: Deploy Production
+
+on:
+  workflow_run:
+    workflows: ["Publish Container Images"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      piggypulse_api_image:
+        description: "Immutable API image ref (ghcr.io/...@sha256:...)"
+        required: true
+        type: string
+      piggypulse_cron_image:
+        description: "Immutable Cron image ref (ghcr.io/...@sha256:...)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Run Ansible production deploy
+    runs-on: [self-hosted, linux]
+    environment: production
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download image digest artifact from publish run
+        if: ${{ github.event_name == 'workflow_run' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: image-digests
+          path: .
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create image vars for manual dispatch
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          cat > ansible-image-vars.yml <<EOFVARS
+          piggypulse_api_image: ${{ inputs.piggypulse_api_image }}
+          piggypulse_cron_image: ${{ inputs.piggypulse_cron_image }}
+          EOFVARS
+
+      - name: Validate required deploy files and secrets
+        run: |
+          test -f ansible-image-vars.yml
+          test -n "${{ secrets.ANSIBLE_VAULT_PASSWORD }}"
+          test -n "${{ secrets.PROD_SSH_KNOWN_HOSTS }}"
+
+      - name: Prepare SSH known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Optionally install deploy SSH key from secret
+        if: ${{ secrets.PROD_SSH_PRIVATE_KEY != '' }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.PROD_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Write vault password file
+        run: |
+          printf '%s' "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > .vault_pass
+          chmod 600 .vault_pass
+
+      - name: Verify Ansible is installed on runner
+        run: |
+          ansible --version
+          ansible-playbook --version
+
+      - name: Run Ansible deploy
+        env:
+          ANSIBLE_CONFIG: ansible/ansible.cfg
+        run: |
+          ansible-playbook ansible/site.yml \
+            --vault-password-file .vault_pass \
+            --extra-vars @ansible-image-vars.yml
+
+      - name: Cleanup sensitive temp files
+        if: always()
+        run: |
+          rm -f .vault_pass

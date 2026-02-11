@@ -1,0 +1,43 @@
+flush ruleset
+
+table inet filter {
+  chain input {
+    type filter hook input priority 0;
+    policy drop;
+
+    iif "lo" accept
+    ct state established,related accept
+
+    ip protocol icmp accept
+    ip6 nexthdr ipv6-icmp accept
+
+    tcp dport {{ security_https_port }} accept
+{% if security_enable_wireguard %}
+    udp dport {{ security_wireguard_port }} accept
+{% endif %}
+{% if security_ssh_mode == 'vpn_only' %}
+    iifname "{{ security_wireguard_interface }}" tcp dport 22 accept
+{% endif %}
+{% if security_ssh_mode == 'admin_cidr' or security_enable_breakglass_ssh %}
+{% for cidr in security_admin_ssh_allowed_cidrs %}
+{% if ':' in cidr %}
+    ip6 saddr {{ cidr }} tcp dport 22 accept
+{% else %}
+    ip saddr {{ cidr }} tcp dport 22 accept
+{% endif %}
+{% endfor %}
+{% endif %}
+
+    counter drop
+  }
+
+  chain forward {
+    type filter hook forward priority 0;
+    policy accept;
+  }
+
+  chain output {
+    type filter hook output priority 0;
+    policy accept;
+  }
+}

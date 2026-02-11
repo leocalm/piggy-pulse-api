@@ -1,0 +1,66 @@
+---
+- name: Install wireguard packages
+  ansible.builtin.apt:
+    name: wireguard
+    state: present
+  when: wireguard_enabled
+
+- name: Ensure wireguard config directory exists
+  ansible.builtin.file:
+    path: /etc/wireguard
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: wireguard_enabled
+
+- name: Check for existing server private key
+  ansible.builtin.stat:
+    path: /etc/wireguard/server_private.key
+  register: wireguard_private_key_file
+  when: wireguard_enabled
+
+- name: Generate server keypair when absent
+  ansible.builtin.shell: |
+    set -euo pipefail
+    umask 077
+    wg genkey | tee /etc/wireguard/server_private.key | wg pubkey > /etc/wireguard/server_public.key
+  args:
+    executable: /bin/bash
+  when: wireguard_enabled and not wireguard_private_key_file.stat.exists
+
+- name: Read wireguard server private key
+  ansible.builtin.slurp:
+    src: /etc/wireguard/server_private.key
+  register: wireguard_private_key_raw
+  when: wireguard_enabled
+
+- name: Set wireguard private key fact
+  ansible.builtin.set_fact:
+    wireguard_server_private_key: "{{ wireguard_private_key_raw.content | b64decode | trim }}"
+  when: wireguard_enabled
+
+- name: Render wireguard interface config
+  ansible.builtin.template:
+    src: wg0.conf.j2
+    dest: "/etc/wireguard/{{ wireguard_interface }}.conf"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart wireguard
+  when: wireguard_enabled
+
+- name: Ensure wireguard service is enabled and running
+  ansible.builtin.service:
+    name: "wg-quick@{{ wireguard_interface }}"
+    enabled: true
+    state: started
+  when: wireguard_enabled
+
+- name: Disable wireguard service when disabled
+  ansible.builtin.service:
+    name: "wg-quick@{{ wireguard_interface }}"
+    enabled: false
+    state: stopped
+  when: not wireguard_enabled
+  failed_when: false
