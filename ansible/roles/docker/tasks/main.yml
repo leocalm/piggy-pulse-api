@@ -1,10 +1,22 @@
 ---
-- name: Install Docker engine and compose plugin
+- name: Install Docker engine
   ansible.builtin.apt:
     name:
       - docker.io
-      - docker-compose
     state: present
+
+- name: Install Docker Compose v2 plugin package
+  ansible.builtin.apt:
+    name: docker-compose-v2
+    state: present
+  register: piggypulse_compose_v2_install
+  ignore_errors: true
+
+- name: Install docker-compose v1 fallback when v2 package is unavailable
+  ansible.builtin.apt:
+    name: docker-compose
+    state: present
+  when: piggypulse_compose_v2_install is failed
 
 - name: Ensure docker service is enabled and running
   ansible.builtin.service:

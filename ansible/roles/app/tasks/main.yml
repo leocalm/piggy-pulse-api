@@ -156,6 +156,16 @@
     fail_msg: "Missing required production deployment file on target host: {{ item.stat.path }}"
   loop: "{{ piggypulse_required_files.results }}"
 
+- name: Assert deploy image vars are populated before starting stack
+  ansible.builtin.assert:
+    that:
+      - (piggypulse_api_image | default('', true) | trim | length) > 0
+      - (piggypulse_cron_image | default('', true) | trim | length) > 0
+    fail_msg: >-
+      Deploy image vars are empty.
+      piggypulse_api_image='{{ piggypulse_api_image | default("<undefined>", true) }}'
+      piggypulse_cron_image='{{ piggypulse_cron_image | default("<undefined>", true) }}'
+
 - name: Ensure production env file is rendered from vault vars
   ansible.builtin.template:
     src: production.env.j2
@@ -164,6 +174,19 @@
     group: "{{ security_deploy_group }}"
     mode: "0600"
   notify: Restart piggypulse stack
+
+- name: Verify rendered env includes non-empty image refs
+  ansible.builtin.shell: |
+    set -euo pipefail
+    api="$(grep -E '^BUDGET_API_IMAGE=' "{{ piggypulse_env_path }}" | head -n1 | cut -d= -f2-)"
+    cron="$(grep -E '^BUDGET_CRON_IMAGE=' "{{ piggypulse_env_path }}" | head -n1 | cut -d= -f2-)"
+    echo "BUDGET_API_IMAGE=${api}"
+    echo "BUDGET_CRON_IMAGE=${cron}"
+    test -n "${api}"
+    test -n "${cron}"
+  args:
+    executable: /bin/bash
+  changed_when: false
 
 - name: Ensure GHCR credentials are configured when required
   ansible.builtin.assert:

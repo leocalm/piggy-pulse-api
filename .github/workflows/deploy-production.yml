@@ -27,7 +27,7 @@ concurrency:
 jobs:
   deploy:
     name: Run Ansible production deploy
-    runs-on: [self-hosted, linux]
+    runs-on: ubuntu-latest
     environment: production
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
@@ -40,23 +40,54 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: image-digests
-          path: .
+          path: image-digests
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create image vars for manual dispatch
-        if: ${{ github.event_name == 'workflow_dispatch' }}
+      - name: Materialize deploy image vars file
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_API_IMAGE: ${{ inputs.piggypulse_api_image }}
+          MANUAL_CRON_IMAGE: ${{ inputs.piggypulse_cron_image }}
         run: |
-          cat > ansible-image-vars.yml <<EOFVARS
-          piggypulse_api_image: ${{ inputs.piggypulse_api_image }}
-          piggypulse_cron_image: ${{ inputs.piggypulse_cron_image }}
+          set -euo pipefail
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            cat > ansible-image-vars.yml <<EOFVARS
+          piggypulse_api_image: ${MANUAL_API_IMAGE}
+          piggypulse_cron_image: ${MANUAL_CRON_IMAGE}
           EOFVARS
+          else
+            test -f image-digests/ansible-image-vars.yml
+            cp image-digests/ansible-image-vars.yml ansible-image-vars.yml
+          fi
 
       - name: Validate required deploy files and secrets
         run: |
           test -f ansible-image-vars.yml
+          grep -Eq '^piggypulse_api_image:[[:space:]]*.+$' ansible-image-vars.yml
+          grep -Eq '^piggypulse_cron_image:[[:space:]]*.+$' ansible-image-vars.yml
+          echo "Using ansible-image-vars.yml:"
+          cat ansible-image-vars.yml
           test -n "${{ secrets.ANSIBLE_VAULT_PASSWORD }}"
+          test -n "${{ secrets.PROD_WIREGUARD_CONFIG }}"
           test -n "${{ secrets.PROD_SSH_KNOWN_HOSTS }}"
+
+      - name: Install Ansible and WireGuard tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible wireguard-tools
+
+      - name: Configure and start WireGuard
+        run: |
+          sudo install -d -m 0700 /etc/wireguard
+          printf '%s\n' "${{ secrets.PROD_WIREGUARD_CONFIG }}" | sudo tee /etc/wireguard/wg0.conf > /dev/null
+          sudo chmod 600 /etc/wireguard/wg0.conf
+          sudo wg-quick up wg0
+          sudo wg show
+
+      - name: Verify VPN connectivity to production host
+        run: |
+          ping -c 3 10.66.0.1
 
       - name: Prepare SSH known_hosts
         run: |
@@ -66,12 +97,22 @@ jobs:
           chmod 644 ~/.ssh/known_hosts
 
       - name: Optionally install deploy SSH key from secret
-        if: ${{ secrets.PROD_SSH_PRIVATE_KEY != '' }}
+        env:
+          PROD_SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+          PROD_SSH_PRIVATE_KEY_B64: ${{ secrets.PROD_SSH_PRIVATE_KEY_B64 }}
         run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "${{ secrets.PROD_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
+          if [ -n "${PROD_SSH_PRIVATE_KEY_B64:-}" ] || [ -n "${PROD_SSH_PRIVATE_KEY:-}" ]; then
+            mkdir -p ~/.ssh
+            chmod 700 ~/.ssh
+            if [ -n "${PROD_SSH_PRIVATE_KEY_B64:-}" ]; then
+              printf '%s' "${PROD_SSH_PRIVATE_KEY_B64}" | tr -d '[:space:]' | base64 -d > ~/.ssh/id_ed25519
+            else
+              # Support secrets copied with escaped newlines and strip CRLF.
+              printf '%b' "${PROD_SSH_PRIVATE_KEY}" | tr -d '\r' > ~/.ssh/id_ed25519
+            fi
+            chmod 600 ~/.ssh/id_ed25519
+            ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null
+          fi
 
       - name: Write vault password file
         run: |
@@ -86,12 +127,16 @@ jobs:
       - name: Run Ansible deploy
         env:
           ANSIBLE_CONFIG: ansible/ansible.cfg
+          ANSIBLE_VAULT_IDENTITY_LIST: prod@.vault_pass,default@.vault_pass
         run: |
           ansible-playbook ansible/site.yml \
-            --vault-password-file .vault_pass \
+            --vault-id prod@.vault_pass \
+            --vault-id default@.vault_pass \
             --extra-vars @ansible-image-vars.yml
 
       - name: Cleanup sensitive temp files
         if: always()
         run: |
           rm -f .vault_pass
+          sudo wg-quick down wg0 || true
+          sudo rm -f /etc/wireguard/wg0.conf

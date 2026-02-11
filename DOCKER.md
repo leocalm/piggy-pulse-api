@@ -47,7 +47,6 @@ This will:
 2. Build and start the Budget API
 3. Build and start the cron worker
 4. Start Caddy reverse proxy
-5. Run database migrations automatically
 
 ### 3. Access the Application
 
@@ -116,14 +115,13 @@ docker compose logs -f db
 
 ### Run Database Migrations
 
-Migrations run automatically when the budget container starts via the entrypoint script. To run manually:
+Database migrations are embedded in the API binary and run automatically during startup.
+
+If you need to run them manually from an operator workstation, use `sqlx-cli` against the target database:
 
 ```bash
-# Run migrations using sqlx-cli
-docker compose exec budget sqlx migrate run --source /app/migrations
-
-# Check migration status
-docker compose exec budget sqlx migrate info --source /app/migrations
+DATABASE_URL=postgres://postgres:<password>@<host>:5432/budget_db \
+  sqlx migrate run --source migrations
 ```
 
 ### Access Database

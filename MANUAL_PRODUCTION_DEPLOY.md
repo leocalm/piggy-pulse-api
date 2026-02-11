@@ -113,6 +113,7 @@ Update `inventories/production/group_vars/all/all.yml`:
 
 - `piggypulse_api_image`
 - `piggypulse_cron_image`
+- `piggypulse_budget_image_platform` (keep `linux/amd64` for Hetzner x86_64)
 
 Use immutable digest refs (`ghcr.io/...@sha256:...`).
 

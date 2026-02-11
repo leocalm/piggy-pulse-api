@@ -4,5 +4,6 @@ terraform.tfstate
 terraform.tfstate.*
 crash.log
 *.tfvars
+*.tfvars.old
 wg-*.conf
 *.key
