@@ -1,16 +1,30 @@
-FROM alpine:3.22
-
-RUN apk add --no-cache curl tzdata
+# Build stage
+FROM rust:1.93.0 AS builder
 
 WORKDIR /app
 
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+
+RUN cargo build --release --bin cron
+
+# Runtime stage
+FROM debian:trixie-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    cron \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /app/target/release/cron /app/cron
 COPY docker-cron-entrypoint.sh /usr/local/bin/docker-cron-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-cron-entrypoint.sh
+
+RUN chmod +x /app/cron /usr/local/bin/docker-cron-entrypoint.sh
 
 ENV CRON_SCHEDULE="*/15 * * * *"
-ENV CRON_BASE_URL="http://budget:8000"
-ENV CRON_API_BASE_PATH="/api/v1"
-ENV CRON_TOKEN=""
 ENV TZ="UTC"
 
 ENTRYPOINT ["/usr/local/bin/docker-cron-entrypoint.sh"]

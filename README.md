@@ -31,6 +31,16 @@ cargo run
 
 The server will start (by default) on `http://127.0.0.1:8000`.
 
+## Running Cron Jobs
+
+Periodic jobs are executed by a dedicated binary instead of an HTTP endpoint.
+
+Run automatic budget period generation:
+
+```bash
+cargo run --bin cron -- generate-periods
+```
+
 ### Endpoints
 
 All API endpoints are versioned and mounted under `/api/v1` by default. The current version is `v1` (configurable via `api.base_path` or `BUDGET_API__BASE_PATH`). You can also expose the same routes under additional base paths via `api.additional_base_paths`. The examples below assume the default base path.

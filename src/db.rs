@@ -4,7 +4,7 @@ use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use std::time::Duration;
 
-async fn init_pool(db_config: &DatabaseConfig) -> Result<PgPool, sqlx::Error> {
+pub async fn init_pool(db_config: &DatabaseConfig) -> Result<PgPool, sqlx::Error> {
     PgPoolOptions::new()
         .max_connections(db_config.max_connections)
         .min_connections(db_config.min_connections)
