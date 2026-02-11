@@ -475,7 +475,7 @@ mod tests {
             smtp_port: 587,
             smtp_username: "test".to_string(),
             smtp_password: "test".to_string(),
-            from_address: "noreply@piggypulse.com".to_string(),
+            from_address: "noreply@piggy-pulse.com".to_string(),
             from_name: "PiggyPulse".to_string(),
             enabled: false,
         };
@@ -497,7 +497,7 @@ mod tests {
             smtp_port: 587,
             smtp_username: "test".to_string(),
             smtp_password: "test".to_string(),
-            from_address: "noreply@piggypulse.com".to_string(),
+            from_address: "noreply@piggy-pulse.com".to_string(),
             from_name: "PiggyPulse".to_string(),
             enabled: false,
         };

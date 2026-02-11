@@ -70,7 +70,7 @@ Key sections and their defaults:
 | | `smtp_port` | 587 |
 | | `smtp_username` | `""` |
 | | `smtp_password` | `""` |
-| | `from_address` | `noreply@piggypulse.com` |
+| | `from_address` | `noreply@piggy-pulse.com` |
 | | `from_name` | `PiggyPulse` |
 | | `enabled` | `false` |
 | `[password_reset]` | `token_ttl_seconds` | 900 (15 min) |

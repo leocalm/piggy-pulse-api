@@ -103,7 +103,9 @@ pub async fn post_user_login(
     let repo = PostgresRepository { pool: pool.inner().clone() };
     match repo.get_user_by_email(&payload.email).await? {
         Some(user) => {
-            repo.verify_password(&user, &payload.password).await?;
+            if repo.verify_password(&user, &payload.password).await.is_err() {
+                return Err(AppError::InvalidCredentials);
+            }
             let ttl_seconds = config.session.ttl_seconds.max(60);
             let expires_at = chrono::Utc::now() + chrono::Duration::seconds(ttl_seconds);
             let session = repo.create_session(&user.id, expires_at).await?;
@@ -122,6 +124,7 @@ pub async fn post_user_login(
             // Equalize response timing so attackers cannot distinguish
             // existing from non-existing accounts by measuring latency.
             PostgresRepository::dummy_verify(&payload.password);
+            return Err(AppError::InvalidCredentials);
         }
     }
 
