@@ -47,6 +47,7 @@ COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 # Create a non-root user and set permissions
 RUN useradd -m -u 1000 appuser \
+    && sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
     && chmod +x /usr/local/bin/docker-entrypoint.sh \
     && chown -R appuser:appuser /app
 
@@ -56,5 +57,5 @@ EXPOSE 8000
 # Switch to non-root user
 USER appuser
 
-# Use entrypoint script
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+# Use entrypoint script through /bin/sh for portability
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/docker-entrypoint.sh"]

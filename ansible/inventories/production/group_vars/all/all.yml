@@ -34,13 +34,16 @@ wireguard_peers:
 
 # App role
 piggypulse_project_root: /opt/piggypulse
+piggypulse_deploy_mode: image_only # repo or image_only
+piggypulse_local_assets_dir: "{{ playbook_dir }}/../deploy/production"
 piggypulse_repo_url: https://github.com/leocalm/budget.git
 piggypulse_repo_version: main
 piggypulse_repo_update: true
-piggypulse_repo_requires_auth: true
+piggypulse_repo_requires_auth: false
+piggypulse_ghcr_requires_auth: true
 piggypulse_repo_dest: /opt/piggypulse/budget
-piggypulse_compose_dir: /opt/piggypulse/budget/deploy/production
-piggypulse_env_path: /opt/piggypulse/budget/deploy/production/.env
+piggypulse_compose_dir: /opt/piggypulse/stack/production
+piggypulse_env_path: /opt/piggypulse/stack/production/.env
 piggypulse_systemd_unit: piggypulse-stack.service
 piggypulse_api_image: ghcr.io/leocalm/budget-api@sha256:ecca1ee64eb0d6de2e46e1cefa632c0a8e4211236c94a5c14e9b4361a9a98703
 piggypulse_cron_image: ghcr.io/leocalm/budget-cron@sha256:eb5350d674323316ef0180dabf646955b68d3a571b7768ee620c313ae547899f

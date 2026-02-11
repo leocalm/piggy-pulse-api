@@ -7,9 +7,9 @@ After=network-online.target docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory={{ piggypulse_compose_dir }}
-ExecStartPre=/usr/bin/docker compose pull
-ExecStart=/usr/bin/docker compose up -d --remove-orphans
-ExecStop=/usr/bin/docker compose down
+ExecStartPre={{ piggypulse_compose_bin }}{% if piggypulse_compose_subcommand %} {{ piggypulse_compose_subcommand }}{% endif %} pull
+ExecStart={{ piggypulse_compose_bin }}{% if piggypulse_compose_subcommand %} {{ piggypulse_compose_subcommand }}{% endif %} up -d --remove-orphans
+ExecStop={{ piggypulse_compose_bin }}{% if piggypulse_compose_subcommand %} {{ piggypulse_compose_subcommand }}{% endif %} down
 TimeoutStartSec=0
 
 [Install]

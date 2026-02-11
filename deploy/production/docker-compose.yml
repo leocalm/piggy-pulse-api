@@ -62,9 +62,28 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        max_retries=30
+        retry_count=0
+        while [ "$retry_count" -lt "$max_retries" ]; do
+          if sqlx migrate run --source /app/migrations 2>&1; then
+            break
+          fi
+          retry_count=$((retry_count + 1))
+          if [ "$retry_count" -lt "$max_retries" ]; then
+            sleep 2
+          else
+            echo "ERROR: Database migrations failed after $max_retries attempts"
+            exit 1
+          fi
+        done
+        exec /app/budget
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-budget_db}
-      BUDGET_DATABASE__URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-budget_db}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENC:?POSTGRES_PASSWORD_URLENC is required}@db:5432/${POSTGRES_DB:-budget_db}
+      BUDGET_DATABASE__URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENC:?POSTGRES_PASSWORD_URLENC is required}@db:5432/${POSTGRES_DB:-budget_db}
       BUDGET_DATABASE__MAX_CONNECTIONS: ${BUDGET_DATABASE_MAX_CONNECTIONS:-16}
       BUDGET_DATABASE__MIN_CONNECTIONS: ${BUDGET_DATABASE_MIN_CONNECTIONS:-4}
       BUDGET_DATABASE__CONNECTION_TIMEOUT: ${BUDGET_DATABASE_CONNECTION_TIMEOUT:-5}
@@ -82,10 +101,10 @@ services:
       BUDGET_CORS__ALLOWED_ORIGINS: "${BUDGET_CORS_ALLOWED_ORIGINS:?BUDGET_CORS_ALLOWED_ORIGINS is required}"
       BUDGET_CORS__ALLOW_CREDENTIALS: ${BUDGET_CORS_ALLOW_CREDENTIALS:-true}
 
-      BUDGET_RATE_LIMIT__USE_FORWARDED_IP: true
+      BUDGET_RATE_LIMIT__USE_FORWARDED_IP: "true"
       BUDGET_RATE_LIMIT__FORWARDED_IP_HEADER: x-forwarded-for
       BUDGET_RATE_LIMIT__BACKEND: redis
-      BUDGET_RATE_LIMIT__REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379/0"
+      BUDGET_RATE_LIMIT__REDIS_URL: "redis://:${REDIS_PASSWORD_URLENC:?REDIS_PASSWORD_URLENC is required}@redis:6379/0"
       BUDGET_RATE_LIMIT__REDIS_KEY_PREFIX: "budget:rate_limit:"
 
       BUDGET_LOGGING__LEVEL: ${BUDGET_LOGGING_LEVEL:-info}
@@ -124,7 +143,7 @@ services:
       - /tmp:rw,noexec,nosuid,size=32m
     environment:
       CRON_SCHEDULE: ${CRON_SCHEDULE:-*/15 * * * *}
-      BUDGET_DATABASE__URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-budget_db}
+      BUDGET_DATABASE__URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENC:?POSTGRES_PASSWORD_URLENC is required}@db:5432/${POSTGRES_DB:-budget_db}
       BUDGET_DATABASE__MAX_CONNECTIONS: ${BUDGET_DATABASE_MAX_CONNECTIONS:-8}
       BUDGET_DATABASE__MIN_CONNECTIONS: ${BUDGET_DATABASE_MIN_CONNECTIONS:-2}
       BUDGET_DATABASE__CONNECTION_TIMEOUT: ${BUDGET_DATABASE_CONNECTION_TIMEOUT:-5}

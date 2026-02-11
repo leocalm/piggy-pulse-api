@@ -26,16 +26,23 @@ Terraform should provision infrastructure only. Use Ansible for day-2 operations
 
 1. Update host IP and SSH key in `inventories/production/hosts.yml`.
 2. Update non-secret settings in `inventories/production/group_vars/all/all.yml`.
-3. Set `piggypulse_api_image` and `piggypulse_cron_image` to GHCR digest refs published by CI.
-4. Source digests from the `image-digests` artifact in the `Publish Container Images` workflow run.
-5. Use `ansible-image-vars.yml` from that artifact to update:
+3. Set `piggypulse_deploy_mode`:
+   - `image_only` (recommended): no git checkout on the server, deploy files are copied from this repo checkout.
+   - `repo`: server performs `git clone/pull` before deploy.
+4. Set `piggypulse_api_image` and `piggypulse_cron_image` to GHCR digest refs published by CI.
+5. Source digests from the `image-digests` artifact in the `Publish Container Images` workflow run.
+6. Use `ansible-image-vars.yml` from that artifact to update:
    - `piggypulse_api_image`
    - `piggypulse_cron_image`
-6. If the repo is private, set these in Vault:
+7. If `piggypulse_deploy_mode: repo` and the repo is private, set these in Vault:
    - `vault_piggypulse_repo_username` (your GitHub username)
    - `vault_piggypulse_repo_token`
    and keep `piggypulse_repo_url` as HTTPS.
-7. Set `piggypulse_repo_requires_auth: true` for private repositories.
+8. Set `piggypulse_repo_requires_auth: true` for private repositories (repo mode only).
+9. If GHCR packages are private, set:
+   - `piggypulse_ghcr_requires_auth: true`
+   - `vault_piggypulse_ghcr_username`
+   - `vault_piggypulse_ghcr_token` (`read:packages` scope)
 
 ## Vault Setup
 
@@ -66,10 +73,15 @@ Or:
 make vault-edit
 ```
 
-If the repository is private, add repo credentials in `vault.yml`:
+If `piggypulse_deploy_mode: repo` and the repository is private, add repo credentials in `vault.yml`:
 - `vault_piggypulse_repo_username`
 - `vault_piggypulse_repo_token`
   - token should have read access to repository contents (Fine-grained PAT: `Contents: Read`).
+
+If GHCR images are private, also add:
+- `vault_piggypulse_ghcr_username`
+- `vault_piggypulse_ghcr_token`
+  - token should have package pull access (`read:packages`).
 
 Run playbook with vault prompt:
 

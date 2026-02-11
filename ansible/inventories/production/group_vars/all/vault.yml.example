@@ -12,7 +12,12 @@ vault_piggypulse_email_smtp_host: smtp.example.com
 vault_piggypulse_email_smtp_username: smtp-user
 vault_piggypulse_email_smtp_password: smtp-password
 
-# Optional for private repository checkout over HTTPS.
+# Optional for private repository checkout over HTTPS (repo mode only).
 # If unset, Ansible will use piggypulse_repo_url as-is.
 vault_piggypulse_repo_username: your-github-username
 vault_piggypulse_repo_token: ""
+
+# Optional for private GHCR image pulls.
+# Required when piggypulse_ghcr_requires_auth=true.
+vault_piggypulse_ghcr_username: your-github-username
+vault_piggypulse_ghcr_token: ""

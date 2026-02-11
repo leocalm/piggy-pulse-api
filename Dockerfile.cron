@@ -22,9 +22,10 @@ WORKDIR /app
 COPY --from=builder /app/target/release/cron /app/cron
 COPY docker-cron-entrypoint.sh /usr/local/bin/docker-cron-entrypoint.sh
 
-RUN chmod +x /app/cron /usr/local/bin/docker-cron-entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/docker-cron-entrypoint.sh \
+    && chmod +x /app/cron /usr/local/bin/docker-cron-entrypoint.sh
 
 ENV CRON_SCHEDULE="*/15 * * * *"
 ENV TZ="UTC"
 
-ENTRYPOINT ["/usr/local/bin/docker-cron-entrypoint.sh"]
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/docker-cron-entrypoint.sh"]
