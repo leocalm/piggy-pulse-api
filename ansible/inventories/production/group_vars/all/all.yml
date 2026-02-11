@@ -6,9 +6,9 @@ server_timezone: UTC
 security_deploy_user: deploy
 security_deploy_group: deploy
 security_deploy_ssh_public_keys:
-  - "h-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFF0Xm9B1ApH6wA0+x8GRiWkLuUZ9i6THmWtqalE5dsG leonardo.almeida@Leonardos-Mac-mini.local"
+  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFF0Xm9B1ApH6wA0+x8GRiWkLuUZ9i6THmWtqalE5dsG leonardo.almeida@Leonardos-Mac-mini.local"
 
-security_ssh_mode: admin_cidr # admin_cidr or vpn_only
+security_ssh_mode: vpn_only # admin_cidr or vpn_only
 security_enable_breakglass_ssh: false
 security_admin_ssh_allowed_cidrs:
   - "143.179.194.121/32"
@@ -45,8 +45,8 @@ piggypulse_repo_dest: /opt/piggypulse/budget
 piggypulse_compose_dir: /opt/piggypulse/stack/production
 piggypulse_env_path: /opt/piggypulse/stack/production/.env
 piggypulse_systemd_unit: piggypulse-stack.service
-piggypulse_api_image: ghcr.io/leocalm/budget-api@sha256:9fa2dccfb4a764e5e97ce3c052fad77ac101b0cdc95a62a5303a89954a7535fd
-piggypulse_cron_image: ghcr.io/leocalm/budget-cron@sha256:bad07f15858abbebd46316034a4a6118603f1f2862a173031acf6319919e7f9d
+piggypulse_api_image: ghcr.io/leocalm/budget-api:sha-c19dff51f2839dbcc54d0458240dc9de87af88ab
+piggypulse_cron_image: ghcr.io/leocalm/budget-cron:sha-c19dff51f2839dbcc54d0458240dc9de87af88ab
 piggypulse_budget_image_platform: linux/amd64
 
 piggypulse_api_domain: api.piggy-pulse.com
