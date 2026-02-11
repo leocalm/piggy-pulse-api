@@ -98,6 +98,7 @@ impl PostgresRepository {
     }
 
     /// Clean up expired password reset tokens
+    #[allow(dead_code)]
     pub async fn cleanup_expired_password_resets(&self) -> Result<u64, AppError> {
         let result = sqlx::query(
             r#"
