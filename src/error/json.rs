@@ -64,13 +64,6 @@ impl<'r, T: DeserializeOwned> FromData<'r> for JsonBody<T> {
         match serde_json::from_slice::<T>(&bytes) {
             Ok(value) => Outcome::Success(JsonBody(value)),
             Err(e) => {
-                let body_preview = String::from_utf8_lossy(&bytes);
-                let body_preview = if body_preview.len() > 500 {
-                    format!("{}...", &body_preview[..500])
-                } else {
-                    body_preview.to_string()
-                };
-
                 warn!(
                     request_id = %request_id,
                     method = %req.method(),
@@ -79,7 +72,7 @@ impl<'r, T: DeserializeOwned> FromData<'r> for JsonBody<T> {
                     error_line = e.line(),
                     error_column = e.column(),
                     error_category = ?e.classify(),
-                    request_body = %body_preview,
+                    body_size_bytes = bytes.len(),
                     "Failed to parse JSON request body"
                 );
 

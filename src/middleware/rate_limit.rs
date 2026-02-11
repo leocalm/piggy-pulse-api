@@ -215,8 +215,8 @@ impl RateLimiter {
         let counts: Vec<Option<u32>> = match redis::cmd("MGET").arg(&keys).query_async(&mut conn).await {
             Ok(counts) => counts,
             Err(err) => {
-                warn!(error = %err, "rate limiter redis lookup failed; allowing request");
-                return RateLimitDecision::Allow;
+                warn!(error = %err, bucket = %bucket.as_str(), "rate limiter redis lookup failed");
+                return self.redis_failure_decision(bucket);
             }
         };
 
@@ -227,8 +227,8 @@ impl RateLimiter {
                 let ttl_ms: i64 = match redis::cmd("PTTL").arg(&keys[idx]).query_async(&mut conn).await {
                     Ok(ttl_ms) => ttl_ms,
                     Err(err) => {
-                        warn!(error = %err, "rate limiter redis ttl lookup failed; allowing request");
-                        return RateLimitDecision::Allow;
+                        warn!(error = %err, bucket = %bucket.as_str(), "rate limiter redis ttl lookup failed");
+                        return self.redis_failure_decision(bucket);
                     }
                 };
 
@@ -260,8 +260,19 @@ impl RateLimiter {
         }
 
         if let Err(err) = pipe.query_async::<()>(&mut conn).await {
-            warn!(error = %err, "rate limiter redis increment failed; allowing request");
-            return RateLimitDecision::Allow;
+            warn!(error = %err, bucket = %bucket.as_str(), "rate limiter redis increment failed");
+            return self.redis_failure_decision(bucket);
+        }
+
+        RateLimitDecision::Allow
+    }
+
+    fn redis_failure_decision(&self, bucket: RateLimitBucket) -> RateLimitDecision {
+        // Fail closed for auth endpoints so brute-force protection remains effective
+        // even when Redis is unavailable. Keep read/mutation fail-open to prioritize
+        // availability for already-authenticated usage.
+        if bucket == RateLimitBucket::Auth {
+            return RateLimitDecision::Limited { retry_after: self.window };
         }
 
         RateLimitDecision::Allow

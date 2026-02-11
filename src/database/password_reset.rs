@@ -184,7 +184,7 @@ impl PostgresRepository {
     pub async fn invalidate_all_user_sessions(&self, user_id: &Uuid) -> Result<u64, AppError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM sessions
+            DELETE FROM user_session
             WHERE user_id = $1
             "#,
         )
