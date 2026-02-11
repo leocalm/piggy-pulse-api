@@ -105,7 +105,7 @@ impl From<&AppError> for Status {
     fn from(e: &AppError) -> Self {
         match e {
             AppError::UserNotFound => Status::NotFound,
-            AppError::InvalidCredentials => Status::Forbidden,
+            AppError::InvalidCredentials => Status::Unauthorized,
             AppError::PasswordHash { .. } => Status::InternalServerError,
             AppError::Db { .. } => Status::InternalServerError,
             AppError::Unauthorized => Status::Unauthorized,
