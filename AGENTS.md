@@ -19,6 +19,9 @@ cargo build
 # Run in release mode
 cargo build --release && cargo run --release
 
+# Run cron worker task (automatic period generation)
+cargo run --bin cron -- generate-periods
+
 # Format code (max line width: 160)
 cargo fmt
 
@@ -160,6 +163,8 @@ All endpoints are mounted under `/api/v1` by default (configurable via `api.base
 - `/api/v1/dashboard` — `budget-per-day`, `spent-per-category`, `monthly-burn-in`, `month-progress`, `recent-transactions`, `dashboard` (all accept `period_id`)
   `spent-per-category` returns `percentage_spent` in basis points (percent * 100). Example: 2534 = 25.34%.
 - `/api/v1/overlays` — period schedule management and overlay features
+- Cron tasks are **not** exposed via API routes. Automatic period generation runs through the dedicated executable:
+  `cargo run --bin cron -- generate-periods` (or the built `cron` binary in containers).
 
 404 and 409 responses are caught under `/api/v1` by default and returned as `{"message":"..."}` JSON.
 

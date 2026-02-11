@@ -1,20 +1,32 @@
 #!/bin/sh
 set -eu
 
-if [ -z "${CRON_TOKEN:-}" ]; then
-  echo "CRON_TOKEN is required"
+DB_URL="${BUDGET_DATABASE__URL:-${DATABASE_URL:-}}"
+if [ -z "${DB_URL}" ]; then
+  echo "BUDGET_DATABASE__URL (or DATABASE_URL) is required"
   exit 1
 fi
 
 CRON_SCHEDULE="${CRON_SCHEDULE:-*/15 * * * *}"
-CRON_BASE_URL="${CRON_BASE_URL:-http://budget:8000}"
-CRON_API_BASE_PATH="${CRON_API_BASE_PATH:-/api/v1}"
-CRON_ENDPOINT="${CRON_BASE_URL%/}${CRON_API_BASE_PATH}/cron/generate-periods"
+CRON_FILE="/etc/cron.d/budget-generate-periods"
 
-printf "%s /usr/bin/curl -fsS -X POST -H 'x-cron-token: %s' '%s' >> /proc/1/fd/1 2>> /proc/1/fd/2\n" \
-  "$CRON_SCHEDULE" "$CRON_TOKEN" "$CRON_ENDPOINT" > /etc/crontabs/root
+{
+  echo "SHELL=/bin/sh"
+  echo "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  echo "TZ=${TZ:-UTC}"
+  echo "BUDGET_DATABASE__URL=${DB_URL}"
+  [ -n "${BUDGET_DATABASE__MAX_CONNECTIONS:-}" ] && echo "BUDGET_DATABASE__MAX_CONNECTIONS=${BUDGET_DATABASE__MAX_CONNECTIONS}"
+  [ -n "${BUDGET_DATABASE__MIN_CONNECTIONS:-}" ] && echo "BUDGET_DATABASE__MIN_CONNECTIONS=${BUDGET_DATABASE__MIN_CONNECTIONS}"
+  [ -n "${BUDGET_DATABASE__CONNECTION_TIMEOUT:-}" ] && echo "BUDGET_DATABASE__CONNECTION_TIMEOUT=${BUDGET_DATABASE__CONNECTION_TIMEOUT}"
+  [ -n "${BUDGET_DATABASE__ACQUIRE_TIMEOUT:-}" ] && echo "BUDGET_DATABASE__ACQUIRE_TIMEOUT=${BUDGET_DATABASE__ACQUIRE_TIMEOUT}"
+  [ -n "${BUDGET_LOGGING__LEVEL:-}" ] && echo "BUDGET_LOGGING__LEVEL=${BUDGET_LOGGING__LEVEL}"
+  [ -n "${BUDGET_LOGGING__JSON_FORMAT:-}" ] && echo "BUDGET_LOGGING__JSON_FORMAT=${BUDGET_LOGGING__JSON_FORMAT}"
+  echo "${CRON_SCHEDULE} root /app/cron generate-periods >> /proc/1/fd/1 2>> /proc/1/fd/2"
+} > "${CRON_FILE}"
+
+chmod 0644 "${CRON_FILE}"
 
 echo "Cron schedule: ${CRON_SCHEDULE}"
-echo "Cron endpoint: ${CRON_ENDPOINT}"
+echo "Cron job: /app/cron generate-periods"
 
-exec crond -f -l 8
+exec cron -f
