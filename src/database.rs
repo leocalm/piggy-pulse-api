@@ -5,6 +5,7 @@ pub mod category;
 pub mod currency;
 pub mod dashboard;
 pub mod overlay;
+pub mod password_reset;
 pub mod postgres_repository;
 pub mod session;
 pub mod settings;

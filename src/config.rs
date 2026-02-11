@@ -5,7 +5,7 @@ use rocket::figment::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Config {
     pub database: DatabaseConfig,
     pub server: ServerConfig,
@@ -14,6 +14,8 @@ pub struct Config {
     pub rate_limit: RateLimitConfig,
     pub session: SessionConfig,
     pub api: ApiConfig,
+    pub email: EmailConfig,
+    pub password_reset: PasswordResetConfig,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -76,6 +78,24 @@ pub struct ApiConfig {
     pub base_path: String,
     pub additional_base_paths: Vec<String>,
     pub expose_docs: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct EmailConfig {
+    pub smtp_host: String,
+    pub smtp_port: u16,
+    pub smtp_username: String,
+    pub smtp_password: String,
+    pub from_address: String,
+    pub from_name: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct PasswordResetConfig {
+    pub token_ttl_seconds: i64,
+    pub max_attempts_per_hour: u32,
+    pub frontend_reset_url: String,
 }
 
 pub const DEFAULT_API_BASE_PATH: &str = "/api/v1";
@@ -143,6 +163,46 @@ impl Default for ApiConfig {
             base_path: DEFAULT_API_BASE_PATH.to_string(),
             additional_base_paths: Vec::new(),
             expose_docs: false,
+        }
+    }
+}
+
+impl Default for EmailConfig {
+    fn default() -> Self {
+        Self {
+            smtp_host: "localhost".to_string(),
+            smtp_port: 587,
+            smtp_username: "".to_string(),
+            smtp_password: "".to_string(),
+            from_address: "noreply@piggypulse.com".to_string(),
+            from_name: "PiggyPulse".to_string(),
+            enabled: false, // Disabled by default for safety
+        }
+    }
+}
+
+impl Default for PasswordResetConfig {
+    fn default() -> Self {
+        Self {
+            token_ttl_seconds: 900, // 15 minutes
+            max_attempts_per_hour: 3,
+            frontend_reset_url: "http://localhost:3000/reset-password".to_string(),
+        }
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            database: DatabaseConfig::default(),
+            server: ServerConfig::default(),
+            logging: LoggingConfig::default(),
+            cors: CorsConfig::default(),
+            rate_limit: RateLimitConfig::default(),
+            session: SessionConfig::default(),
+            api: ApiConfig::default(),
+            email: EmailConfig::default(),
+            password_reset: PasswordResetConfig::default(),
         }
     }
 }

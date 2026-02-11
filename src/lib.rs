@@ -194,6 +194,7 @@ fn stage_rate_limiter(rate_limit_config: config::RateLimitConfig) -> AdHoc {
 fn mount_api_routes(mut rocket: Rocket<Build>, base_path: &str) -> Rocket<Build> {
     rocket = rocket.mount(join_base_path(base_path, "accounts"), app_routes::account::routes().0);
     rocket = rocket.mount(join_base_path(base_path, "users"), app_routes::user::routes().0);
+    rocket = rocket.mount(join_base_path(base_path, ""), app_routes::password_reset::routes().0);
     rocket = rocket.mount(join_base_path(base_path, "settings"), app_routes::settings::routes().0);
     rocket = rocket.mount(join_base_path(base_path, "currency"), app_routes::currency::routes().0);
     rocket = rocket.mount(join_base_path(base_path, "categories"), app_routes::category::routes().0);
@@ -230,6 +231,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
             rocket, primary_base_path.clone(), settings,
             "/accounts" => app_routes::account::routes(),
             "/users" => app_routes::user::routes(),
+            "" => app_routes::password_reset::routes(),
             "/settings" => app_routes::settings::routes(),
             "/currency" => app_routes::currency::routes(),
             "/categories" => app_routes::category::routes(),
@@ -261,6 +263,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
                 rocket, base_path.clone(), settings,
                 "/accounts" => app_routes::account::routes(),
                 "/users" => app_routes::user::routes(),
+                "" => app_routes::password_reset::routes(),
                 "/settings" => app_routes::settings::routes(),
                 "/currency" => app_routes::currency::routes(),
                 "/categories" => app_routes::category::routes(),

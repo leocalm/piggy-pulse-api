@@ -116,7 +116,7 @@ impl PostgresRepository {
     }
 }
 
-fn password_hash(password: &str) -> (String, String) {
+pub(crate) fn password_hash(password: &str) -> (String, String) {
     let salt_string = SaltString::generate(&mut OsRng);
     let salt = Salt::from(&salt_string);
     let password_hash = PasswordHash::generate(Argon2::default(), password.as_bytes(), salt).unwrap();
