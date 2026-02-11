@@ -59,6 +59,8 @@ pub enum AppError {
         #[source]
         source: figment::Error,
     },
+    #[error("Email error: {0}")]
+    EmailError(String),
 }
 
 impl AppError {
@@ -80,6 +82,10 @@ impl AppError {
         Self::PasswordHash {
             message: format!("{}: {}", message.into(), source),
         }
+    }
+
+    pub fn email(message: impl Into<String>) -> Self {
+        Self::EmailError(message.into())
     }
 }
 
@@ -111,6 +117,7 @@ impl From<&AppError> for Status {
             AppError::UuidError { .. } => Status::BadRequest,
             AppError::ValidationError(_) => Status::BadRequest,
             AppError::ConfigurationError { .. } => Status::InternalServerError,
+            AppError::EmailError(_) => Status::InternalServerError,
         }
     }
 }

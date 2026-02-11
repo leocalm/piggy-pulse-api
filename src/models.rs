@@ -6,6 +6,7 @@ pub mod currency;
 pub mod dashboard;
 pub mod overlay;
 pub mod pagination;
+pub mod password_reset;
 pub mod session;
 pub mod settings;
 pub mod transaction;

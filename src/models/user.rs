@@ -48,7 +48,7 @@ impl From<&User> for UserResponse {
     }
 }
 
-fn validate_password_strength(password: &str) -> Result<(), ValidationError> {
+pub fn validate_password_strength(password: &str) -> Result<(), ValidationError> {
     let estimate = zxcvbn(password, &[]).map_err(|_| ValidationError::new("password_strength"))?;
     if estimate.score() < 3 {
         let mut error = ValidationError::new("password_strength");
