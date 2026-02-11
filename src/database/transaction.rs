@@ -346,6 +346,7 @@ impl PostgresRepository {
             let query = format!(
                 "SELECT {} FROM transaction t CROSS JOIN budget_period bp {} \
                  WHERE bp.id = $1 \
+                   AND bp.user_id = $2 \
                    AND t.user_id = $2 \
                    AND t.occurred_at >= bp.start_date \
                    AND t.occurred_at <= bp.end_date \
@@ -365,6 +366,7 @@ impl PostgresRepository {
             let query = format!(
                 "SELECT {} FROM transaction t CROSS JOIN budget_period bp {} \
                  WHERE bp.id = $1 \
+                   AND bp.user_id = $2 \
                    AND t.user_id = $2 \
                    AND t.occurred_at >= bp.start_date \
                    AND t.occurred_at <= bp.end_date \
@@ -447,6 +449,7 @@ impl PostgresRepository {
             JOIN category c ON t.category_id = c.id
             CROSS JOIN budget_period bp
             WHERE bp.id = $1
+                AND bp.user_id = $2
                 AND t.user_id = $2
                 AND t.occurred_at >= bp.start_date
                 AND t.occurred_at <= bp.end_date

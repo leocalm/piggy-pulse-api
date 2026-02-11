@@ -174,7 +174,7 @@ impl Default for EmailConfig {
             smtp_port: 587,
             smtp_username: "".to_string(),
             smtp_password: "".to_string(),
-            from_address: "noreply@piggypulse.com".to_string(),
+            from_address: "noreply@piggy-pulse.com".to_string(),
             from_name: "PiggyPulse".to_string(),
             enabled: false, // Disabled by default for safety
         }
