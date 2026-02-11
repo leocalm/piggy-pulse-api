@@ -15,12 +15,14 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-budget_db}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-budget_db}" ]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - budget_network
+    ports:
+      - "5432:5432"
 
   # Budget API application
   budget:
