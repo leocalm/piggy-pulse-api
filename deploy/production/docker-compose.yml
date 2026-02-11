@@ -63,25 +63,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
-    entrypoint:
-      - /bin/sh
-      - -ec
-      - |
-        max_retries=30
-        retry_count=0
-        while [ "$$retry_count" -lt "$$max_retries" ]; do
-          if sqlx migrate run --source /app/migrations 2>&1; then
-            break
-          fi
-          retry_count=$$((retry_count + 1))
-          if [ "$$retry_count" -lt "$$max_retries" ]; then
-            sleep 2
-          else
-            echo "ERROR: Database migrations failed after $$max_retries attempts"
-            exit 1
-          fi
-        done
-        exec /app/budget
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENC:?POSTGRES_PASSWORD_URLENC is required}@db:5432/${POSTGRES_DB:-budget_db}
       BUDGET_DATABASE__URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENC:?POSTGRES_PASSWORD_URLENC is required}@db:5432/${POSTGRES_DB:-budget_db}

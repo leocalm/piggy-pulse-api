@@ -3,14 +3,12 @@ FROM rust:1.93.0 AS builder
 
 WORKDIR /app
 
-# Install sqlx-cli for migrations
-RUN cargo install sqlx-cli --version 0.7.4 --locked --no-default-features --features rustls,postgres
-
 # Copy manifests
 COPY Cargo.toml Cargo.lock ./
 
 # Copy source code
 COPY src ./src
+# Needed for sqlx::migrate! compile-time embedding.
 COPY migrations ./migrations
 COPY sqlx.toml ./sqlx.toml
 
@@ -31,12 +29,6 @@ WORKDIR /app
 
 # Copy the binary from builder
 COPY --from=builder /app/target/release/budget /app/budget
-
-# Copy sqlx-cli for migrations
-COPY --from=builder /usr/local/cargo/bin/sqlx /usr/local/bin/sqlx
-
-# Copy migrations
-COPY --from=builder /app/migrations /app/migrations
 
 # Copy configuration examples (will be overridden by env vars)
 COPY Budget.toml.example ./Budget.toml
