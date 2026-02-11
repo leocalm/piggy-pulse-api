@@ -1,3 +1,4 @@
 *.retry
 .vault_pass
 .vault_pass.*
+inventories/production/group_vars/all/vault.yml
