@@ -1,0 +1,103 @@
+---
+kind: pipeline
+type: docker
+name: build-and-deploy
+
+trigger:
+  branch:
+    - main
+  event:
+    - push
+
+steps:
+  - name: build-api
+    image: docker:dind
+    volumes:
+      - name: dockersock
+        path: /var/run/docker.sock
+    environment:
+      GHCR_USERNAME:
+        from_secret: ghcr_username
+      GHCR_TOKEN:
+        from_secret: ghcr_token
+    commands:
+      - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+      - docker buildx create --use --name drone-builder || true
+      - docker buildx build
+          --cache-from type=registry,ref=ghcr.io/leocalm/piggypulse-api:buildcache
+          --cache-to type=registry,ref=ghcr.io/leocalm/piggypulse-api:buildcache,mode=max
+          --tag ghcr.io/leocalm/piggypulse-api:latest
+          --tag ghcr.io/leocalm/piggypulse-api:${DRONE_COMMIT_SHA:0:7}
+          --push
+          .
+
+  - name: build-cron
+    image: docker:dind
+    volumes:
+      - name: dockersock
+        path: /var/run/docker.sock
+    environment:
+      GHCR_USERNAME:
+        from_secret: ghcr_username
+      GHCR_TOKEN:
+        from_secret: ghcr_token
+    commands:
+      - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+      - docker buildx create --use --name drone-builder || true
+      - docker buildx build
+          --cache-from type=registry,ref=ghcr.io/leocalm/piggypulse-cron:buildcache
+          --cache-to type=registry,ref=ghcr.io/leocalm/piggypulse-cron:buildcache,mode=max
+          --tag ghcr.io/leocalm/piggypulse-cron:latest
+          --tag ghcr.io/leocalm/piggypulse-cron:${DRONE_COMMIT_SHA:0:7}
+          --file Dockerfile.cron
+          --push
+          .
+
+  - name: deploy
+    image: docker:27-cli
+    volumes:
+      - name: dockersock
+        path: /var/run/docker.sock
+      - name: app-dir
+        path: /app
+    environment:
+      GHCR_USERNAME:
+        from_secret: ghcr_username
+      GHCR_TOKEN:
+        from_secret: ghcr_token
+    commands:
+      - echo "🚀 Starting deployment..."
+      - apk add --no-cache docker-cli-compose
+      - docker compose version
+      - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+      - cd /app/budget
+      - docker compose pull budget cron
+      - docker compose up -d budget cron
+      - docker image prune -af
+      - echo "✅ Deployed version ${DRONE_COMMIT_SHA:0:7}"
+
+  - name: notify-success
+    image: alpine:latest
+    when:
+      status:
+        - success
+    commands:
+      - echo "✅ Build ${DRONE_BUILD_NUMBER} completed successfully!"
+      - echo "📦 Tests passed, images built, deployed to production!"
+      
+  - name: notify-failure
+    image: alpine:latest
+    when:
+      status:
+        - failure
+    commands:
+      - echo "❌ Build ${DRONE_BUILD_NUMBER} failed!"
+      - echo "Tests or build failed - nothing deployed"
+
+volumes:
+  - name: dockersock
+    host:
+      path: /var/run/docker.sock
+  - name: app-dir
+    host:
+      path: /opt/piggypulse

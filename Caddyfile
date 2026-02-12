@@ -5,6 +5,8 @@
         format json
         level {$CADDY_LOG_LEVEL:INFO}
     }
+    tls internal
+    
 
     # Reverse proxy to budget API
     reverse_proxy {$BUDGET_UPSTREAM:budget:8000} {
@@ -35,3 +37,9 @@
         # Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
     }
 }
+
+drone.piggy-pulse.com {
+    reverse_proxy drone-server:80
+    tls internal
+}
+

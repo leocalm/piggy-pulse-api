@@ -12,7 +12,19 @@ COPY src ./src
 COPY migrations ./migrations
 COPY sqlx.toml ./sqlx.toml
 
-# Build for release
+# Install any required tools
+RUN rustup component add rustfmt clippy
+
+# Run format check
+# RUN cargo fmt -- --check
+
+# Run linter
+# RUN cargo clippy --all-targets -- -D warnings
+
+# Run tests
+RUN cargo test --all --release
+
+# Build release binary
 RUN cargo build --release
 
 # Runtime stage

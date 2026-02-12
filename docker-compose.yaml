@@ -113,6 +113,49 @@ services:
     networks:
       - budget_network
 
+  # Drone CI Server
+  drone-server:
+    image: drone/drone:2
+    container_name: drone-server
+    restart: unless-stopped
+    expose:
+      - "80"
+    volumes:
+      - drone_data:/data
+    environment:
+      DRONE_GITHUB_CLIENT_ID: ${DRONE_GITHUB_CLIENT_ID}
+      DRONE_GITHUB_CLIENT_SECRET: ${DRONE_GITHUB_CLIENT_SECRET}
+      DRONE_RPC_SECRET: ${DRONE_RPC_SECRET}
+      DRONE_SERVER_HOST: ${DRONE_SERVER_HOST}
+      DRONE_SERVER_PROTO: https
+      DRONE_USER_CREATE: username:${GITHUB_USERNAME},admin:true
+      DRONE_DATABASE_DRIVER: sqlite3
+      DRONE_DATABASE_DATASOURCE: /data/database.sqlite
+      DRONE_LOGS_DEBUG: "false"
+    networks:
+      - budget_network
+
+  # Drone CI Runner
+  drone-runner:
+    image: drone/drone-runner-docker:1
+    container_name: drone-runner
+    restart: unless-stopped
+    depends_on:
+      - drone-server
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      DRONE_RPC_PROTO: http
+      DRONE_RPC_HOST: drone-server
+      DRONE_RPC_SECRET: ${DRONE_RPC_SECRET}
+      DRONE_RUNNER_CAPACITY: 2
+      DRONE_RUNNER_NAME: hetzner-runner
+      DRONE_MEMORY_LIMIT: 1073741824      # 1GB per build
+      DRONE_MEMORY_SWAP_LIMIT: 2147483648 # 2GB swap
+    networks:
+      - budget_network
+
+
 networks:
   budget_network:
     driver: bridge
@@ -121,3 +164,4 @@ volumes:
   postgres_data:
   caddy_data:
   caddy_config:
+  drone_data:  # Added this!
