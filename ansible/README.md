@@ -137,10 +137,10 @@ ansible-playbook site.yml --tags security,wireguard --ask-vault-pass
 
 ## GitHub Actions Deploy
 
-Automated deploy workflow: `.github/workflows/deploy-production.yml`.
+Automated publish+deploy workflow: `.github/workflows/publish-images.yml`.
 
-- Auto trigger: after successful `Publish Container Images` run on `main`
-- Manual trigger: `workflow_dispatch` with explicit image refs
+- Auto trigger: on push to `main`
+- Manual trigger: `workflow_dispatch` (builds images for current commit, then deploys)
 - Runner requirement: GitHub-hosted `ubuntu-latest` runner
 - Connectivity model: workflow establishes WireGuard tunnel, then deploys to `10.66.0.1`
 
@@ -152,11 +152,9 @@ Required repository/environment secrets:
 - `PROD_SSH_KNOWN_HOSTS`
   - build it from verified host keys (example: `ssh-keyscan -H <host-or-vpn-ip>`)
 
-Optional secret:
+Required SSH secret format:
 
-- `PROD_SSH_PRIVATE_KEY`
-  - required unless your playbook uses another auth mechanism
-  - paste raw OpenSSH private key content (with BEGIN/END lines)
 - `PROD_SSH_PRIVATE_KEY_B64`
-  - preferred for CI robustness; base64-encoded private key content
-  - if set, it takes precedence over `PROD_SSH_PRIVATE_KEY`
+  - base64-encoded private key content
+  - generate on your local machine with:
+    - `base64 -i ~/.ssh/id_ed25519 | tr -d '\n'`

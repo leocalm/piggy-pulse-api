@@ -38,7 +38,7 @@ For a hardened single-VM production setup on Hetzner (`API + cron + PostgreSQL +
 - Terraform provisioning (+ Cloudflare DNS IaC): `infra/hetzner/README.md`
 - Ansible host hardening + deploy orchestration (+ Vault): `ansible/README.md`
 - Production compose stack: `deploy/production/README.md`
-- CI image publish + automated production deploy: `.github/workflows/publish-images.yml`, `.github/workflows/deploy-production.yml`
+- CI image publish + automated production deploy: `.github/workflows/publish-images.yml`
 - Manual end-to-end deploy runbook: `MANUAL_PRODUCTION_DEPLOY.md`
 
 ## Running Cron Jobs
