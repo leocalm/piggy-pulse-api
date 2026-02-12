@@ -5,6 +5,7 @@
         format json
         level {$CADDY_LOG_LEVEL:INFO}
     }
+    
 
     # Reverse proxy to budget API
     reverse_proxy {$BUDGET_UPSTREAM:budget:8000} {
@@ -34,4 +35,8 @@
         # Optional: Uncomment for HTTPS
         # Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
     }
+}
+
+drone.your-domain.com {
+    reverse_proxy drone-server:80
 }
