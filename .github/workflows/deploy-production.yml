@@ -75,8 +75,8 @@ jobs:
       - name: Normalize deploy image vars for Ansible
         run: |
           set -euo pipefail
-          api_image="$(sed -n 's/^piggypulse_api_image:[[:space:]]*//p' ansible-image-vars.yml | head -n1)"
-          cron_image="$(sed -n 's/^piggypulse_cron_image:[[:space:]]*//p' ansible-image-vars.yml | head -n1)"
+          api_image="$(sed -n 's/^[[:space:]]*piggypulse_api_image:[[:space:]]*//p' ansible-image-vars.yml | head -n1 | tr -d '\r')"
+          cron_image="$(sed -n 's/^[[:space:]]*piggypulse_cron_image:[[:space:]]*//p' ansible-image-vars.yml | head -n1 | tr -d '\r')"
           test -n "${api_image}"
           test -n "${cron_image}"
           case "${api_image}" in
