@@ -18,7 +18,7 @@ concurrency:
 jobs:
   publish_api:
     name: Build and publish API image
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Checkout
@@ -75,7 +75,7 @@ jobs:
 
   publish_cron:
     name: Build and publish Cron image
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Checkout
@@ -132,7 +132,7 @@ jobs:
 
   deploy:
     name: Deploy to production via Ansible
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment: production
     needs:
       - publish_api
