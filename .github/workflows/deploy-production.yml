@@ -52,10 +52,8 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
-            cat > ansible-image-vars.yml <<EOFVARS
-          piggypulse_api_image: ${MANUAL_API_IMAGE}
-          piggypulse_cron_image: ${MANUAL_CRON_IMAGE}
-          EOFVARS
+            printf 'piggypulse_api_image: %s\n' "${MANUAL_API_IMAGE}" > ansible-image-vars.yml
+            printf 'piggypulse_cron_image: %s\n' "${MANUAL_CRON_IMAGE}" >> ansible-image-vars.yml
           else
             test -f image-digests/ansible-image-vars.yml
             cp image-digests/ansible-image-vars.yml ansible-image-vars.yml
@@ -64,8 +62,8 @@ jobs:
       - name: Validate required deploy files and secrets
         run: |
           test -f ansible-image-vars.yml
-          grep -Eq '^piggypulse_api_image:[[:space:]]*.+$' ansible-image-vars.yml
-          grep -Eq '^piggypulse_cron_image:[[:space:]]*.+$' ansible-image-vars.yml
+          grep -Eq '^[[:space:]]*piggypulse_api_image:[[:space:]]*.+$' ansible-image-vars.yml
+          grep -Eq '^[[:space:]]*piggypulse_cron_image:[[:space:]]*.+$' ansible-image-vars.yml
           echo "Using ansible-image-vars.yml:"
           cat ansible-image-vars.yml
           test -n "${{ secrets.ANSIBLE_VAULT_PASSWORD }}"
@@ -75,8 +73,16 @@ jobs:
       - name: Normalize deploy image vars for Ansible
         run: |
           set -euo pipefail
-          api_image="$(sed -n 's/^[[:space:]]*piggypulse_api_image:[[:space:]]*//p' ansible-image-vars.yml | head -n1 | tr -d '\r')"
-          cron_image="$(sed -n 's/^[[:space:]]*piggypulse_cron_image:[[:space:]]*//p' ansible-image-vars.yml | head -n1 | tr -d '\r')"
+          api_image="$(sed -n 's/^[[:space:]]*piggypulse_api_image:[[:space:]]*//p' ansible-image-vars.yml | head -n1 | tr -d '\r' | xargs)"
+          cron_image="$(sed -n 's/^[[:space:]]*piggypulse_cron_image:[[:space:]]*//p' ansible-image-vars.yml | head -n1 | tr -d '\r' | xargs)"
+          api_image="${api_image%\"}"
+          api_image="${api_image#\"}"
+          api_image="${api_image%\'}"
+          api_image="${api_image#\'}"
+          cron_image="${cron_image%\"}"
+          cron_image="${cron_image#\"}"
+          cron_image="${cron_image%\'}"
+          cron_image="${cron_image#\'}"
           test -n "${api_image}"
           test -n "${cron_image}"
           case "${api_image}" in
