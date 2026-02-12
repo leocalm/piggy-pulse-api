@@ -92,7 +92,7 @@ steps:
           .
 
   - name: deploy
-    image: docker/compose:latest
+    image: docker:27-cli
     volumes:
       - name: dockersock
         path: /var/run/docker.sock
@@ -100,9 +100,12 @@ steps:
         path: /app
     commands:
       - echo "🚀 Starting deployment..."
+      - echo "Installing Docker Compose v2..."
+      - apk add --no-cache docker-cli-compose
+      - docker compose version
       - cd /app/budget
-      - docker-compose pull budget cron
-      - docker-compose up -d budget cron
+      - docker compose pull budget cron
+      - docker compose up -d budget cron
       - docker image prune -af
       - echo "✅ Deployed version ${DRONE_COMMIT_SHA:0:7}"
 
