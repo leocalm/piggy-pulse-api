@@ -86,12 +86,19 @@ jobs:
       - name: Optionally install deploy SSH key from secret
         env:
           PROD_SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+          PROD_SSH_PRIVATE_KEY_B64: ${{ secrets.PROD_SSH_PRIVATE_KEY_B64 }}
         run: |
-          if [ -n "${PROD_SSH_PRIVATE_KEY:-}" ]; then
+          if [ -n "${PROD_SSH_PRIVATE_KEY_B64:-}" ] || [ -n "${PROD_SSH_PRIVATE_KEY:-}" ]; then
             mkdir -p ~/.ssh
             chmod 700 ~/.ssh
-            printf '%s\n' "${PROD_SSH_PRIVATE_KEY}" > ~/.ssh/id_ed25519
+            if [ -n "${PROD_SSH_PRIVATE_KEY_B64:-}" ]; then
+              printf '%s' "${PROD_SSH_PRIVATE_KEY_B64}" | base64 -d > ~/.ssh/id_ed25519
+            else
+              # Support secrets copied with escaped newlines and strip CRLF.
+              printf '%b' "${PROD_SSH_PRIVATE_KEY}" | tr -d '\r' > ~/.ssh/id_ed25519
+            fi
             chmod 600 ~/.ssh/id_ed25519
+            ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null
           fi
 
       - name: Write vault password file

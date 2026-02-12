@@ -156,3 +156,7 @@ Optional secret:
 
 - `PROD_SSH_PRIVATE_KEY`
   - required unless your playbook uses another auth mechanism
+  - paste raw OpenSSH private key content (with BEGIN/END lines)
+- `PROD_SSH_PRIVATE_KEY_B64`
+  - preferred for CI robustness; base64-encoded private key content
+  - if set, it takes precedence over `PROD_SSH_PRIVATE_KEY`
