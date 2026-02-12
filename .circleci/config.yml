@@ -48,7 +48,7 @@ jobs:
               --push \
               .
 
-  test:
+  check-test:
     machine:
       image: ubuntu-2204:current
     steps:
@@ -80,7 +80,7 @@ workflows:
 
   check-and-test:
     jobs:
-      - test:
+      - check-test:
           filters:
             ignore:
               - main
