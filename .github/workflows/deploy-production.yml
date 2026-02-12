@@ -40,23 +40,34 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: image-digests
-          path: .
+          path: image-digests
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create image vars for manual dispatch
-        if: ${{ github.event_name == 'workflow_dispatch' }}
+      - name: Materialize deploy image vars file
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_API_IMAGE: ${{ inputs.piggypulse_api_image }}
+          MANUAL_CRON_IMAGE: ${{ inputs.piggypulse_cron_image }}
         run: |
-          cat > ansible-image-vars.yml <<EOFVARS
-          piggypulse_api_image: ${{ inputs.piggypulse_api_image }}
-          piggypulse_cron_image: ${{ inputs.piggypulse_cron_image }}
+          set -euo pipefail
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            cat > ansible-image-vars.yml <<EOFVARS
+          piggypulse_api_image: ${MANUAL_API_IMAGE}
+          piggypulse_cron_image: ${MANUAL_CRON_IMAGE}
           EOFVARS
+          else
+            test -f image-digests/ansible-image-vars.yml
+            cp image-digests/ansible-image-vars.yml ansible-image-vars.yml
+          fi
 
       - name: Validate required deploy files and secrets
         run: |
           test -f ansible-image-vars.yml
           grep -Eq '^piggypulse_api_image:[[:space:]]*.+$' ansible-image-vars.yml
           grep -Eq '^piggypulse_cron_image:[[:space:]]*.+$' ansible-image-vars.yml
+          echo "Using ansible-image-vars.yml:"
+          cat ansible-image-vars.yml
           test -n "${{ secrets.ANSIBLE_VAULT_PASSWORD }}"
           test -n "${{ secrets.PROD_WIREGUARD_CONFIG }}"
           test -n "${{ secrets.PROD_SSH_KNOWN_HOSTS }}"
