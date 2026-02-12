@@ -50,6 +50,7 @@ steps:
           --cache-from type=registry,ref=ghcr.io/leocalm/piggypulse-api:buildcache
           --cache-to type=registry,ref=ghcr.io/leocalm/piggypulse-api:buildcache,mode=max
           --tag ghcr.io/leocalm/piggypulse-api:latest
+          --tag ghcr.io/leocalm/piggypulse-api:${DRONE_COMMIT_SHA:0:7}
           --push
           .
 
@@ -70,52 +71,43 @@ steps:
           --cache-from type=registry,ref=ghcr.io/leocalm/piggypulse-cron:buildcache
           --cache-to type=registry,ref=ghcr.io/leocalm/piggypulse-cron:buildcache,mode=max
           --tag ghcr.io/leocalm/piggypulse-cron:latest
+          --tag ghcr.io/leocalm/piggypulse-cron:${DRONE_COMMIT_SHA:0:7}
           --file Dockerfile.cron
           --push
           .
 
   - name: deploy
-    image: alpine:latest
-    environment:
-      HETZNER_USER:
-        from_secret: hetzner_user
-    commands:
-      # No SSH needed - we're already on the same server!
-      - cd /opt/piggypulse/budget
-      - docker compose pull
-      - docker compose up -d
-      - docker image prune -af
-    # Mount the actual filesystem
+    image: docker:cli
     volumes:
-      - name: piggypulse-app
-        path: /opt/piggypulse
+      - name: dockersock
+        path: /var/run/docker.sock
+    commands:
+      - echo "🚀 Starting deployment..."
+      - cd /opt/piggypulse/budget
+      - docker compose pull api cron
+      - docker compose up -d api cron
+      - docker image prune -af
+      - echo "✅ Deployed version ${DRONE_COMMIT_SHA:0:7}"
+
+  - name: notify-success
+    image: alpine:latest
+    when:
+      status:
+        - success
+    commands:
+      - echo "✅ Build ${DRONE_BUILD_NUMBER} completed successfully!"
+      - echo "📦 Version ${DRONE_COMMIT_SHA:0:7} deployed to production"
+      
+  - name: notify-failure
+    image: alpine:latest
+    when:
+      status:
+        - failure
+    commands:
+      - echo "❌ Build ${DRONE_BUILD_NUMBER} failed!"
+      - echo "Commit ${DRONE_COMMIT_SHA:0:7} was not deployed"
 
 volumes:
   - name: dockersock
     host:
       path: /var/run/docker.sock
-  - name: piggypulse-app
-    host:
-      path: /opt/piggypulse
-
----
-kind: pipeline
-type: docker
-name: notify
-
-# Runs after build-and-deploy
-depends_on:
-  - build-and-deploy
-
-trigger:
-  branch:
-    - main
-  status:
-    - success
-    - failure
-
-steps:
-  - name: notify
-    image: alpine:latest
-    commands:
-      - echo "Build ${DRONE_BUILD_STATUS}"
