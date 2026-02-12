@@ -1,53 +1,11 @@
 version: 2.1
 
+# ============================================
+# JOBS
+# ============================================
+
 jobs:
-  build_api:
-    machine:
-      image: ubuntu-2204:current
-    steps:
-      - checkout
-
-      - run:
-          name: Setup Docker Buildx
-          command: |
-            docker buildx create --use || true
-            docker buildx inspect --bootstrap
-
-      - run:
-          name: Build and push API
-          command: |
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-            docker buildx build \
-              --cache-from type=registry,ref=ghcr.io/leocalm/piggypulse-api:buildcache \
-              --cache-to type=registry,ref=ghcr.io/leocalm/piggypulse-api:buildcache,mode=max \
-              --tag ghcr.io/leocalm/piggypulse-api:latest \
-              --push \
-              .
-
-  build_cron:
-    machine:
-      image: ubuntu-2204:current
-    steps:
-      - checkout
-
-      - run:
-          name: Setup Docker Buildx
-          command: |
-            docker buildx create --use || true
-            docker buildx inspect --bootstrap
-
-      - run:
-          name: Build and push Cron
-          command: |
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-            docker buildx build \
-              --cache-from type=registry,ref=ghcr.io/leocalm/piggypulse-cron:buildcache \
-              --cache-to type=registry,ref=ghcr.io/leocalm/piggypulse-cron:buildcache,mode=max \
-              --tag ghcr.io/leocalm/piggypulse-cron:latest \
-              --file Dockerfile.cron \
-              --push \
-              .
-
+  # Check formatting, lint, and test
   check-test:
     docker:
       - image: cimg/rust:1.93.0
@@ -73,19 +31,149 @@ jobs:
             - target
           key: cargo-deps-{{ checksum "Cargo.lock" }}
 
+  # Build API image
+  build_api:
+    machine:
+      image: ubuntu-2204:current
+    steps:
+      - checkout
+
+      - run:
+          name: Setup Docker Buildx
+          command: |
+            docker buildx create --use || true
+            docker buildx inspect --bootstrap
+
+      - run:
+          name: Build and push API
+          command: |
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+            docker buildx build \
+              --cache-from type=registry,ref=ghcr.io/leocalm/piggypulse-api:buildcache \
+              --cache-to type=registry,ref=ghcr.io/leocalm/piggypulse-api:buildcache,mode=max \
+              --tag ghcr.io/leocalm/piggypulse-api:latest \
+              --push \
+              .
+
+  # Build Cron image
+  build_cron:
+    machine:
+      image: ubuntu-2204:current
+    steps:
+      - checkout
+
+      - run:
+          name: Setup Docker Buildx
+          command: |
+            docker buildx create --use || true
+            docker buildx inspect --bootstrap
+
+      - run:
+          name: Build and push Cron
+          command: |
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+            docker buildx build \
+              --cache-from type=registry,ref=ghcr.io/leocalm/piggypulse-cron:buildcache \
+              --cache-to type=registry,ref=ghcr.io/leocalm/piggypulse-cron:buildcache,mode=max \
+              --tag ghcr.io/leocalm/piggypulse-cron:latest \
+              --file Dockerfile.cron \
+              --push \
+              .
+
+  # Deploy via Tailscale with release tracking
+  deploy:
+    machine:
+      image: ubuntu-2204:current
+    steps:
+      - run:
+          name: Plan a deploy
+          command: |
+            circleci run release plan \
+              --environment-name="production" \
+              --component-name="piggypulse" \
+              --target-version="${CIRCLE_SHA1:0:7}"
+      
+      - run:
+          name: Install Tailscale
+          command: |
+            curl -fsSL https://tailscale.com/install.sh | sh
+            
+      - run:
+          name: Connect to Tailscale VPN
+          command: |
+            echo "$TAILSCALE_AUTH_KEY" | sudo tailscale up --authkey - --accept-routes
+            echo "✅ Connected to Tailscale"
+            sudo tailscale status
+      
+      - run:
+          name: Setup SSH
+          command: |
+            mkdir -p ~/.ssh
+            chmod 700 ~/.ssh
+            echo "$HETZNER_SSH_KEY" > ~/.ssh/id_ed25519
+            chmod 600 ~/.ssh/id_ed25519
+            
+            # Add Tailscale IP to known hosts
+            ssh-keyscan -H 100.67.187.36 >> ~/.ssh/known_hosts
+      
+      - run:
+          name: Deploy to Hetzner via Tailscale
+          command: |
+            ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no $HETZNER_USER@100.67.187.36 '
+              set -e
+              cd /opt/piggypulse/budget
+              echo "🐋 Pulling latest images..."
+              docker compose pull
+              echo "🚀 Restarting services..."
+              docker compose up -d
+              echo "🧹 Cleaning up old images..."
+              docker image prune -af
+              echo "✅ Deployment complete!"
+            '
+      
+      - run:
+          name: Disconnect from Tailscale
+          when: always
+          command: |
+            sudo tailscale down || true
+      
+      - run:
+          name: Update deploy to SUCCESS
+          command: circleci run release update --status=SUCCESS
+          when: on_success
+      
+      - run:
+          name: Update deploy to FAILED
+          command: circleci run release update --status=FAILED
+          when: on_fail
+
+# ============================================
+# WORKFLOWS
+# ============================================
+
 workflows:
-  build:
+  # Run tests on ALL branches and PRs
+  check-and-test:
+    jobs:
+      - check-test
+
+  # Build and deploy ONLY on main branch
+  build-and-deploy:
     jobs:
       - build_api:
           filters:
             branches:
               only: main
-
+      
       - build_cron:
           filters:
             branches:
               only: main
-
-  check-and-test:
-    jobs:
-      - check-test
+      
+      - deploy:
+          requires:
+            - build_api
+            - build_cron
+          filters:
+            branches:
+              only: main
