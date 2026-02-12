@@ -1,11 +1,9 @@
-name: Publish Container Images
+name: Publish and Deploy Production
 
 on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -13,12 +11,16 @@ permissions:
   packages: write
   id-token: write
 
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   publish_api:
     name: Build and publish API image
     runs-on: ubuntu-latest
     outputs:
-      image_ref: ${{ steps.export.outputs.image_ref }}
+      image_ref: ${{ format('{0}@{1}', steps.prep.outputs.image_name, steps.build.outputs.digest) }}
 
     steps:
       - name: Checkout
@@ -73,16 +75,11 @@ jobs:
         run: |
           cosign sign "${{ steps.prep.outputs.image_name }}@${{ steps.build.outputs.digest }}"
 
-      - name: Export API digest reference
-        id: export
-        run: |
-          echo "image_ref=${{ steps.prep.outputs.image_name }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
-
   publish_cron:
     name: Build and publish Cron image
     runs-on: ubuntu-latest
     outputs:
-      image_ref: ${{ steps.export.outputs.image_ref }}
+      image_ref: ${{ format('{0}@{1}', steps.prep.outputs.image_name, steps.build.outputs.digest) }}
 
     steps:
       - name: Checkout
@@ -137,26 +134,19 @@ jobs:
         run: |
           cosign sign "${{ steps.prep.outputs.image_name }}@${{ steps.build.outputs.digest }}"
 
-      - name: Export Cron digest reference
-        id: export
-        run: |
-          echo "image_ref=${{ steps.prep.outputs.image_name }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
-
-  publish-manifest:
-    name: Publish deploy digest manifest
+  deploy:
+    name: Deploy to production via Ansible
     runs-on: ubuntu-latest
+    environment: production
     needs:
       - publish_api
       - publish_cron
 
     steps:
-      - name: Debug publish outputs
-        run: |
-          echo "needs context: ${{ toJson(needs) }}"
-          echo "api image_ref: '${{ needs.publish_api.outputs.image_ref }}'"
-          echo "cron image_ref: '${{ needs.publish_cron.outputs.image_ref }}'"
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Create deploy digest manifest
+      - name: Validate image refs and required secrets
         env:
           API_IMAGE_REF: ${{ needs.publish_api.outputs.image_ref }}
           CRON_IMAGE_REF: ${{ needs.publish_cron.outputs.image_ref }}
@@ -164,28 +154,75 @@ jobs:
           set -euo pipefail
           test -n "${API_IMAGE_REF}"
           test -n "${CRON_IMAGE_REF}"
-          printf 'BUDGET_API_IMAGE=%s\n' "${API_IMAGE_REF}" > image-digests.env
-          printf 'BUDGET_CRON_IMAGE=%s\n' "${CRON_IMAGE_REF}" >> image-digests.env
-          printf 'piggypulse_api_image: %s\n' "${API_IMAGE_REF}" > ansible-image-vars.yml
-          printf 'piggypulse_cron_image: %s\n' "${CRON_IMAGE_REF}" >> ansible-image-vars.yml
+          case "${API_IMAGE_REF}" in
+            ghcr.io/*) ;;
+            *) echo "Invalid API image ref: ${API_IMAGE_REF}" >&2; exit 1 ;;
+          esac
+          case "${CRON_IMAGE_REF}" in
+            ghcr.io/*) ;;
+            *) echo "Invalid Cron image ref: ${CRON_IMAGE_REF}" >&2; exit 1 ;;
+          esac
+          test -n "${{ secrets.ANSIBLE_VAULT_PASSWORD }}"
+          test -n "${{ secrets.PROD_WIREGUARD_CONFIG }}"
+          test -n "${{ secrets.PROD_SSH_KNOWN_HOSTS }}"
+          test -n "${{ secrets.PROD_SSH_PRIVATE_KEY_B64 }}"
 
-      - name: Upload digest artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: image-digests
-          path: |
-            image-digests.env
-            ansible-image-vars.yml
+      - name: Install Ansible and WireGuard tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible wireguard-tools
+
+      - name: Configure and start WireGuard
+        run: |
+          sudo install -d -m 0700 /etc/wireguard
+          printf '%s\n' "${{ secrets.PROD_WIREGUARD_CONFIG }}" | sudo tee /etc/wireguard/wg0.conf > /dev/null
+          sudo chmod 600 /etc/wireguard/wg0.conf
+          sudo wg-quick up wg0
+          sudo wg show
+
+      - name: Verify VPN connectivity to production host
+        run: |
+          ping -c 3 10.66.0.1
+
+      - name: Prepare SSH files
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+          printf '%s' "${{ secrets.PROD_SSH_PRIVATE_KEY_B64 }}" | tr -d '[:space:]' | base64 -d > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null
+
+      - name: Write vault password file
+        run: |
+          printf '%s' "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > .vault_pass
+          chmod 600 .vault_pass
+
+      - name: Run Ansible deploy
+        env:
+          ANSIBLE_CONFIG: ansible/ansible.cfg
+          API_IMAGE_REF: ${{ needs.publish_api.outputs.image_ref }}
+          CRON_IMAGE_REF: ${{ needs.publish_cron.outputs.image_ref }}
+        run: |
+          ansible-playbook ansible/site.yml \
+            --vault-password-file .vault_pass \
+            --extra-vars "piggypulse_api_image=${API_IMAGE_REF}" \
+            --extra-vars "piggypulse_cron_image=${CRON_IMAGE_REF}"
 
       - name: Write workflow summary
         run: |
           {
-            echo "## Published Images"
+            echo "## Published and Deployed Images"
             echo
             echo "- API: \\`${{ needs.publish_api.outputs.image_ref }}\\`"
             echo "- Cron: \\`${{ needs.publish_cron.outputs.image_ref }}\\`"
-            echo
-            echo "Use these in Ansible:"
-            echo "- \\`piggypulse_api_image\\`"
-            echo "- \\`piggypulse_cron_image\\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Cleanup sensitive temp files
+        if: always()
+        run: |
+          rm -f .vault_pass
+          rm -f ~/.ssh/id_ed25519
+          sudo wg-quick down wg0 || true
+          sudo rm -f /etc/wireguard/wg0.conf
