@@ -63,4 +63,6 @@ jobs:
         run: cargo build --workspace --release --all-targets --verbose
 
       - name: Run tests (release)
+        env:
+          ROCKET_SECRET_KEY: "iJ8YVQz2Q8X5v9sR1lWf3n6dK0pT4mN7cH2aE5uB9yQ="
         run: cargo test --workspace --all-targets --release --verbose
