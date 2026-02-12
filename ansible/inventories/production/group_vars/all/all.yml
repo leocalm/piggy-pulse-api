@@ -6,7 +6,7 @@ server_timezone: UTC
 security_deploy_user: deploy
 security_deploy_group: deploy
 security_deploy_ssh_public_keys:
-  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFF0Xm9B1ApH6wA0+x8GRiWkLuUZ9i6THmWtqalE5dsG leonardo.almeida@Leonardos-Mac-mini.local"
+  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB0Nm4VeWCU4xblN2h0aneK6sWv2CsFA7e/SU6y1qAWU leonardo.almeida@Leonardos-Mac-mini.local"
 
 security_ssh_mode: vpn_only # admin_cidr or vpn_only
 security_enable_breakglass_ssh: false
