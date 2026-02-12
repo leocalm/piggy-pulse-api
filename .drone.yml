@@ -98,14 +98,24 @@ steps:
         path: /var/run/docker.sock
       - name: app-dir
         path: /app
+    environment:
+      GHCR_USERNAME:
+        from_secret: ghcr_username
+      GHCR_TOKEN:
+        from_secret: ghcr_token
     commands:
       - echo "🚀 Starting deployment..."
       - echo "Installing Docker Compose v2..."
       - apk add --no-cache docker-cli-compose
       - docker compose version
+      - echo "Logging in to GHCR..."
+      - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
       - cd /app/budget
+      - echo "Pulling latest images..."
       - docker compose pull budget cron
+      - echo "Restarting services..."
       - docker compose up -d budget cron
+      - echo "Cleaning up old images..."
       - docker image prune -af
       - echo "✅ Deployed version ${DRONE_COMMIT_SHA:0:7}"
 
