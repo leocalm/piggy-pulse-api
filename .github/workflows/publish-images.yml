@@ -20,7 +20,7 @@ jobs:
     name: Build and publish API image
     runs-on: ubuntu-latest
     outputs:
-      image_ref: ${{ format('{0}@{1}', steps.prep.outputs.image_name, steps.build.outputs.digest) }}
+      image_ref: ${{ steps.export.outputs.image_ref }}
 
     steps:
       - name: Checkout
@@ -75,11 +75,17 @@ jobs:
         run: |
           cosign sign "${{ steps.prep.outputs.image_name }}@${{ steps.build.outputs.digest }}"
 
+      - name: Export API image ref
+        id: export
+        run: |
+          set -euo pipefail
+          echo "image_ref=${{ steps.prep.outputs.image_name }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+
   publish_cron:
     name: Build and publish Cron image
     runs-on: ubuntu-latest
     outputs:
-      image_ref: ${{ format('{0}@{1}', steps.prep.outputs.image_name, steps.build.outputs.digest) }}
+      image_ref: ${{ steps.export.outputs.image_ref }}
 
     steps:
       - name: Checkout
@@ -134,6 +140,12 @@ jobs:
         run: |
           cosign sign "${{ steps.prep.outputs.image_name }}@${{ steps.build.outputs.digest }}"
 
+      - name: Export Cron image ref
+        id: export
+        run: |
+          set -euo pipefail
+          echo "image_ref=${{ steps.prep.outputs.image_name }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+
   deploy:
     name: Deploy to production via Ansible
     runs-on: ubuntu-latest
@@ -152,6 +164,9 @@ jobs:
           CRON_IMAGE_REF: ${{ needs.publish_cron.outputs.image_ref }}
         run: |
           set -euo pipefail
+          echo "Resolved publish outputs:"
+          echo "API_IMAGE_REF='${API_IMAGE_REF}'"
+          echo "CRON_IMAGE_REF='${CRON_IMAGE_REF}'"
           test -n "${API_IMAGE_REF}"
           test -n "${CRON_IMAGE_REF}"
           case "${API_IMAGE_REF}" in
