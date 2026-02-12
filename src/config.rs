@@ -220,7 +220,6 @@ impl Default for PasswordResetConfig {
     }
 }
 
-
 impl Config {
     /// Load configuration from multiple sources in priority order:
     /// 1. Budget.toml (base configuration file)

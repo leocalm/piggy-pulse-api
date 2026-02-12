@@ -57,7 +57,7 @@ pub enum AppError {
     ConfigurationError {
         message: String,
         #[source]
-        source: figment::Error,
+        source: Box<figment::Error>,
     },
     #[error("Email error: {0}")]
     EmailError(String),
@@ -235,7 +235,7 @@ impl From<figment::Error> for AppError {
     fn from(e: figment::Error) -> Self {
         AppError::ConfigurationError {
             message: "Failed to read configuration".to_string(),
-            source: e,
+            source: Box::new(e),
         }
     }
 }

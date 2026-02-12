@@ -4,14 +4,13 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::RateLimit;
 use crate::models::two_factor::{
-    EmergencyDisableConfirm, EmergencyDisableRequest, TwoFactorDisableRequest, TwoFactorRegenerateRequest, TwoFactorSetupResponse,
-    TwoFactorStatus, TwoFactorVerifyRequest,
+    EmergencyDisableConfirm, EmergencyDisableRequest, TwoFactorDisableRequest, TwoFactorRegenerateRequest, TwoFactorSetupResponse, TwoFactorStatus,
+    TwoFactorVerifyRequest,
 };
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{State, delete, get, post};
 use rocket_okapi::openapi;
-use sha2::Digest;
 use sqlx::PgPool;
 
 /// Initialize 2FA setup - generates secret, QR code, and backup codes
@@ -26,15 +25,17 @@ pub async fn setup_two_factor(
     let repo = PostgresRepository { pool: pool.inner().clone() };
 
     // Check if user already has 2FA enabled
-    if let Some(existing) = repo.get_two_factor_by_user(&current_user.id).await? {
-        if existing.is_enabled {
-            return Err(AppError::BadRequest("Two-factor authentication is already enabled. Disable it first to set up again.".to_string()));
-        }
+    if let Some(existing) = repo.get_two_factor_by_user(&current_user.id).await?
+        && existing.is_enabled
+    {
+        return Err(AppError::BadRequest(
+            "Two-factor authentication is already enabled. Disable it first to set up again.".to_string(),
+        ));
     }
 
     // Parse encryption key from config
-    let encryption_key_bytes = hex::decode(&config.two_factor.encryption_key)
-        .map_err(|e| AppError::BadRequest(format!("Invalid encryption key configuration: {}", e)))?;
+    let encryption_key_bytes =
+        hex::decode(&config.two_factor.encryption_key).map_err(|e| AppError::BadRequest(format!("Invalid encryption key configuration: {}", e)))?;
 
     if encryption_key_bytes.len() != 32 {
         return Err(AppError::BadRequest("Encryption key must be exactly 32 bytes (64 hex chars)".to_string()));
@@ -83,17 +84,18 @@ pub async fn verify_two_factor(
     let repo = PostgresRepository { pool: pool.inner().clone() };
 
     // Get the user's 2FA configuration
-    let two_factor = repo.get_two_factor_by_user(&current_user.id).await?.ok_or_else(|| {
-        AppError::BadRequest("Two-factor authentication setup not found. Please initialize setup first.".to_string())
-    })?;
+    let two_factor = repo
+        .get_two_factor_by_user(&current_user.id)
+        .await?
+        .ok_or_else(|| AppError::BadRequest("Two-factor authentication setup not found. Please initialize setup first.".to_string()))?;
 
     if two_factor.is_enabled {
         return Err(AppError::BadRequest("Two-factor authentication is already enabled.".to_string()));
     }
 
     // Parse encryption key
-    let encryption_key_bytes = hex::decode(&config.two_factor.encryption_key)
-        .map_err(|e| AppError::BadRequest(format!("Invalid encryption key configuration: {}", e)))?;
+    let encryption_key_bytes =
+        hex::decode(&config.two_factor.encryption_key).map_err(|e| AppError::BadRequest(format!("Invalid encryption key configuration: {}", e)))?;
     let mut encryption_key = [0u8; 32];
     encryption_key.copy_from_slice(&encryption_key_bytes);
 
@@ -132,17 +134,18 @@ pub async fn disable_two_factor(
     repo.verify_password(&user, &payload.password).await?;
 
     // Get the user's 2FA configuration
-    let two_factor = repo.get_two_factor_by_user(&current_user.id).await?.ok_or_else(|| {
-        AppError::BadRequest("Two-factor authentication is not enabled.".to_string())
-    })?;
+    let two_factor = repo
+        .get_two_factor_by_user(&current_user.id)
+        .await?
+        .ok_or_else(|| AppError::BadRequest("Two-factor authentication is not enabled.".to_string()))?;
 
     if !two_factor.is_enabled {
         return Err(AppError::BadRequest("Two-factor authentication is not enabled.".to_string()));
     }
 
     // Parse encryption key
-    let encryption_key_bytes = hex::decode(&config.two_factor.encryption_key)
-        .map_err(|e| AppError::BadRequest(format!("Invalid encryption key configuration: {}", e)))?;
+    let encryption_key_bytes =
+        hex::decode(&config.two_factor.encryption_key).map_err(|e| AppError::BadRequest(format!("Invalid encryption key configuration: {}", e)))?;
     let mut encryption_key = [0u8; 32];
     encryption_key.copy_from_slice(&encryption_key_bytes);
 
@@ -170,11 +173,7 @@ pub async fn disable_two_factor(
 /// Get current 2FA status for the authenticated user
 #[openapi(tag = "Two-Factor Authentication")]
 #[get("/status")]
-pub async fn get_two_factor_status(
-    pool: &State<PgPool>,
-    _rate_limit: RateLimit,
-    current_user: CurrentUser,
-) -> Result<Json<TwoFactorStatus>, AppError> {
+pub async fn get_two_factor_status(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser) -> Result<Json<TwoFactorStatus>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
 
     let two_factor = repo.get_two_factor_by_user(&current_user.id).await?;
@@ -208,17 +207,18 @@ pub async fn regenerate_backup_codes(
     let repo = PostgresRepository { pool: pool.inner().clone() };
 
     // Get the user's 2FA configuration
-    let two_factor = repo.get_two_factor_by_user(&current_user.id).await?.ok_or_else(|| {
-        AppError::BadRequest("Two-factor authentication is not enabled.".to_string())
-    })?;
+    let two_factor = repo
+        .get_two_factor_by_user(&current_user.id)
+        .await?
+        .ok_or_else(|| AppError::BadRequest("Two-factor authentication is not enabled.".to_string()))?;
 
     if !two_factor.is_enabled {
         return Err(AppError::BadRequest("Two-factor authentication is not enabled.".to_string()));
     }
 
     // Parse encryption key
-    let encryption_key_bytes = hex::decode(&config.two_factor.encryption_key)
-        .map_err(|e| AppError::BadRequest(format!("Invalid encryption key configuration: {}", e)))?;
+    let encryption_key_bytes =
+        hex::decode(&config.two_factor.encryption_key).map_err(|e| AppError::BadRequest(format!("Invalid encryption key configuration: {}", e)))?;
     let mut encryption_key = [0u8; 32];
     encryption_key.copy_from_slice(&encryption_key_bytes);
 
@@ -270,58 +270,20 @@ pub async fn emergency_disable_request(
     };
 
     // Check if user has 2FA enabled
-    let has_2fa = repo
-        .get_two_factor_by_user(&user.id)
-        .await?
-        .map(|tf| tf.is_enabled)
-        .unwrap_or(false);
+    let has_2fa = repo.get_two_factor_by_user(&user.id).await?.map(|tf| tf.is_enabled).unwrap_or(false);
 
     if !has_2fa {
         // Don't reveal whether 2FA is enabled
         return Ok(Status::Ok);
     }
 
-    // Generate emergency token (RNG operation in blocking task)
-    let user_id = user.id;
-    let token = tokio::task::spawn_blocking(move || {
-        // This would normally call the repo method, but we need to inline it
-        // to avoid async in blocking. For now, generate token directly.
-        use rand::RngCore;
-        let mut rng = rand::thread_rng();
-        let mut token_bytes = [0u8; 32];
-        rng.fill_bytes(&mut token_bytes);
-        hex::encode(token_bytes)
-    })
-    .await
-    .map_err(|e| AppError::BadRequest(format!("Task join error: {}", e)))?;
-
-    // Store the token hash in database
-    let mut hasher = sha2::Sha256::new();
-    hasher.update(token.as_bytes());
-    let token_hash = hex::encode(hasher.finalize());
-    let expires_at = chrono::Utc::now() + chrono::Duration::hours(1);
-
-    sqlx::query(
-        r#"
-        INSERT INTO two_factor_emergency_tokens (user_id, token_hash, expires_at)
-        VALUES ($1, $2, $3)
-        "#,
-    )
-    .bind(&user_id)
-    .bind(&token_hash)
-    .bind(expires_at)
-    .execute(&repo.pool)
-    .await?;
+    // Generate and store emergency token hash in database
+    let token = repo.create_emergency_token(&user.id).await?;
 
     // Send emergency 2FA disable email
     let email_service = crate::service::email::EmailService::new(config.email.clone());
     if let Err(e) = email_service
-        .send_emergency_2fa_disable_email(
-            &user.email,
-            &user.name,
-            &token,
-            &config.two_factor.frontend_emergency_disable_url,
-        )
+        .send_emergency_2fa_disable_email(&user.email, &user.name, &token, &config.two_factor.frontend_emergency_disable_url)
         .await
     {
         tracing::error!("Failed to send emergency 2FA disable email to {}: {}", user.email, e);
@@ -337,17 +299,14 @@ pub async fn emergency_disable_request(
 /// Confirm emergency 2FA disable with token from email
 #[openapi(tag = "Two-Factor Authentication")]
 #[post("/emergency-disable-confirm", data = "<payload>")]
-pub async fn emergency_disable_confirm(
-    pool: &State<PgPool>,
-    _rate_limit: RateLimit,
-    payload: Json<EmergencyDisableConfirm>,
-) -> Result<Status, AppError> {
+pub async fn emergency_disable_confirm(pool: &State<PgPool>, _rate_limit: RateLimit, payload: Json<EmergencyDisableConfirm>) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
 
     // Verify the token and get user_id
-    let user_id = repo.verify_emergency_token(&payload.token).await?.ok_or_else(|| {
-        AppError::BadRequest("Invalid or expired emergency disable token.".to_string())
-    })?;
+    let user_id = repo
+        .verify_emergency_token(&payload.token)
+        .await?
+        .ok_or_else(|| AppError::BadRequest("Invalid or expired emergency disable token.".to_string()))?;
 
     // Disable 2FA
     repo.disable_two_factor(&user_id).await?;

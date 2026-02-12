@@ -2,11 +2,11 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::two_factor::{BackupCode, EmergencyToken, TwoFactorAuth, TwoFactorRateLimit};
 use aes_gcm::{
-    aead::{Aead, KeyInit, OsRng},
     Aes256Gcm, Nonce,
+    aead::{Aead, KeyInit, OsRng},
 };
 use argon2::Argon2;
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
 use data_encoding::BASE32_NOPAD;
 use password_hash::{PasswordHasher, PasswordVerifier, SaltString};
 use qrcode::QrCode;
@@ -46,7 +46,7 @@ impl PostgresRepository {
             .map_err(|e| AppError::BadRequest(format!("Encryption failed: {}", e)))?;
 
         let encrypted_base64 = general_purpose::STANDARD.encode(&ciphertext);
-        let nonce_base64 = general_purpose::STANDARD.encode(&nonce_bytes);
+        let nonce_base64 = general_purpose::STANDARD.encode(nonce_bytes);
 
         Ok((encrypted_base64, nonce_base64))
     }
@@ -88,9 +88,7 @@ impl PostgresRepository {
         let qr = QrCode::new(&uri).map_err(|e| AppError::BadRequest(format!("Failed to generate QR code: {}", e)))?;
 
         // Render QR code as SVG (simpler than PNG, no extra dependencies)
-        let qr_svg = qr.render::<qrcode::render::svg::Color>()
-            .min_dimensions(200, 200)
-            .build();
+        let qr_svg = qr.render::<qrcode::render::svg::Color>().min_dimensions(200, 200).build();
 
         // Convert SVG to base64 data URL
         let base64_svg = general_purpose::STANDARD.encode(qr_svg.as_bytes());
@@ -103,8 +101,8 @@ impl PostgresRepository {
             .to_bytes()
             .map_err(|e| AppError::BadRequest(format!("Failed to decode secret: {}", e)))?;
 
-        let totp = TOTP::new(Algorithm::SHA1, TOTP_DIGITS, 1, TOTP_STEP, secret_bytes)
-            .map_err(|e| AppError::BadRequest(format!("Failed to create TOTP: {}", e)))?;
+        let totp =
+            TOTP::new(Algorithm::SHA1, TOTP_DIGITS, 1, TOTP_STEP, secret_bytes).map_err(|e| AppError::BadRequest(format!("Failed to create TOTP: {}", e)))?;
 
         // Use constant-time comparison through totp-rs
         Ok(totp.check(code, SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()))
@@ -200,11 +198,9 @@ impl PostgresRepository {
             .await?;
 
         // Generate codes in blocking task
-        let codes_with_hashes = tokio::task::spawn_blocking(|| {
-            PostgresRepository::generate_backup_codes_sync()
-        })
-        .await
-        .map_err(|e| AppError::BadRequest(format!("Task join error: {}", e)))??;
+        let codes_with_hashes = tokio::task::spawn_blocking(PostgresRepository::generate_backup_codes_sync)
+            .await
+            .map_err(|e| AppError::BadRequest(format!("Task join error: {}", e)))??;
 
         let mut codes = Vec::new();
 
@@ -254,7 +250,7 @@ impl PostgresRepository {
                     WHERE id = $1
                     "#,
                 )
-                .bind(&backup_code.id)
+                .bind(backup_code.id)
                 .execute(&self.pool)
                 .await?;
 
@@ -324,10 +320,10 @@ impl PostgresRepository {
 
         match rate_limit {
             Some(limit) => {
-                if let Some(locked_until) = limit.locked_until {
-                    if locked_until > chrono::Utc::now() {
-                        return Ok(true); // Still locked
-                    }
+                if let Some(locked_until) = limit.locked_until
+                    && locked_until > chrono::Utc::now()
+                {
+                    return Ok(true); // Still locked
                 }
                 Ok(false)
             }
@@ -399,10 +395,12 @@ impl PostgresRepository {
     /// Create emergency disable token
     pub async fn create_emergency_token(&self, user_id: &Uuid) -> Result<String, AppError> {
         // Generate random token (32 bytes = 64 hex chars)
-        let mut rng = rand::thread_rng();
-        let mut token_bytes = [0u8; 32];
-        rand::RngCore::fill_bytes(&mut rng, &mut token_bytes);
-        let token = hex::encode(token_bytes);
+        let token = {
+            let mut rng = rand::thread_rng();
+            let mut token_bytes = [0u8; 32];
+            rand::RngCore::fill_bytes(&mut rng, &mut token_bytes);
+            hex::encode(token_bytes)
+        };
 
         // Hash token before storing
         let mut hasher = Sha256::new();
@@ -454,7 +452,7 @@ impl PostgresRepository {
                     WHERE id = $1
                     "#,
                 )
-                .bind(&token.id)
+                .bind(token.id)
                 .execute(&self.pool)
                 .await?;
 

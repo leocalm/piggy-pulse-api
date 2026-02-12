@@ -40,12 +40,6 @@ pub struct LoginRequest {
     pub two_factor_code: Option<String>,
 }
 
-#[derive(Serialize, Debug, JsonSchema)]
-pub struct TwoFactorRequiredResponse {
-    /// Indicates that a 2FA code is required to complete login
-    pub two_factor_required: bool,
-}
-
 impl From<&User> for UserResponse {
     fn from(user: &User) -> Self {
         Self {

@@ -129,8 +129,8 @@ pub async fn post_user_login(
                 }
 
                 // Parse encryption key
-                let encryption_key_bytes = hex::decode(&config.two_factor.encryption_key)
-                    .map_err(|e| AppError::BadRequest(format!("Invalid encryption key configuration: {}", e)))?;
+                let encryption_key_bytes =
+                    hex::decode(&config.two_factor.encryption_key).map_err(|e| AppError::BadRequest(format!("Invalid encryption key configuration: {}", e)))?;
                 let mut encryption_key = [0u8; 32];
                 encryption_key.copy_from_slice(&encryption_key_bytes);
 
@@ -151,11 +151,7 @@ pub async fn post_user_login(
                 .map_err(|e| AppError::BadRequest(format!("Task join error: {}", e)))??;
 
                 // If TOTP failed, try backup code
-                let backup_valid = if !totp_valid {
-                    repo.verify_backup_code(&user.id, code).await?
-                } else {
-                    false
-                };
+                let backup_valid = if !totp_valid { repo.verify_backup_code(&user.id, code).await? } else { false };
 
                 if !totp_valid && !backup_valid {
                     // Record failed attempt
