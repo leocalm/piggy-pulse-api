@@ -10,5 +10,6 @@ pub mod overlay;
 pub mod password_reset;
 pub mod settings;
 pub mod transaction;
+pub mod two_factor;
 pub mod user;
 pub mod vendor;

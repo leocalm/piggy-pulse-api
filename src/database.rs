@@ -10,5 +10,6 @@ pub mod postgres_repository;
 pub mod session;
 pub mod settings;
 pub mod transaction;
+pub mod two_factor;
 pub mod user;
 pub mod vendor;

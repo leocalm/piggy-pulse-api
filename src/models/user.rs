@@ -36,6 +36,8 @@ pub struct UserRequest {
 pub struct LoginRequest {
     pub email: String,
     pub password: String,
+    /// Optional two-factor authentication code (6 digits or backup code)
+    pub two_factor_code: Option<String>,
 }
 
 impl From<&User> for UserResponse {

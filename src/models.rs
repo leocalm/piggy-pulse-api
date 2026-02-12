@@ -11,5 +11,6 @@ pub mod session;
 pub mod settings;
 pub mod transaction;
 pub mod transaction_summary;
+pub mod two_factor;
 pub mod user;
 pub mod vendor;

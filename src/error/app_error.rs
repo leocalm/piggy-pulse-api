@@ -57,10 +57,12 @@ pub enum AppError {
     ConfigurationError {
         message: String,
         #[source]
-        source: figment::Error,
+        source: Box<figment::Error>,
     },
     #[error("Email error: {0}")]
     EmailError(String),
+    #[error("Two-factor authentication required")]
+    TwoFactorRequired,
 }
 
 impl AppError {
@@ -118,6 +120,7 @@ impl From<&AppError> for Status {
             AppError::ValidationError(_) => Status::BadRequest,
             AppError::ConfigurationError { .. } => Status::InternalServerError,
             AppError::EmailError(_) => Status::InternalServerError,
+            AppError::TwoFactorRequired => Status::PreconditionRequired,
         }
     }
 }
@@ -152,22 +155,30 @@ impl<'r> Responder<'r, 'static> for AppError {
         );
 
         let status = Status::from(&self);
-        let error_message = match &self {
-            AppError::ValidationError(_) => "Invalid request".to_string(),
-            _ => self.to_string(),
+        let body = match &self {
+            AppError::TwoFactorRequired => {
+                // Special case for 2FA required - return custom JSON
+                serde_json::json!({"two_factor_required": true}).to_string()
+            }
+            _ => {
+                let error_message = match &self {
+                    AppError::ValidationError(_) => "Invalid request".to_string(),
+                    _ => self.to_string(),
+                };
+                let error_response = ErrorResponse {
+                    message: error_message.clone(),
+                    request_id: request_id.clone(),
+                };
+                serde_json::to_string(&error_response).unwrap_or_else(|e| {
+                    error!(
+                        request_id = %request_id,
+                        error = %e,
+                        "Failed to serialize error response"
+                    );
+                    format!(r#"{{"message":"Error serialization failed","request_id":"{}"}}"#, request_id)
+                })
+            }
         };
-        let error_response = ErrorResponse {
-            message: error_message.clone(),
-            request_id: request_id.clone(),
-        };
-        let body = serde_json::to_string(&error_response).unwrap_or_else(|e| {
-            error!(
-                request_id = %request_id,
-                error = %e,
-                "Failed to serialize error response"
-            );
-            format!(r#"{{"message":"Error serialization failed","request_id":"{}"}}"#, request_id)
-        });
 
         Response::build()
             .status(status)
@@ -224,7 +235,7 @@ impl From<figment::Error> for AppError {
     fn from(e: figment::Error) -> Self {
         AppError::ConfigurationError {
             message: "Failed to read configuration".to_string(),
-            source: e,
+            source: Box::new(e),
         }
     }
 }

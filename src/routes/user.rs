@@ -101,11 +101,66 @@ pub async fn post_user_login(
     payload: Json<LoginRequest>,
 ) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
+
     match repo.get_user_by_email(&payload.email).await? {
         Some(user) => {
+            // Verify password first
             if repo.verify_password(&user, &payload.password).await.is_err() {
                 return Err(AppError::InvalidCredentials);
             }
+
+            // Check if user has 2FA enabled
+            let two_factor = repo.get_two_factor_by_user(&user.id).await?;
+            let has_2fa = two_factor.as_ref().map(|tf| tf.is_enabled).unwrap_or(false);
+
+            if has_2fa {
+                // 2FA is enabled - check if code was provided
+                if payload.two_factor_code.is_none() {
+                    // Return 428 Precondition Required with JSON response
+                    return Err(AppError::TwoFactorRequired);
+                }
+
+                // Code was provided - verify it
+                let code = payload.two_factor_code.as_ref().unwrap();
+
+                // Check rate limit
+                if repo.check_rate_limit(&user.id).await? {
+                    return Err(AppError::BadRequest("Too many failed attempts. Please try again later.".to_string()));
+                }
+
+                // Parse encryption key
+                let encryption_key = config.two_factor.parse_encryption_key().map_err(AppError::BadRequest)?;
+
+                // Decrypt and verify in blocking task
+                let two_factor_data = two_factor.unwrap();
+                let encrypted_secret = two_factor_data.encrypted_secret.clone();
+                let encryption_nonce = two_factor_data.encryption_nonce.clone();
+                let code_clone = code.clone();
+
+                let totp_valid = tokio::task::spawn_blocking(move || {
+                    // Decrypt the secret
+                    let secret = PostgresRepository::decrypt_secret(&encrypted_secret, &encryption_nonce, &encryption_key)?;
+
+                    // Verify TOTP code
+                    PostgresRepository::verify_totp_code(&secret, &code_clone)
+                })
+                .await
+                .map_err(|e| AppError::BadRequest(format!("Task join error: {}", e)))??;
+
+                // If TOTP failed, try backup code
+                let backup_valid = if !totp_valid { repo.verify_backup_code(&user.id, code).await? } else { false };
+
+                if !totp_valid && !backup_valid {
+                    // Record failed attempt
+                    repo.record_failed_attempt(&user.id).await?;
+                    return Err(AppError::BadRequest("Invalid two-factor authentication code.".to_string()));
+                }
+
+                // Success - reset rate limit
+                repo.reset_rate_limit(&user.id).await?;
+            }
+
+            // Create session (either no 2FA or 2FA passed)
             let ttl_seconds = config.session.ttl_seconds.max(60);
             let expires_at = chrono::Utc::now() + chrono::Duration::seconds(ttl_seconds);
             let session = repo.create_session(&user.id, expires_at).await?;
@@ -119,16 +174,16 @@ pub async fn post_user_login(
                     .max_age(Duration::seconds(ttl_seconds))
                     .build(),
             );
+
+            Ok(Status::Ok)
         }
         None => {
             // Equalize response timing so attackers cannot distinguish
             // existing from non-existing accounts by measuring latency.
             PostgresRepository::dummy_verify(&payload.password);
-            return Err(AppError::InvalidCredentials);
+            Err(AppError::InvalidCredentials)
         }
     }
-
-    Ok(Status::Ok)
 }
 
 /// Log out the current user
