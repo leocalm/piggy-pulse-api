@@ -34,15 +34,7 @@ pub async fn setup_two_factor(
     }
 
     // Parse encryption key from config
-    let encryption_key_bytes =
-        hex::decode(&config.two_factor.encryption_key).map_err(|e| AppError::BadRequest(format!("Invalid encryption key configuration: {}", e)))?;
-
-    if encryption_key_bytes.len() != 32 {
-        return Err(AppError::BadRequest("Encryption key must be exactly 32 bytes (64 hex chars)".to_string()));
-    }
-
-    let mut encryption_key = [0u8; 32];
-    encryption_key.copy_from_slice(&encryption_key_bytes);
+    let encryption_key = config.two_factor.parse_encryption_key().map_err(AppError::BadRequest)?;
 
     // Generate crypto material in blocking task (RNG operations)
     let issuer_name = config.two_factor.issuer_name.clone();
@@ -94,10 +86,7 @@ pub async fn verify_two_factor(
     }
 
     // Parse encryption key
-    let encryption_key_bytes =
-        hex::decode(&config.two_factor.encryption_key).map_err(|e| AppError::BadRequest(format!("Invalid encryption key configuration: {}", e)))?;
-    let mut encryption_key = [0u8; 32];
-    encryption_key.copy_from_slice(&encryption_key_bytes);
+    let encryption_key = config.two_factor.parse_encryption_key().map_err(AppError::BadRequest)?;
 
     // Decrypt the secret
     let secret = PostgresRepository::decrypt_secret(&two_factor.encrypted_secret, &two_factor.encryption_nonce, &encryption_key)?;
@@ -144,10 +133,7 @@ pub async fn disable_two_factor(
     }
 
     // Parse encryption key
-    let encryption_key_bytes =
-        hex::decode(&config.two_factor.encryption_key).map_err(|e| AppError::BadRequest(format!("Invalid encryption key configuration: {}", e)))?;
-    let mut encryption_key = [0u8; 32];
-    encryption_key.copy_from_slice(&encryption_key_bytes);
+    let encryption_key = config.two_factor.parse_encryption_key().map_err(AppError::BadRequest)?;
 
     // Decrypt the secret
     let secret = PostgresRepository::decrypt_secret(&two_factor.encrypted_secret, &two_factor.encryption_nonce, &encryption_key)?;
@@ -217,10 +203,7 @@ pub async fn regenerate_backup_codes(
     }
 
     // Parse encryption key
-    let encryption_key_bytes =
-        hex::decode(&config.two_factor.encryption_key).map_err(|e| AppError::BadRequest(format!("Invalid encryption key configuration: {}", e)))?;
-    let mut encryption_key = [0u8; 32];
-    encryption_key.copy_from_slice(&encryption_key_bytes);
+    let encryption_key = config.two_factor.parse_encryption_key().map_err(AppError::BadRequest)?;
 
     // Decrypt and verify in blocking task
     let encrypted_secret = two_factor.encrypted_secret.clone();

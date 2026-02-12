@@ -56,6 +56,25 @@ fn ensure_rocket_secret_key() {
     }
 }
 
+fn ensure_two_factor_encryption_key(two_factor_config: &config::TwoFactorConfig) {
+    // Only enforce strict 2FA key requirements for non-debug profiles (e.g., staging/production).
+    let profile = std::env::var("ROCKET_PROFILE").unwrap_or_else(|_| "debug".to_string());
+    if profile == "debug" {
+        return;
+    }
+
+    if two_factor_config.encryption_key_is_default() {
+        panic!(
+            "BUDGET_TWO_FACTOR__ENCRYPTION_KEY must be set for profile '{}' and cannot use the insecure default. Generate one with: openssl rand -hex 32",
+            profile
+        );
+    }
+
+    if let Err(err) = two_factor_config.parse_encryption_key() {
+        panic!("Invalid BUDGET_TWO_FACTOR__ENCRYPTION_KEY for profile '{}': {}", profile, err);
+    }
+}
+
 fn build_cors(cors_config: &config::CorsConfig) -> CorsOptions {
     if cors_config.allowed_origins.is_empty() {
         if cors_config.allow_credentials {
@@ -214,6 +233,7 @@ fn mount_api_routes(mut rocket: Rocket<Build>, base_path: &str) -> Rocket<Build>
 pub fn build_rocket(config: Config) -> Rocket<Build> {
     init_tracing(&config.logging.level, config.logging.json_format);
     ensure_rocket_secret_key();
+    ensure_two_factor_encryption_key(&config.two_factor);
 
     let cors = build_cors(&config.cors).to_cors().expect("Failed to create CORS fairing");
 

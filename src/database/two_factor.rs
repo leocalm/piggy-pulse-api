@@ -242,19 +242,21 @@ impl PostgresRepository {
 
             let argon2 = Argon2::default();
             if argon2.verify_password(code.as_bytes(), &parsed_hash).is_ok() {
-                // Mark this code as used
-                sqlx::query(
+                // Mark this code as used only if it is still unused to preserve single-use semantics under concurrency.
+                let result = sqlx::query(
                     r#"
                     UPDATE two_factor_backup_codes
                     SET used_at = now()
-                    WHERE id = $1
+                    WHERE id = $1 AND used_at IS NULL
                     "#,
                 )
                 .bind(backup_code.id)
                 .execute(&self.pool)
                 .await?;
 
-                return Ok(true);
+                if result.rows_affected() == 1 {
+                    return Ok(true);
+                }
             }
         }
 
@@ -346,9 +348,12 @@ impl PostgresRepository {
 
         match existing {
             Some(limit) => {
-                let new_attempts = limit.failed_attempts + 1;
+                let now = chrono::Utc::now();
+                let lockout_expired = limit.locked_until.is_some_and(|locked_until| locked_until <= now);
+                let current_attempts = if lockout_expired { 0 } else { limit.failed_attempts };
+                let new_attempts = current_attempts + 1;
                 let locked_until = if new_attempts >= RATE_LIMIT_MAX_ATTEMPTS {
-                    Some(chrono::Utc::now() + chrono::Duration::minutes(RATE_LIMIT_LOCKOUT_MINUTES))
+                    Some(now + chrono::Duration::minutes(RATE_LIMIT_LOCKOUT_MINUTES))
                 } else {
                     None
                 };

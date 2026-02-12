@@ -129,10 +129,7 @@ pub async fn post_user_login(
                 }
 
                 // Parse encryption key
-                let encryption_key_bytes =
-                    hex::decode(&config.two_factor.encryption_key).map_err(|e| AppError::BadRequest(format!("Invalid encryption key configuration: {}", e)))?;
-                let mut encryption_key = [0u8; 32];
-                encryption_key.copy_from_slice(&encryption_key_bytes);
+                let encryption_key = config.two_factor.parse_encryption_key().map_err(AppError::BadRequest)?;
 
                 // Decrypt and verify in blocking task
                 let two_factor_data = two_factor.unwrap();

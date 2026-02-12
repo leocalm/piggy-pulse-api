@@ -18,11 +18,13 @@ pub struct TwoFactorConfig {
     pub frontend_emergency_disable_url: String,
 }
 
+pub const INSECURE_DEFAULT_TWO_FACTOR_ENCRYPTION_KEY: &str = "0000000000000000000000000000000000000000000000000000000000000000";
+
 fn default_encryption_key() -> String {
     // WARNING: This is a placeholder key for development only
     // Generate a secure key with: openssl rand -hex 32
     // Set BUDGET_TWO_FACTOR__ENCRYPTION_KEY environment variable in production
-    "0000000000000000000000000000000000000000000000000000000000000000".to_string()
+    INSECURE_DEFAULT_TWO_FACTOR_ENCRYPTION_KEY.to_string()
 }
 
 fn default_issuer_name() -> String {
@@ -31,6 +33,24 @@ fn default_issuer_name() -> String {
 
 fn default_emergency_disable_url() -> String {
     "http://localhost:5173/auth/emergency-2fa-disable".to_string()
+}
+
+impl TwoFactorConfig {
+    pub fn encryption_key_is_default(&self) -> bool {
+        self.encryption_key.eq_ignore_ascii_case(INSECURE_DEFAULT_TWO_FACTOR_ENCRYPTION_KEY)
+    }
+
+    pub fn parse_encryption_key(&self) -> Result<[u8; 32], String> {
+        let encryption_key_bytes = hex::decode(&self.encryption_key).map_err(|e| format!("Invalid encryption key configuration: {}", e))?;
+
+        if encryption_key_bytes.len() != 32 {
+            return Err("Encryption key must be exactly 32 bytes (64 hex chars)".to_string());
+        }
+
+        let mut encryption_key = [0u8; 32];
+        encryption_key.copy_from_slice(&encryption_key_bytes);
+        Ok(encryption_key)
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -235,5 +255,45 @@ impl Config {
             .extract()?;
 
         Ok(figment)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{INSECURE_DEFAULT_TWO_FACTOR_ENCRYPTION_KEY, TwoFactorConfig};
+
+    #[test]
+    fn parse_encryption_key_accepts_32_byte_hex() {
+        let config = TwoFactorConfig {
+            encryption_key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            issuer_name: "PiggyPulse".to_string(),
+            frontend_emergency_disable_url: "http://localhost".to_string(),
+        };
+
+        let parsed = config.parse_encryption_key().expect("valid key should parse");
+        assert_eq!(parsed.len(), 32);
+    }
+
+    #[test]
+    fn parse_encryption_key_rejects_wrong_length() {
+        let config = TwoFactorConfig {
+            encryption_key: "abcd".to_string(),
+            issuer_name: "PiggyPulse".to_string(),
+            frontend_emergency_disable_url: "http://localhost".to_string(),
+        };
+
+        let err = config.parse_encryption_key().expect_err("short key should fail");
+        assert_eq!(err, "Encryption key must be exactly 32 bytes (64 hex chars)");
+    }
+
+    #[test]
+    fn encryption_key_default_detection_is_case_insensitive() {
+        let config = TwoFactorConfig {
+            encryption_key: INSECURE_DEFAULT_TWO_FACTOR_ENCRYPTION_KEY.to_uppercase(),
+            issuer_name: "PiggyPulse".to_string(),
+            frontend_emergency_disable_url: "http://localhost".to_string(),
+        };
+
+        assert!(config.encryption_key_is_default());
     }
 }
