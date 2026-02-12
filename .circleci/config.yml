@@ -50,7 +50,7 @@ jobs:
 
   check-test:
     docker:
-      - image: cimg/rust:stable
+      - image: cimg/rust:1.93.0
     steps:
       - checkout
 
