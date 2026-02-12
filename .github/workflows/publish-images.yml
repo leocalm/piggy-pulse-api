@@ -152,8 +152,8 @@ jobs:
     steps:
       - name: Create deploy digest manifest
         env:
-          API_IMAGE_REF: ${{ needs.publish-api.outputs.image_ref }}
-          CRON_IMAGE_REF: ${{ needs.publish-cron.outputs.image_ref }}
+          API_IMAGE_REF: ${{ needs['publish-api'].outputs.image_ref }}
+          CRON_IMAGE_REF: ${{ needs['publish-cron'].outputs.image_ref }}
         run: |
           set -euo pipefail
           test -n "${API_IMAGE_REF}"
@@ -176,8 +176,8 @@ jobs:
           {
             echo "## Published Images"
             echo
-            echo "- API: \\`${{ needs.publish-api.outputs.image_ref }}\\`"
-            echo "- Cron: \\`${{ needs.publish-cron.outputs.image_ref }}\\`"
+            echo "- API: \\`${{ needs['publish-api'].outputs.image_ref }}\\`"
+            echo "- Cron: \\`${{ needs['publish-cron'].outputs.image_ref }}\\`"
             echo
             echo "Use these in Ansible:"
             echo "- \\`piggypulse_api_image\\`"
