@@ -8,11 +8,21 @@ jobs:
       - checkout
 
       - run:
+          name: Setup Docker Buildx
+          command: |
+            docker buildx create --use || true
+            docker buildx inspect --bootstrap
+
+      - run:
           name: Build and push API
           command: |
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-            docker build -t ghcr.io/leocalm/piggypulse-api:latest .
-            docker push ghcr.io/leocalm/piggypulse-api:latest
+            docker buildx build \
+              --cache-from type=registry,ref=ghcr.io/leocalm/piggypulse-api:buildcache \
+              --cache-to type=registry,ref=ghcr.io/leocalm/piggypulse-api:buildcache,mode=max \
+              --tag ghcr.io/leocalm/piggypulse-api:latest \
+              --push \
+              .
 
   build_cron:
     machine:
@@ -21,11 +31,22 @@ jobs:
       - checkout
 
       - run:
+          name: Setup Docker Buildx
+          command: |
+            docker buildx create --use || true
+            docker buildx inspect --bootstrap
+
+      - run:
           name: Build and push Cron
           command: |
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-            docker build -f Dockerfile.cron -t ghcr.io/leocalm/piggypulse-cron:latest .
-            docker push ghcr.io/leocalm/piggypulse-cron:latest
+            docker buildx build \
+              --cache-from type=registry,ref=ghcr.io/leocalm/piggypulse-cron:buildcache \
+              --cache-to type=registry,ref=ghcr.io/leocalm/piggypulse-cron:buildcache,mode=max \
+              --tag ghcr.io/leocalm/piggypulse-cron:latest \
+              --file Dockerfile.cron \
+              --push \
+              .
 
   deploy:
     machine:
@@ -48,6 +69,8 @@ jobs:
               docker compose pull
               echo "🚀 Starting services..."
               docker compose up -d
+              echo "🧹 Cleaning up old images..."
+              docker image prune -af
               echo "✅ Deploy complete!"
             '
 
