@@ -654,7 +654,9 @@ fn render_period_name(pattern: &str, start_date: NaiveDate, end_date: NaiveDate)
         .replace("{start_date}", &start_date.format("%Y-%m-%d").to_string())
         .replace("{end_date}", &end_date.format("%Y-%m-%d").to_string())
         .replace("{year}", &start_date.format("%Y").to_string())
-        .replace("{month}", &start_date.format("%m").to_string());
+        .replace("{month}", &start_date.format("%m").to_string())
+        .replace("{YEAR}", &start_date.format("%Y").to_string())
+        .replace("{MONTH}", &start_date.format("%B").to_string());
 
     if rendered == pattern {
         format!("{} {}", rendered, start_date.format("%Y-%m-%d"))
