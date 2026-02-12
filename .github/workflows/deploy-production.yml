@@ -73,8 +73,8 @@ jobs:
       - name: Normalize deploy image vars for Ansible
         run: |
           set -euo pipefail
-          api_image="$(sed -n 's/^[[:space:]]*piggypulse_api_image:[[:space:]]*//p' ansible-image-vars.yml | head -n1 | tr -d '\r' | xargs)"
-          cron_image="$(sed -n 's/^[[:space:]]*piggypulse_cron_image:[[:space:]]*//p' ansible-image-vars.yml | head -n1 | tr -d '\r' | xargs)"
+          api_image="$(awk '/^[[:space:]]*piggypulse_api_image:[[:space:]]*/ { line=$0; sub(/^[[:space:]]*piggypulse_api_image:[[:space:]]*/, "", line); print line; exit }' ansible-image-vars.yml | tr -d '\r' | xargs)"
+          cron_image="$(awk '/^[[:space:]]*piggypulse_cron_image:[[:space:]]*/ { line=$0; sub(/^[[:space:]]*piggypulse_cron_image:[[:space:]]*/, "", line); print line; exit }' ansible-image-vars.yml | tr -d '\r' | xargs)"
           api_image="${api_image%\"}"
           api_image="${api_image#\"}"
           api_image="${api_image%\'}"
@@ -83,8 +83,13 @@ jobs:
           cron_image="${cron_image#\"}"
           cron_image="${cron_image%\'}"
           cron_image="${cron_image#\'}"
-          test -n "${api_image}"
-          test -n "${cron_image}"
+          if [ -z "${api_image}" ] || [ -z "${cron_image}" ]; then
+            echo "Failed to parse image refs from ansible-image-vars.yml" >&2
+            echo "---- ansible-image-vars.yml ----" >&2
+            cat -n ansible-image-vars.yml >&2 || true
+            echo "--------------------------------" >&2
+            exit 1
+          fi
           case "${api_image}" in
             ghcr.io/*) ;;
             *) echo "Invalid piggypulse_api_image: ${api_image}" >&2; exit 1 ;;
