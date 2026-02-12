@@ -34,6 +34,7 @@
     mode: "0700"
 
 - name: Configure deploy authorized_keys
+  become: false
   ansible.builtin.copy:
     dest: "/home/{{ security_deploy_user }}/.ssh/authorized_keys"
     content: "{{ (security_deploy_ssh_public_keys | join('\n')) ~ '\n' }}"
