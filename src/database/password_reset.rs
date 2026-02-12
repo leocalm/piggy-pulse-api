@@ -35,7 +35,7 @@ impl PostgresRepository {
         let reset = sqlx::query_as::<_, PasswordReset>(
             r#"
             INSERT INTO password_resets (user_id, token_hash, expires_at, ip_address, user_agent)
-            VALUES ($1, $2, $3, $4, $5)
+            VALUES ($1, $2, $3, $4::inet, $5)
             RETURNING id, user_id, token_hash, ip_address, user_agent, created_at, expires_at, used_at
             "#,
         )
@@ -144,7 +144,7 @@ impl PostgresRepository {
         let log = sqlx::query_as::<_, SecurityAuditLog>(
             r#"
             INSERT INTO security_audit_log (user_id, event_type, success, ip_address, user_agent, metadata)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            VALUES ($1, $2, $3, $4::inet, $5, $6)
             RETURNING id, user_id, event_type, ip_address, user_agent, success, metadata, created_at
             "#,
         )

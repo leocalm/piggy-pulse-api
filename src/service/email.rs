@@ -1,6 +1,5 @@
 use crate::config::EmailConfig;
 use crate::error::app_error::AppError;
-use lettre::message::header::ContentType;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport};
 
@@ -427,19 +426,10 @@ PiggyPulse Security
             )
             .to(to_email.parse().map_err(|e| AppError::email(format!("Invalid to address: {}", e)))?)
             .subject(subject)
-            .header(ContentType::TEXT_HTML)
             .multipart(
                 lettre::message::MultiPart::alternative()
-                    .singlepart(
-                        lettre::message::SinglePart::builder()
-                            .header(ContentType::TEXT_PLAIN)
-                            .body(text_body.to_string()),
-                    )
-                    .singlepart(
-                        lettre::message::SinglePart::builder()
-                            .header(ContentType::TEXT_HTML)
-                            .body(html_body.to_string()),
-                    ),
+                    .singlepart(lettre::message::SinglePart::plain(text_body.to_string()))
+                    .singlepart(lettre::message::SinglePart::html(html_body.to_string())),
             )
             .map_err(|e| AppError::email(format!("Failed to build email: {}", e)))?;
 
