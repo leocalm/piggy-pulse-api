@@ -92,7 +92,7 @@ jobs:
             mkdir -p ~/.ssh
             chmod 700 ~/.ssh
             if [ -n "${PROD_SSH_PRIVATE_KEY_B64:-}" ]; then
-              printf '%s' "${PROD_SSH_PRIVATE_KEY_B64}" | base64 -d > ~/.ssh/id_ed25519
+              printf '%s' "${PROD_SSH_PRIVATE_KEY_B64}" | tr -d '[:space:]' | base64 -d > ~/.ssh/id_ed25519
             else
               # Support secrets copied with escaped newlines and strip CRLF.
               printf '%b' "${PROD_SSH_PRIVATE_KEY}" | tr -d '\r' > ~/.ssh/id_ed25519
