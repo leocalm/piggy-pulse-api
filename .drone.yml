@@ -10,7 +10,12 @@ steps:
     volumes:
       - name: cargo-cache
         path: /usr/local/cargo
+    environment:
+      PATH: /usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      CARGO_HOME: /usr/local/cargo
     commands:
+      - cargo --version
+      - rustc --version
       - cargo fmt -- --check
       - cargo clippy -- -D warnings
       - cargo test --all
@@ -84,8 +89,8 @@ steps:
     commands:
       - echo "🚀 Starting deployment..."
       - cd /opt/piggypulse/budget
-      - docker compose pull api cron
-      - docker compose up -d api cron
+      - docker compose pull budget cron
+      - docker compose up -d budget cron
       - docker image prune -af
       - echo "✅ Deployed version ${DRONE_COMMIT_SHA:0:7}"
 
