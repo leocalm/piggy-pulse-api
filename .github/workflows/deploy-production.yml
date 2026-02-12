@@ -55,6 +55,8 @@ jobs:
       - name: Validate required deploy files and secrets
         run: |
           test -f ansible-image-vars.yml
+          grep -Eq '^piggypulse_api_image:[[:space:]]*.+$' ansible-image-vars.yml
+          grep -Eq '^piggypulse_cron_image:[[:space:]]*.+$' ansible-image-vars.yml
           test -n "${{ secrets.ANSIBLE_VAULT_PASSWORD }}"
           test -n "${{ secrets.PROD_WIREGUARD_CONFIG }}"
           test -n "${{ secrets.PROD_SSH_KNOWN_HOSTS }}"

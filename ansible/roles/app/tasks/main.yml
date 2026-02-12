@@ -165,6 +165,15 @@
     mode: "0600"
   notify: Restart piggypulse stack
 
+- name: Assert deploy image refs are present in rendered env file
+  ansible.builtin.shell: |
+    set -euo pipefail
+    grep -Eq '^BUDGET_API_IMAGE=.+' "{{ piggypulse_env_path }}"
+    grep -Eq '^BUDGET_CRON_IMAGE=.+' "{{ piggypulse_env_path }}"
+  args:
+    executable: /bin/bash
+  changed_when: false
+
 - name: Ensure GHCR credentials are configured when required
   ansible.builtin.assert:
     that:
