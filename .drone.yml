@@ -17,8 +17,13 @@ steps:
     commands:
       - cargo --version
       - rustc --version
+      - echo "Installing rustfmt and clippy..."
+      - rustup component add rustfmt clippy
+      - echo "Running format check..."
       - cargo fmt -- --check
+      - echo "Running clippy..."
       - cargo clippy -- -D warnings
+      - echo "Running tests..."
       - cargo test --all
 
 volumes:
@@ -54,72 +59,4 @@ steps:
       GHCR_USERNAME:
         from_secret: ghcr_username
       GHCR_TOKEN:
-        from_secret: ghcr_token
-    commands:
-      - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-      - docker buildx create --use --name drone-builder || true
-      - docker buildx build
-          --cache-from type=registry,ref=ghcr.io/leocalm/piggypulse-api:buildcache
-          --cache-to type=registry,ref=ghcr.io/leocalm/piggypulse-api:buildcache,mode=max
-          --tag ghcr.io/leocalm/piggypulse-api:latest
-          --tag ghcr.io/leocalm/piggypulse-api:${DRONE_COMMIT_SHA:0:7}
-          --push
-          .
-
-  - name: build-cron
-    image: docker:dind
-    volumes:
-      - name: dockersock
-        path: /var/run/docker.sock
-    environment:
-      GHCR_USERNAME:
-        from_secret: ghcr_username
-      GHCR_TOKEN:
-        from_secret: ghcr_token
-    commands:
-      - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-      - docker buildx create --use --name drone-builder || true
-      - docker buildx build
-          --cache-from type=registry,ref=ghcr.io/leocalm/piggypulse-cron:buildcache
-          --cache-to type=registry,ref=ghcr.io/leocalm/piggypulse-cron:buildcache,mode=max
-          --tag ghcr.io/leocalm/piggypulse-cron:latest
-          --tag ghcr.io/leocalm/piggypulse-cron:${DRONE_COMMIT_SHA:0:7}
-          --file Dockerfile.cron
-          --push
-          .
-
-  - name: deploy
-    image: docker:cli
-    volumes:
-      - name: dockersock
-        path: /var/run/docker.sock
-    commands:
-      - echo "🚀 Starting deployment..."
-      - cd /opt/piggypulse/budget
-      - docker compose pull budget cron
-      - docker compose up -d budget cron
-      - docker image prune -af
-      - echo "✅ Deployed version ${DRONE_COMMIT_SHA:0:7}"
-
-  - name: notify-success
-    image: alpine:latest
-    when:
-      status:
-        - success
-    commands:
-      - echo "✅ Build ${DRONE_BUILD_NUMBER} completed successfully!"
-      - echo "📦 Version ${DRONE_COMMIT_SHA:0:7} deployed to production"
-      
-  - name: notify-failure
-    image: alpine:latest
-    when:
-      status:
-        - failure
-    commands:
-      - echo "❌ Build ${DRONE_BUILD_NUMBER} failed!"
-      - echo "Commit ${DRONE_COMMIT_SHA:0:7} was not deployed"
-
-volumes:
-  - name: dockersock
-    host:
-      path: /var/run/docker.sock
+        from_secret: ghcr_token​​​​​​​​​​​​​​​​
