@@ -48,6 +48,23 @@ jobs:
               --push \
               .
 
+  test:
+    machine:
+      image: ubuntu-2204:current
+    steps:
+      - checkout
+
+      - run:
+          name: Check Style
+          command: |
+            cargo fmt --check
+            cargo clippy
+
+      - run:
+          name: Run Tests
+          command: |
+            cargo test
+
 workflows:
   build:
     jobs:
@@ -60,3 +77,10 @@ workflows:
           filters:
             branches:
               only: main
+
+  check-and-test:
+    jobs:
+      - test:
+          filters:
+            ignore:
+              - main
