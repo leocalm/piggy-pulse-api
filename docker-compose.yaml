@@ -150,8 +150,8 @@ services:
       DRONE_RPC_SECRET: ${DRONE_RPC_SECRET}
       DRONE_RUNNER_CAPACITY: 2
       DRONE_RUNNER_NAME: hetzner-runner
-      DRONE_MEMORY_LIMIT: 1073741824      # 1GB per build
-      DRONE_MEMORY_SWAP_LIMIT: 2147483648 # 2GB swap
+      DRONE_MEMORY_LIMIT: 3221225472        # 3GB (increased from 1GB)
+      DRONE_MEMORY_SWAP_LIMIT: 6442450944   # 6GB swap (increased from 2GB)
     networks:
       - budget_network
 
