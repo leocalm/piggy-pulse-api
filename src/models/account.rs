@@ -39,8 +39,6 @@ pub struct AccountRequest {
     #[validate(length(min = 3))]
     pub icon: String,
     pub account_type: AccountType,
-    #[validate(length(equal = 3))]
-    pub currency: String,
     #[validate(range(min = 0))]
     pub balance: i64,
     pub spend_limit: Option<i32>,

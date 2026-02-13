@@ -165,6 +165,29 @@ mod tests {
 
         assert_eq!(login_response.status(), Status::Ok);
 
+        // Fetch EUR currency ID
+        let currency_response = client.get("/api/v1/currency/EUR").dispatch().await;
+        assert_eq!(currency_response.status(), Status::Ok);
+        let currency_body = currency_response.into_string().await.expect("currency response body");
+        let currency_json: Value = serde_json::from_str(&currency_body).expect("valid currency json");
+        let eur_id = currency_json["id"].as_str().expect("currency id");
+
+        // Set default currency to EUR for the user
+        let settings_payload = serde_json::json!({
+            "theme": "light",
+            "language": "en",
+            "default_currency_id": eur_id
+        });
+
+        let settings_response = client
+            .put("/api/v1/settings")
+            .header(ContentType::JSON)
+            .body(settings_payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(settings_response.status(), Status::Ok);
+
         (user_json["id"].as_str().expect("user id").to_string(), user_email)
     }
 
@@ -174,6 +197,7 @@ mod tests {
         let mut config = Config::default();
         config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
         config.rate_limit.require_client_ip = false;
+        config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
         create_user_and_auth(&client).await;
@@ -192,6 +216,7 @@ mod tests {
         let mut config = Config::default();
         config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
         config.rate_limit.require_client_ip = false;
+        config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
         create_user_and_auth(&client).await;
@@ -202,7 +227,6 @@ mod tests {
             "color": "#123456",
             "icon": "wallet",
             "account_type": "Checking",
-            "currency": "EUR",
             "balance": 5000,
             "spend_limit": null
         });

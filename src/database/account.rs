@@ -125,10 +125,24 @@ impl PostgresRepository {
             return Err(AppError::BadRequest("Account name already exists".to_string()));
         }
 
+        let default_currency_id: Option<Uuid> = sqlx::query_scalar(
+            r#"
+            SELECT default_currency_id
+            FROM settings
+            WHERE user_id = $1
+            "#,
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .flatten();
+
+        let currency_id = default_currency_id.ok_or_else(|| AppError::BadRequest("Please set your default currency in settings first.".to_string()))?;
+
         let currency = self
-            .get_currency_by_code(&request.currency)
+            .get_currency_by_id(&currency_id)
             .await?
-            .ok_or_else(|| AppError::CurrencyDoesNotExist(request.currency.clone()))?;
+            .ok_or_else(|| AppError::NotFound(format!("Default currency {} not found", currency_id)))?;
 
         let account_type_str = request.account_type_to_db();
 
@@ -167,7 +181,7 @@ impl PostgresRepository {
         .bind(&request.color)
         .bind(&request.icon)
         .bind(&account_type_str)
-        .bind(currency.id)
+        .bind(currency_id)
         .bind(request.balance)
         .bind(request.spend_limit)
         .fetch_one(&self.pool)
@@ -605,10 +619,12 @@ ORDER BY a.id, d.day
             return Err(AppError::BadRequest("Account name already exists".to_string()));
         }
 
-        let currency = self
-            .get_currency_by_code(&request.currency)
+        // We re-fetch the existing account to get the current currency
+        let existing_account = self
+            .get_account_by_id(id, user_id)
             .await?
-            .ok_or_else(|| AppError::CurrencyDoesNotExist(request.currency.clone()))?;
+            .ok_or_else(|| AppError::NotFound("Account not found".to_string()))?;
+        let currency = existing_account.currency;
 
         let account_type_str = request.account_type_to_db();
 
@@ -628,7 +644,7 @@ ORDER BY a.id, d.day
         let row = sqlx::query_as::<_, UpdateAccountRow>(
             r#"
             UPDATE account
-            SET name = $1, color = $2, icon = $3, account_type = $4::text::account_type, currency_id = $5, balance = $6
+            SET name = $1, color = $2, icon = $3, account_type = $4::text::account_type, balance = $5, spend_limit = $6
             WHERE id = $7 and user_id = $8
             RETURNING
                 id,
@@ -647,8 +663,8 @@ ORDER BY a.id, d.day
         .bind(&request.color)
         .bind(&request.icon)
         .bind(&account_type_str)
-        .bind(currency.id)
         .bind(request.balance)
+        .bind(request.spend_limit)
         .bind(id)
         .bind(user_id)
         .fetch_one(&self.pool)
@@ -730,7 +746,6 @@ mod tests {
             color: "#000000".to_string(),
             icon: "icon".to_string(),
             account_type: AccountType::Checking,
-            currency: "USD".to_string(),
             balance: 0,
             spend_limit: None,
         };
@@ -741,7 +756,6 @@ mod tests {
             color: "#000000".to_string(),
             icon: "icon".to_string(),
             account_type: AccountType::Savings,
-            currency: "USD".to_string(),
             balance: 0,
             spend_limit: None,
         };
@@ -752,7 +766,6 @@ mod tests {
             color: "#000000".to_string(),
             icon: "icon".to_string(),
             account_type: AccountType::CreditCard,
-            currency: "USD".to_string(),
             balance: 0,
             spend_limit: None,
         };

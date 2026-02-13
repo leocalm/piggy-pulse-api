@@ -235,7 +235,8 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_get_me_unauthorized_without_cookie() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
@@ -248,7 +249,8 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_get_me_returns_current_user() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
@@ -301,7 +303,8 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_put_user_forbidden_when_wrong_user() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
@@ -349,7 +352,8 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_delete_user_forbidden_when_wrong_user() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 

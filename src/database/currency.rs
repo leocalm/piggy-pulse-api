@@ -1,6 +1,7 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::currency::Currency;
+use uuid::Uuid;
 
 impl PostgresRepository {
     pub async fn get_currency_by_code(&self, currency_code: &str) -> Result<Option<Currency>, AppError> {
@@ -13,6 +14,20 @@ impl PostgresRepository {
             "#,
         )
         .bind(currency_code)
+        .fetch_optional(&self.pool)
+        .await?)
+    }
+
+    pub async fn get_currency_by_id(&self, id: &Uuid) -> Result<Option<Currency>, AppError> {
+        Ok(sqlx::query_as::<_, Currency>(
+            r#"
+              SELECT id, name, symbol, currency, decimal_places, symbol_position, created_at
+              FROM currency
+              WHERE id = $1
+              LIMIT 1
+            "#,
+        )
+        .bind(id)
         .fetch_optional(&self.pool)
         .await?)
     }

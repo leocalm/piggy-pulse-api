@@ -110,7 +110,8 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_get_budget_category_invalid_uuid() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
@@ -123,7 +124,8 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_delete_budget_category_invalid_uuid() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
