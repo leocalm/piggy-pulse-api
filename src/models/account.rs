@@ -72,6 +72,7 @@ impl From<&Account> for AccountResponse {
                 symbol: account.currency.symbol.clone(),
                 currency: account.currency.currency.clone(),
                 decimal_places: account.currency.decimal_places,
+                symbol_position: account.currency.symbol_position,
             },
             balance: account.balance,
             spend_limit: account.spend_limit,

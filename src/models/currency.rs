@@ -2,7 +2,15 @@ use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
 use uuid::Uuid;
-use validator::Validate;
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, sqlx::Type, JsonSchema, Default)]
+#[sqlx(type_name = "text", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum SymbolPosition {
+    #[default]
+    Before,
+    After,
+}
 
 #[derive(Serialize, Debug, Clone, Default, sqlx::FromRow)]
 pub struct Currency {
@@ -11,6 +19,7 @@ pub struct Currency {
     pub symbol: String,
     pub currency: String,
     pub decimal_places: i32,
+    pub symbol_position: SymbolPosition,
     pub created_at: DateTime<Utc>,
 }
 
@@ -22,6 +31,7 @@ impl From<&Currency> for CurrencyResponse {
             symbol: value.symbol.clone(),
             currency: value.currency.clone(),
             decimal_places: value.decimal_places,
+            symbol_position: value.symbol_position,
         }
     }
 }
@@ -33,16 +43,5 @@ pub struct CurrencyResponse {
     pub symbol: String,
     pub currency: String,
     pub decimal_places: i32,
-}
-
-#[derive(Deserialize, Debug, Validate, JsonSchema)]
-pub struct CurrencyRequest {
-    #[validate(length(min = 3))]
-    pub name: String,
-    #[validate(length(max = 3))]
-    pub symbol: String,
-    #[validate(length(equal = 3))]
-    pub currency: String,
-    #[validate(range(min = 0))]
-    pub decimal_places: i32,
+    pub symbol_position: SymbolPosition,
 }

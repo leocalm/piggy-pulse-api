@@ -168,28 +168,12 @@ mod tests {
         (user_json["id"].as_str().expect("user id").to_string(), user_email)
     }
 
-    async fn create_currency(client: &Client, code: &str) {
-        let payload = serde_json::json!({
-            "name": format!("Test Currency {}", code),
-            "symbol": "$",
-            "currency": code,
-            "decimal_places": 2
-        });
-
-        let response = client
-            .post("/api/v1/currency/")
-            .header(ContentType::JSON)
-            .body(payload.to_string())
-            .dispatch()
-            .await;
-        assert_eq!(response.status(), Status::Created);
-    }
-
     #[rocket::async_test]
     #[ignore = "requires database"]
     async fn total_assets_returns_zero_without_accounts_or_transactions() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.rate_limit.require_client_ip = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
         create_user_and_auth(&client).await;
@@ -206,18 +190,19 @@ mod tests {
     #[ignore = "requires database"]
     async fn total_assets_includes_account_balance_without_transactions() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.rate_limit.require_client_ip = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
         create_user_and_auth(&client).await;
-        create_currency(&client, "TST").await;
+        // create_currency(&client, "TST").await;
 
         let account_payload = serde_json::json!({
             "name": format!("Main {}", Uuid::new_v4()),
             "color": "#123456",
             "icon": "wallet",
             "account_type": "Checking",
-            "currency": "TST",
+            "currency": "EUR",
             "balance": 5000,
             "spend_limit": null
         });

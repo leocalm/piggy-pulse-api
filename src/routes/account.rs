@@ -180,23 +180,6 @@ mod tests {
         (user_id, user_email)
     }
 
-    async fn create_currency(client: &Client, code: &str) {
-        let payload = serde_json::json!({
-            "name": format!("Test Currency {}", code),
-            "symbol": "$",
-            "currency": code,
-            "decimal_places": 2
-        });
-
-        let response = client
-            .post("/api/v1/currency/")
-            .header(ContentType::JSON)
-            .body(payload.to_string())
-            .dispatch()
-            .await;
-        assert_eq!(response.status(), Status::Created);
-    }
-
     async fn create_category(client: &Client, name: &str, category_type: &str) -> String {
         let payload = serde_json::json!({
             "name": name,
@@ -287,7 +270,8 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_create_account_validation_error() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.rate_limit.require_client_ip = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
@@ -314,7 +298,8 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_get_account_invalid_uuid() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.rate_limit.require_client_ip = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
@@ -327,15 +312,15 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_list_accounts_includes_balance_metrics() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.rate_limit.require_client_ip = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
         create_user_and_auth(&client).await;
-        create_currency(&client, "TST").await;
 
         let category_id = create_category(&client, "Groceries", "Outgoing").await;
         let account_name = format!("Main {}", Uuid::new_v4());
-        let account_id = create_account(&client, &account_name, "TST", 10_000).await;
+        let account_id = create_account(&client, &account_name, "EUR", 10_000).await;
 
         let today = Utc::now().date_naive();
         let start_date = today
@@ -372,7 +357,8 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_list_accounts_missing_period_id() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.rate_limit.require_client_ip = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
         create_user_and_auth(&client).await;
@@ -388,7 +374,8 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_list_accounts_invalid_period_id() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.rate_limit.require_client_ip = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
         create_user_and_auth(&client).await;
@@ -404,7 +391,8 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_list_accounts_nonexistent_period_id() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.rate_limit.require_client_ip = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
         create_user_and_auth(&client).await;
@@ -418,15 +406,15 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_accounts_summary() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.rate_limit.require_client_ip = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
         create_user_and_auth(&client).await;
-        create_currency(&client, "TST").await;
 
         // Create asset accounts: Checking, Savings, Wallet
-        create_account(&client, &format!("Checking {}", Uuid::new_v4()), "TST", 100_000).await;
-        create_account(&client, &format!("Savings {}", Uuid::new_v4()), "TST", 50_000).await;
+        create_account(&client, &format!("Checking {}", Uuid::new_v4()), "EUR", 100_000).await;
+        create_account(&client, &format!("Savings {}", Uuid::new_v4()), "EUR", 50_000).await;
 
         // Create wallet account
         let wallet_payload = serde_json::json!({
@@ -434,7 +422,7 @@ mod tests {
             "color": "#123456",
             "icon": "wallet",
             "account_type": "Wallet",
-            "currency": "TST",
+            "currency": "EUR",
             "balance": 25_000,
             "spend_limit": null
         });
@@ -452,7 +440,7 @@ mod tests {
             "color": "#654321",
             "icon": "card",
             "account_type": "CreditCard",
-            "currency": "TST",
+            "currency": "EUR",
             "balance": 15_000,
             "spend_limit": null
         });
@@ -483,7 +471,8 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_accounts_summary_empty() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.rate_limit.require_client_ip = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
         create_user_and_auth(&client).await;
@@ -503,7 +492,8 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_account_options_empty() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.rate_limit.require_client_ip = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
         create_user_and_auth(&client).await;
@@ -522,16 +512,16 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_account_options_multiple_accounts() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.rate_limit.require_client_ip = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
         create_user_and_auth(&client).await;
-        create_currency(&client, "TST").await;
 
         // Create multiple accounts to test sorting
-        create_account(&client, "Zebra Account", "TST", 100_000).await;
-        create_account(&client, "Apple Account", "TST", 50_000).await;
-        create_account(&client, "Banana Account", "TST", 25_000).await;
+        create_account(&client, "Zebra Account", "EUR", 100_000).await;
+        create_account(&client, "Apple Account", "EUR", 50_000).await;
+        create_account(&client, "Banana Account", "EUR", 25_000).await;
 
         let response = client.get("/api/v1/accounts/options").dispatch().await;
         assert_eq!(response.status(), Status::Ok);

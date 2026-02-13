@@ -1,7 +1,7 @@
 use crate::database::postgres_repository::{PostgresRepository, is_unique_violation};
 use crate::error::app_error::AppError;
 use crate::models::account::{Account, AccountBalancePerDay, AccountRequest, AccountType, AccountWithMetrics};
-use crate::models::currency::Currency;
+use crate::models::currency::{Currency, SymbolPosition};
 use crate::models::pagination::CursorParams;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -23,6 +23,7 @@ struct AccountRow {
     currency_symbol: String,
     currency_code: String,
     currency_decimal_places: i32,
+    currency_symbol_position: SymbolPosition,
     currency_created_at: DateTime<Utc>,
 }
 
@@ -41,6 +42,7 @@ impl From<AccountRow> for Account {
                 symbol: row.currency_symbol,
                 currency: row.currency_code,
                 decimal_places: row.currency_decimal_places,
+                symbol_position: row.currency_symbol_position,
                 created_at: row.currency_created_at,
             },
             balance: row.balance,
@@ -66,6 +68,7 @@ struct AccountMetricsRow {
     currency_symbol: String,
     currency_code: String,
     currency_decimal_places: i32,
+    currency_symbol_position: SymbolPosition,
     currency_created_at: DateTime<Utc>,
     current_balance: i64,
     balance_change_this_period: i64,
@@ -88,6 +91,7 @@ impl From<AccountMetricsRow> for AccountWithMetrics {
                     symbol: row.currency_symbol,
                     currency: row.currency_code,
                     decimal_places: row.currency_decimal_places,
+                    symbol_position: row.currency_symbol_position,
                     created_at: row.currency_created_at,
                 },
                 balance: row.balance,
@@ -122,7 +126,7 @@ impl PostgresRepository {
         }
 
         let currency = self
-            .get_currency_by_code(&request.currency, user_id)
+            .get_currency_by_code(&request.currency)
             .await?
             .ok_or_else(|| AppError::CurrencyDoesNotExist(request.currency.clone()))?;
 
@@ -209,6 +213,7 @@ impl PostgresRepository {
                 c.symbol as currency_symbol,
                 c.currency as currency_code,
                 c.decimal_places as currency_decimal_places,
+                c.symbol_position as currency_symbol_position,
                 c.created_at as currency_created_at
             FROM account a
             JOIN currency c ON c.id = a.currency_id
@@ -247,6 +252,7 @@ impl PostgresRepository {
                     c.symbol as currency_symbol,
                     c.currency as currency_code,
                     c.decimal_places as currency_decimal_places,
+                    c.symbol_position as currency_symbol_position,
                     c.created_at as currency_created_at,
                     (a.balance + COALESCE(SUM(
                         CASE
@@ -301,6 +307,7 @@ impl PostgresRepository {
                     c.symbol,
                     c.currency,
                     c.decimal_places,
+                    c.symbol_position,
                     c.created_at
                 ORDER BY a.created_at DESC, a.id DESC
                 LIMIT $4
@@ -335,6 +342,7 @@ impl PostgresRepository {
                     c.symbol as currency_symbol,
                     c.currency as currency_code,
                     c.decimal_places as currency_decimal_places,
+                    c.symbol_position as currency_symbol_position,
                     c.created_at as currency_created_at,
                     (a.balance + COALESCE(SUM(
                         CASE
@@ -387,6 +395,7 @@ impl PostgresRepository {
                     c.symbol,
                     c.currency,
                     c.decimal_places,
+                    c.symbol_position,
                     c.created_at
                 ORDER BY a.created_at DESC, a.id DESC
                 LIMIT $3
@@ -597,7 +606,7 @@ ORDER BY a.id, d.day
         }
 
         let currency = self
-            .get_currency_by_code(&request.currency, user_id)
+            .get_currency_by_code(&request.currency)
             .await?
             .ok_or_else(|| AppError::CurrencyDoesNotExist(request.currency.clone()))?;
 
