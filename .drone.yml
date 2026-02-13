@@ -1,44 +1,6 @@
 ---
 kind: pipeline
 type: docker
-name: test
-
-steps:
-  - name: test
-    image: rust:1.93
-    volumes:
-      - name: cargo-registry
-        path: /usr/local/cargo/registry
-      - name: cargo-git
-        path: /usr/local/cargo/git
-      - name: target
-        path: /drone/src/target
-    commands:
-      - cargo --version
-      - rustc --version
-      - echo "Installing rustfmt and clippy..."
-      - rustup component add rustfmt clippy
-      - echo "Running format check..."
-      - cargo fmt -- --check
-      - echo "Running clippy..."
-      - cargo clippy -- -D warnings
-      - echo "Running tests..."
-      - cargo test --all
-
-volumes:
-  - name: cargo-registry
-    host:
-      path: /tmp/drone-cargo-registry
-  - name: cargo-git
-    host:
-      path: /tmp/drone-cargo-git
-  - name: target
-    host:
-      path: /tmp/drone-target
-
----
-kind: pipeline
-type: docker
 name: build-and-deploy
 
 trigger:
@@ -105,17 +67,12 @@ steps:
         from_secret: ghcr_token
     commands:
       - echo "🚀 Starting deployment..."
-      - echo "Installing Docker Compose v2..."
       - apk add --no-cache docker-cli-compose
       - docker compose version
-      - echo "Logging in to GHCR..."
       - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
       - cd /app/budget
-      - echo "Pulling latest images..."
       - docker compose pull budget cron
-      - echo "Restarting services..."
       - docker compose up -d budget cron
-      - echo "Cleaning up old images..."
       - docker image prune -af
       - echo "✅ Deployed version ${DRONE_COMMIT_SHA:0:7}"
 
@@ -126,7 +83,7 @@ steps:
         - success
     commands:
       - echo "✅ Build ${DRONE_BUILD_NUMBER} completed successfully!"
-      - echo "📦 Version ${DRONE_COMMIT_SHA:0:7} deployed to production"
+      - echo "📦 Tests passed, images built, deployed to production!"
       
   - name: notify-failure
     image: alpine:latest
@@ -135,7 +92,7 @@ steps:
         - failure
     commands:
       - echo "❌ Build ${DRONE_BUILD_NUMBER} failed!"
-      - echo "Commit ${DRONE_COMMIT_SHA:0:7} was not deployed"
+      - echo "Tests or build failed - nothing deployed"
 
 volumes:
   - name: dockersock
