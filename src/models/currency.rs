@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
 use uuid::Uuid;
@@ -20,7 +19,6 @@ pub struct Currency {
     pub currency: String,
     pub decimal_places: i32,
     pub symbol_position: SymbolPosition,
-    pub created_at: DateTime<Utc>,
 }
 
 impl From<&Currency> for CurrencyResponse {

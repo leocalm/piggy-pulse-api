@@ -1,7 +1,6 @@
 use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
-use serde_json::Value as JsonValue;
 use uuid::Uuid;
 use validator::Validate;
 
@@ -10,25 +9,8 @@ use validator::Validate;
 pub struct PasswordReset {
     pub id: Uuid,
     pub user_id: Uuid,
-    pub token_hash: String,
-    pub ip_address: Option<String>,
-    pub user_agent: Option<String>,
-    pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
     pub used_at: Option<DateTime<Utc>>,
-}
-
-/// Security audit log entry
-#[derive(Debug, Clone, sqlx::FromRow)]
-pub struct SecurityAuditLog {
-    pub id: Uuid,
-    pub user_id: Option<Uuid>,
-    pub event_type: String,
-    pub ip_address: Option<String>,
-    pub user_agent: Option<String>,
-    pub success: bool,
-    pub metadata: Option<JsonValue>,
-    pub created_at: DateTime<Utc>,
 }
 
 /// Request to initiate password reset (sent by user)

@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::NaiveDate;
 use rocket::serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
 use serde_json::json;
@@ -8,9 +8,7 @@ use validator::Validate;
 #[derive(Debug, Clone, Default, sqlx::FromRow)]
 pub struct Vendor {
     pub id: Uuid,
-    pub user_id: Uuid,
     pub name: String,
-    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]

@@ -10,7 +10,6 @@ use validator::Validate;
 #[derive(Debug, Clone, Default)]
 pub struct Transaction {
     pub id: Uuid,
-    pub user_id: Uuid,
     pub amount: i64,
     pub description: String,
     pub occurred_at: NaiveDate,

@@ -120,7 +120,7 @@ impl PostgresRepository {
             r#"
             INSERT INTO two_factor_auth (user_id, encrypted_secret, encryption_nonce, is_enabled)
             VALUES ($1, $2, $3, false)
-            RETURNING id, user_id, encrypted_secret, encryption_nonce, is_enabled, verified_at, created_at, updated_at
+            RETURNING encrypted_secret, encryption_nonce, is_enabled
             "#,
         )
         .bind(user_id)
@@ -152,7 +152,7 @@ impl PostgresRepository {
     pub async fn get_two_factor_by_user(&self, user_id: &Uuid) -> Result<Option<TwoFactorAuth>, AppError> {
         let two_factor = sqlx::query_as::<_, TwoFactorAuth>(
             r#"
-            SELECT id, user_id, encrypted_secret, encryption_nonce, is_enabled, verified_at, created_at, updated_at
+            SELECT encrypted_secret, encryption_nonce, is_enabled
             FROM two_factor_auth
             WHERE user_id = $1
             "#,
@@ -226,7 +226,7 @@ impl PostgresRepository {
     pub async fn verify_backup_code(&self, user_id: &Uuid, code: &str) -> Result<bool, AppError> {
         let backup_codes = sqlx::query_as::<_, BackupCode>(
             r#"
-            SELECT id, user_id, code_hash, used_at, created_at
+            SELECT id, code_hash
             FROM two_factor_backup_codes
             WHERE user_id = $1 AND used_at IS NULL
             "#,
@@ -311,7 +311,7 @@ impl PostgresRepository {
     pub async fn check_rate_limit(&self, user_id: &Uuid) -> Result<bool, AppError> {
         let rate_limit = sqlx::query_as::<_, TwoFactorRateLimit>(
             r#"
-            SELECT id, user_id, failed_attempts, locked_until, last_attempt_at
+            SELECT failed_attempts, locked_until
             FROM two_factor_rate_limits
             WHERE user_id = $1
             "#,
@@ -337,7 +337,7 @@ impl PostgresRepository {
     pub async fn record_failed_attempt(&self, user_id: &Uuid) -> Result<(), AppError> {
         let existing = sqlx::query_as::<_, TwoFactorRateLimit>(
             r#"
-            SELECT id, user_id, failed_attempts, locked_until, last_attempt_at
+            SELECT failed_attempts, locked_until
             FROM two_factor_rate_limits
             WHERE user_id = $1
             "#,
@@ -438,7 +438,7 @@ impl PostgresRepository {
 
         let emergency_token = sqlx::query_as::<_, EmergencyToken>(
             r#"
-            SELECT id, user_id, token_hash, expires_at, created_at, used_at
+            SELECT id, user_id
             FROM two_factor_emergency_tokens
             WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
             "#,

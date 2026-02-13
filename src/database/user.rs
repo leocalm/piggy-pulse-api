@@ -26,7 +26,7 @@ impl PostgresRepository {
             r#"
             INSERT INTO users (name, email, salt, password_hash)
             VALUES($1, $2, $3, $4)
-            RETURNING id, name, email, password_hash, created_at
+            RETURNING id, name, email, password_hash
             "#,
         )
         .bind(name)
@@ -42,7 +42,7 @@ impl PostgresRepository {
     pub async fn get_user_by_email(&self, email: &str) -> Result<Option<User>, AppError> {
         let user = sqlx::query_as::<_, User>(
             r#"
-            SELECT id, name, email, password_hash, created_at
+            SELECT id, name, email, password_hash
             FROM users
             WHERE email = $1
             "#,
@@ -57,7 +57,7 @@ impl PostgresRepository {
     pub async fn get_user_by_id(&self, id: &Uuid) -> Result<Option<User>, AppError> {
         let user = sqlx::query_as::<_, User>(
             r#"
-            SELECT id, name, email, password_hash, created_at
+            SELECT id, name, email, password_hash
             FROM users
             WHERE id = $1
             "#,
@@ -95,7 +95,7 @@ impl PostgresRepository {
             UPDATE users
             SET name = $1, email = $2, salt = $3, password_hash = $4
             WHERE id = $5
-            RETURNING id, name, email, password_hash, created_at
+            RETURNING id, name, email, password_hash
             "#,
         )
         .bind(name)
