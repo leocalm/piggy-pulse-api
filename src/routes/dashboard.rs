@@ -165,31 +165,39 @@ mod tests {
 
         assert_eq!(login_response.status(), Status::Ok);
 
-        (user_json["id"].as_str().expect("user id").to_string(), user_email)
-    }
+        // Fetch EUR currency ID
+        let currency_response = client.get("/api/v1/currency/EUR").dispatch().await;
+        assert_eq!(currency_response.status(), Status::Ok);
+        let currency_body = currency_response.into_string().await.expect("currency response body");
+        let currency_json: Value = serde_json::from_str(&currency_body).expect("valid currency json");
+        let eur_id = currency_json["id"].as_str().expect("currency id");
 
-    async fn create_currency(client: &Client, code: &str) {
-        let payload = serde_json::json!({
-            "name": format!("Test Currency {}", code),
-            "symbol": "$",
-            "currency": code,
-            "decimal_places": 2
+        // Set default currency to EUR for the user
+        let settings_payload = serde_json::json!({
+            "theme": "light",
+            "language": "en",
+            "default_currency_id": eur_id
         });
 
-        let response = client
-            .post("/api/v1/currency/")
+        let settings_response = client
+            .put("/api/v1/settings")
             .header(ContentType::JSON)
-            .body(payload.to_string())
+            .body(settings_payload.to_string())
             .dispatch()
             .await;
-        assert_eq!(response.status(), Status::Created);
+
+        assert_eq!(settings_response.status(), Status::Ok);
+
+        (user_json["id"].as_str().expect("user id").to_string(), user_email)
     }
 
     #[rocket::async_test]
     #[ignore = "requires database"]
     async fn total_assets_returns_zero_without_accounts_or_transactions() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.rate_limit.require_client_ip = false;
+        config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
         create_user_and_auth(&client).await;
@@ -206,18 +214,19 @@ mod tests {
     #[ignore = "requires database"]
     async fn total_assets_includes_account_balance_without_transactions() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.rate_limit.require_client_ip = false;
+        config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
         create_user_and_auth(&client).await;
-        create_currency(&client, "TST").await;
+        // create_currency(&client, "TST").await;
 
         let account_payload = serde_json::json!({
             "name": format!("Main {}", Uuid::new_v4()),
             "color": "#123456",
             "icon": "wallet",
             "account_type": "Checking",
-            "currency": "TST",
             "balance": 5000,
             "spend_limit": null
         });

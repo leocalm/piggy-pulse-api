@@ -39,8 +39,6 @@ pub struct AccountRequest {
     #[validate(length(min = 3))]
     pub icon: String,
     pub account_type: AccountType,
-    #[validate(length(equal = 3))]
-    pub currency: String,
     #[validate(range(min = 0))]
     pub balance: i64,
     pub spend_limit: Option<i32>,
@@ -72,6 +70,7 @@ impl From<&Account> for AccountResponse {
                 symbol: account.currency.symbol.clone(),
                 currency: account.currency.currency.clone(),
                 decimal_places: account.currency.decimal_places,
+                symbol_position: account.currency.symbol_position,
             },
             balance: account.balance,
             spend_limit: account.spend_limit,

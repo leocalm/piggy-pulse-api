@@ -51,7 +51,7 @@ impl From<&AccountRequest> for Account {
             icon: request.icon.clone(),
             account_type: request.account_type,
             currency: Currency {
-                currency: request.currency.clone(),
+                currency: "USD".to_string(), // Default currency for tests
                 ..Currency::default()
             },
             balance: request.balance,

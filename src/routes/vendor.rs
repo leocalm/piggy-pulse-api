@@ -148,7 +148,8 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_create_vendor_validation_error() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
@@ -171,7 +172,8 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_get_vendor_invalid_uuid() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
@@ -184,7 +186,8 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_delete_vendor_invalid_uuid() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
@@ -197,7 +200,8 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_list_vendors_includes_period_stats() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
@@ -234,28 +238,32 @@ mod tests {
 
         assert_eq!(login_response.status(), Status::Ok);
 
-        let currency_payload = serde_json::json!({
-            "name": "US Dollar",
-            "symbol": "$",
-            "currency": "USD",
-            "decimal_places": 2
-        });
+        // Fetch EUR currency ID
+        let currency_response = client.get("/api/v1/currency/EUR").dispatch().await;
+        assert_eq!(currency_response.status(), Status::Ok);
+        let currency_body = currency_response.into_string().await.expect("currency response body");
+        let currency_json: Value = serde_json::from_str(&currency_body).expect("valid currency json");
+        let eur_id = currency_json["id"].as_str().expect("currency id");
 
-        let response = client
-            .post("/api/v1/currency/")
+        // Set default currency
+        let settings_payload = serde_json::json!({
+            "theme": "light",
+            "language": "en",
+            "default_currency_id": eur_id
+        });
+        let settings_response = client
+            .put("/api/v1/settings")
             .header(ContentType::JSON)
-            .body(currency_payload.to_string())
+            .body(settings_payload.to_string())
             .dispatch()
             .await;
-
-        assert_eq!(response.status(), Status::Created);
+        assert_eq!(settings_response.status(), Status::Ok);
 
         let account_payload = serde_json::json!({
             "name": "Checking",
             "color": "#000000",
             "icon": "bank",
             "account_type": "Checking",
-            "currency": "USD",
             "balance": 1000,
             "spend_limit": null
         });
@@ -365,7 +373,8 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_list_vendors_missing_period_id() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 
@@ -410,7 +419,8 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_get_vendor_options() {
         let mut config = Config::default();
-        config.database.url = "postgresql://test:test@localhost/test".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
 

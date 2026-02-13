@@ -8,3 +8,6 @@ debug
 # Environment and configuration files
 .env
 Budget.toml
+
+.gemini/
+gha-creds-*.json

@@ -3,7 +3,7 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::account::Account;
 use crate::models::category::{Category, CategoryType};
-use crate::models::currency::Currency;
+use crate::models::currency::{Currency, SymbolPosition};
 use crate::models::pagination::CursorParams;
 use crate::models::transaction::{Transaction, TransactionRequest};
 use crate::models::transaction_summary::TransactionSummary;
@@ -41,6 +41,7 @@ struct TransactionRow {
     from_account_currency_symbol: String,
     from_account_currency_code: String,
     from_account_currency_decimal_places: i32,
+    from_account_currency_symbol_position: SymbolPosition,
     from_account_currency_created_at: DateTime<Utc>,
     // To account fields (optional)
     to_account_id: Option<Uuid>,
@@ -56,6 +57,7 @@ struct TransactionRow {
     to_account_currency_symbol: Option<String>,
     to_account_currency_code: Option<String>,
     to_account_currency_decimal_places: Option<i32>,
+    to_account_currency_symbol_position: Option<SymbolPosition>,
     to_account_currency_created_at: Option<DateTime<Utc>>,
     // Vendor fields (optional)
     vendor_id: Option<Uuid>,
@@ -79,6 +81,7 @@ impl From<TransactionRow> for Transaction {
                     symbol: row.to_account_currency_symbol.unwrap(),
                     currency: row.to_account_currency_code.unwrap(),
                     decimal_places: row.to_account_currency_decimal_places.unwrap(),
+                    symbol_position: row.to_account_currency_symbol_position.unwrap(),
                     created_at: row.to_account_currency_created_at.unwrap(),
                 },
                 balance: row.to_account_balance.unwrap(),
@@ -130,6 +133,7 @@ impl From<TransactionRow> for Transaction {
                     symbol: row.from_account_currency_symbol,
                     currency: row.from_account_currency_code,
                     decimal_places: row.from_account_currency_decimal_places,
+                    symbol_position: row.from_account_currency_symbol_position,
                     created_at: row.from_account_currency_created_at,
                 },
                 balance: row.from_account_balance,
@@ -170,6 +174,7 @@ const TRANSACTION_SELECT_FIELDS: &str = r#"
     cfa.symbol as from_account_currency_symbol,
     cfa.currency as from_account_currency_code,
     cfa.decimal_places as from_account_currency_decimal_places,
+    cfa.symbol_position as from_account_currency_symbol_position,
     cfa.created_at as from_account_currency_created_at,
     ta.id as to_account_id,
     ta.name as to_account_name,
@@ -184,6 +189,7 @@ const TRANSACTION_SELECT_FIELDS: &str = r#"
     cta.symbol as to_account_currency_symbol,
     cta.currency as to_account_currency_code,
     cta.decimal_places as to_account_currency_decimal_places,
+    cta.symbol_position as to_account_currency_symbol_position,
     cta.created_at as to_account_currency_created_at,
     v.id as vendor_id,
     v.name as vendor_name,
