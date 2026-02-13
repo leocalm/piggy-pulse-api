@@ -7,10 +7,16 @@ trigger:
   event:
     - push
     - pull_request
+    - promote
+    - rollback
 
 steps:
   - name: format-check
     image: rust:1.93
+    when:
+      event:
+        - push
+        - pull_request
     commands:
       - rustup component add rustfmt
       - cargo fmt -- --check
@@ -32,6 +38,10 @@ steps:
       RUSTC_WRAPPER: sccache
       SCCACHE_DIR: /root/.cache/sccache
       SCCACHE_CACHE_SIZE: 10G
+    when:
+      event:
+        - push
+        - pull_request
     commands:
       - apt-get update
       - apt-get install -y --no-install-recommends sccache
@@ -58,6 +68,10 @@ steps:
       SCCACHE_DIR: /root/.cache/sccache
       SCCACHE_CACHE_SIZE: 10G
       RUST_MIN_STACK: 8388608
+    when:
+      event:
+        - push
+        - pull_request
     commands:
       - apt-get update
       - apt-get install -y --no-install-recommends sccache
@@ -79,7 +93,10 @@ steps:
         - main
       event:
         - push
+        - promote
+        - rollback
     commands:
+      - apk add --no-cache docker-buildx
       - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
       - docker buildx create --use --name drone-builder || true
       - docker buildx build
@@ -105,7 +122,10 @@ steps:
         - main
       event:
         - push
+        - promote
+        - rollback
     commands:
+      - apk add --no-cache docker-buildx
       - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
       - docker buildx create --use --name drone-builder || true
       - docker buildx build
@@ -134,8 +154,10 @@ steps:
         - main
       event:
         - push
+        - promote
+        - rollback
     commands:
-      - echo "🚀 Starting deployment..."
+      - echo "🚀 Starting deployment to production..."
       - apk add --no-cache docker-cli-compose
       - docker compose version
       - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
@@ -154,6 +176,8 @@ steps:
         - main
       event:
         - push
+        - promote
+        - rollback
     commands:
       - echo "✅ Build ${DRONE_BUILD_NUMBER} completed successfully!"
       - echo "📦 Version ${DRONE_COMMIT_SHA:0:7} deployed to production"
@@ -163,10 +187,6 @@ steps:
     when:
       status:
         - failure
-      branch:
-        - main
-      event:
-        - push
     commands:
       - echo "❌ Build ${DRONE_BUILD_NUMBER} failed!"
       - echo "Commit ${DRONE_COMMIT_SHA:0:7} was not deployed"
