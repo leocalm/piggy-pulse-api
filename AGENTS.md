@@ -271,33 +271,50 @@ Always run the full PR check suite locally before pushing:
 - `cargo build --verbose`
 - `cargo test --verbose`
 
-This mirrors `.github/workflows/rust.yml` and keeps PR checks green.
+This should stay aligned with the CI checks in `.drone.yml` (Drone CI).
 
-## Deployment Pipeline
+## CI / Deploy (VPS + Drone)
 
-Production deploy now uses a single workflow: `.github/workflows/publish-images.yml`.
+This repository is deployed from a single always-on Ubuntu VPS running both the application stack and Drone CI (server + docker runner).
 
-- Trigger:
-  - automatic on push to `main`
-  - manual via `workflow_dispatch`
-- Flow:
-  - build and push API image (`linux/amd64`)
-  - build and push Cron image (`linux/amd64`)
-  - deploy with Ansible from the same workflow run
-- Image refs passed to Ansible:
-  - derived deterministically from current commit SHA tags
-  - `ghcr.io/<owner>/budget-api:sha-${GITHUB_SHA}`
-  - `ghcr.io/<owner>/budget-cron:sha-${GITHUB_SHA}`
-- Vault handling:
-  - single vault password mode only (`--vault-password-file .vault_pass`)
-  - do not use multi-vault-id flags in CI for this repo
+### VPS Facts (Production)
 
-Required GitHub environment/repository secrets for deploy job:
-- `ANSIBLE_VAULT_PASSWORD`
-- `PROD_WIREGUARD_CONFIG`
-- `PROD_SSH_KNOWN_HOSTS`
-- `PROD_SSH_PRIVATE_KEY_B64`
+- OS: Ubuntu 24.04 LTS.
+- Docker: rootful Docker daemon via `/var/run/docker.sock` (`root:docker`, mode `0660`).
+- Deploy user: `deploy` exists for day-to-day operations.
+  - SSH: key-only (password and keyboard-interactive auth disabled).
+  - Root SSH login is disabled after verifying `deploy` access.
+  - Permissions: `deploy` is intended to have Docker access (member of the `docker` group) and does not need general `sudo`.
+  - If root access is needed, use the VPS provider web console.
+- Automatic package upgrades: security-only via `unattended-upgrades` (Ubuntu).
 
-Notes:
-- `PROD_SSH_PRIVATE_KEY_B64` must be base64 of the private key content (generated locally).
-- Keep deploy docs aligned with this single-workflow model; `deploy-production.yml` is intentionally removed.
+### Stack Layout (Docker Compose)
+
+The production compose stack is checked into this repo as `docker-compose.yaml` and includes:
+
+- `db` (Postgres)
+- `budget` (API container)
+- `caddy` (reverse proxy)
+- `cron` (period generation worker)
+- `drone-server` (Drone CI server)
+- `drone-runner` (Drone docker runner, mounts `/var/run/docker.sock`)
+
+On the VPS, the stack directory is expected to live under `/opt/piggypulse/budget` (the Drone deploy step `cd`s into that path).
+
+### Drone Pipelines
+
+Drone configuration lives in `.drone.yml`:
+
+- `test` pipeline runs on PRs and pushes.
+- `build-and-deploy` runs only on `main` pushes and depends on `test` passing.
+
+### Drone Caching (VPS Persistent Host Cache)
+
+To keep builds fast on the single VPS runner, CI caches are stored on the host under `/opt/drone-cache` and mounted into build containers:
+
+- `/opt/drone-cache/cargo-registry` -> Cargo registry cache
+- `/opt/drone-cache/cargo-git` -> Cargo git cache
+- `/opt/drone-cache/target` -> Rust `target/` directory cache
+- `/opt/drone-cache/sccache` -> `sccache` compiler cache (if enabled in `.drone.yml`)
+
+Security note: anyone who can run arbitrary Drone pipelines on this runner (or who is in the `docker` group on the VPS) effectively has root-equivalent access.
