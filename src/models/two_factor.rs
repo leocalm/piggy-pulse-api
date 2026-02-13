@@ -4,7 +4,7 @@ use schemars::JsonSchema;
 use uuid::Uuid;
 
 /// Database model for two-factor authentication
-#[derive(Debug, Serialize, sqlx::FromRow)]
+#[derive(Debug, sqlx::FromRow)]
 pub struct TwoFactorAuth {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -62,7 +62,7 @@ pub struct TwoFactorStatus {
 }
 
 /// Backup code database model
-#[derive(Debug, Serialize, sqlx::FromRow)]
+#[derive(Debug, sqlx::FromRow)]
 pub struct BackupCode {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -72,7 +72,7 @@ pub struct BackupCode {
 }
 
 /// Rate limit database model
-#[derive(Debug, Serialize, sqlx::FromRow)]
+#[derive(Debug, sqlx::FromRow)]
 pub struct TwoFactorRateLimit {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -82,7 +82,7 @@ pub struct TwoFactorRateLimit {
 }
 
 /// Emergency disable token model
-#[derive(Debug, Serialize, sqlx::FromRow)]
+#[derive(Debug, sqlx::FromRow)]
 pub struct EmergencyToken {
     pub id: Uuid,
     pub user_id: Uuid,

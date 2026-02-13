@@ -12,7 +12,7 @@ pub enum SymbolPosition {
     After,
 }
 
-#[derive(Serialize, Debug, Clone, Default, sqlx::FromRow)]
+#[derive(Debug, Clone, Default, sqlx::FromRow)]
 pub struct Currency {
     pub id: Uuid,
     pub name: String,

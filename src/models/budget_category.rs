@@ -5,7 +5,7 @@ use schemars::JsonSchema;
 use uuid::Uuid;
 use validator::Validate;
 
-#[derive(Serialize, Debug, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct BudgetCategory {
     pub id: Uuid,
     pub user_id: Uuid,

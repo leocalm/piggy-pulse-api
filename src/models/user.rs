@@ -5,7 +5,7 @@ use uuid::Uuid;
 use validator::{Validate, ValidationError};
 use zxcvbn::zxcvbn;
 
-#[derive(Serialize, Debug, sqlx::FromRow)]
+#[derive(Debug, sqlx::FromRow)]
 pub struct User {
     pub id: Uuid,
     pub name: String,

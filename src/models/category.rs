@@ -13,7 +13,7 @@ pub enum CategoryType {
     Transfer,
 }
 
-#[derive(Serialize, Debug, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Category {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -71,12 +71,9 @@ pub struct CategoryStats {
     pub transaction_count: i64,
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct CategoryWithStats {
-    #[serde(flatten)]
     pub category: Category,
-
-    #[serde(flatten)]
     pub stats: CategoryStats,
 }
 

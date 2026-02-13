@@ -16,7 +16,7 @@ pub enum AccountType {
     Allowance,
 }
 
-#[derive(Serialize, Debug, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Account {
     pub id: Uuid,
     pub user_id: Uuid,

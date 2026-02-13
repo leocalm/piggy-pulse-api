@@ -5,7 +5,7 @@ use serde_json::json;
 use uuid::Uuid;
 use validator::Validate;
 
-#[derive(Serialize, Debug, Clone, Default, sqlx::FromRow)]
+#[derive(Debug, Clone, Default, sqlx::FromRow)]
 pub struct Vendor {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -53,12 +53,9 @@ impl From<&Vendor> for VendorResponse {
     }
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct VendorWithStats {
-    #[serde(flatten)]
     pub vendor: Vendor,
-
-    #[serde(flatten)]
     pub stats: VendorStats,
 }
 
@@ -80,12 +77,9 @@ pub struct VendorWithStatsResponse {
     pub stats: VendorStats,
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct VendorWithPeriodStats {
-    #[serde(flatten)]
     pub vendor: Vendor,
-
-    #[serde(flatten)]
     pub stats: VendorPeriodStats,
 }
 

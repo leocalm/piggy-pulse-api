@@ -6,7 +6,7 @@ use uuid::Uuid;
 use validator::Validate;
 
 /// Password reset record stored in the database
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, sqlx::FromRow)]
 pub struct PasswordReset {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -19,7 +19,7 @@ pub struct PasswordReset {
 }
 
 /// Security audit log entry
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, sqlx::FromRow)]
 pub struct SecurityAuditLog {
     pub id: Uuid,
     pub user_id: Option<Uuid>,
