@@ -1,7 +1,7 @@
 ---
 kind: pipeline
 type: docker
-name: test
+name: default
 
 trigger:
   event:
@@ -64,37 +64,8 @@ steps:
       - echo "Running tests in release mode (optimized for memory)..."
       - cargo test --all --release -- --test-threads=1
 
-volumes:
-  - name: cargo-registry
-    host:
-      path: /opt/drone-cache/cargo-registry
-  - name: cargo-git
-    host:
-      path: /opt/drone-cache/cargo-git
-  - name: sccache
-    host:
-      path: /opt/drone-cache/sccache
-  - name: target
-    host:
-      path: /opt/drone-cache/target
-
----
-kind: pipeline
-type: docker
-name: build-and-deploy
-
-depends_on:
-  - test
-
-trigger:
-  branch:
-    - main
-  event:
-    - push
-
-steps:
   - name: build-api
-    image: docker:dind
+    image: docker:27-cli
     volumes:
       - name: dockersock
         path: /var/run/docker.sock
@@ -103,6 +74,11 @@ steps:
         from_secret: ghcr_username
       GHCR_TOKEN:
         from_secret: ghcr_token
+    when:
+      branch:
+        - main
+      event:
+        - push
     commands:
       - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
       - docker buildx create --use --name drone-builder || true
@@ -115,7 +91,7 @@ steps:
         .
 
   - name: build-cron
-    image: docker:dind
+    image: docker:27-cli
     volumes:
       - name: dockersock
         path: /var/run/docker.sock
@@ -124,6 +100,11 @@ steps:
         from_secret: ghcr_username
       GHCR_TOKEN:
         from_secret: ghcr_token
+    when:
+      branch:
+        - main
+      event:
+        - push
     commands:
       - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
       - docker buildx create --use --name drone-builder || true
@@ -148,6 +129,11 @@ steps:
         from_secret: ghcr_username
       GHCR_TOKEN:
         from_secret: ghcr_token
+    when:
+      branch:
+        - main
+      event:
+        - push
     commands:
       - echo "🚀 Starting deployment..."
       - apk add --no-cache docker-cli-compose
@@ -164,6 +150,10 @@ steps:
     when:
       status:
         - success
+      branch:
+        - main
+      event:
+        - push
     commands:
       - echo "✅ Build ${DRONE_BUILD_NUMBER} completed successfully!"
       - echo "📦 Version ${DRONE_COMMIT_SHA:0:7} deployed to production"
@@ -173,11 +163,27 @@ steps:
     when:
       status:
         - failure
+      branch:
+        - main
+      event:
+        - push
     commands:
       - echo "❌ Build ${DRONE_BUILD_NUMBER} failed!"
       - echo "Commit ${DRONE_COMMIT_SHA:0:7} was not deployed"
 
 volumes:
+  - name: cargo-registry
+    host:
+      path: /opt/drone-cache/cargo-registry
+  - name: cargo-git
+    host:
+      path: /opt/drone-cache/cargo-git
+  - name: sccache
+    host:
+      path: /opt/drone-cache/sccache
+  - name: target
+    host:
+      path: /opt/drone-cache/target
   - name: dockersock
     host:
       path: /var/run/docker.sock
