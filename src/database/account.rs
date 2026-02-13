@@ -3,20 +3,17 @@ use crate::error::app_error::AppError;
 use crate::models::account::{Account, AccountBalancePerDay, AccountRequest, AccountType, AccountWithMetrics};
 use crate::models::currency::{Currency, SymbolPosition};
 use crate::models::pagination::CursorParams;
-use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 // Intermediate struct for sqlx query results with JOINed currency data
 #[derive(Debug, sqlx::FromRow)]
 struct AccountRow {
     id: Uuid,
-    user_id: Uuid,
     name: String,
     color: String,
     icon: String,
     account_type: String,
     balance: i64,
-    created_at: DateTime<Utc>,
     spend_limit: Option<i32>,
     currency_id: Uuid,
     currency_name: String,
@@ -24,14 +21,12 @@ struct AccountRow {
     currency_code: String,
     currency_decimal_places: i32,
     currency_symbol_position: SymbolPosition,
-    currency_created_at: DateTime<Utc>,
 }
 
 impl From<AccountRow> for Account {
     fn from(row: AccountRow) -> Self {
         Account {
             id: row.id,
-            user_id: row.user_id,
             name: row.name,
             color: row.color,
             icon: row.icon,
@@ -43,10 +38,8 @@ impl From<AccountRow> for Account {
                 currency: row.currency_code,
                 decimal_places: row.currency_decimal_places,
                 symbol_position: row.currency_symbol_position,
-                created_at: row.currency_created_at,
             },
             balance: row.balance,
-            created_at: row.created_at,
             spend_limit: row.spend_limit,
         }
     }
@@ -55,13 +48,11 @@ impl From<AccountRow> for Account {
 #[derive(Debug, sqlx::FromRow)]
 struct AccountMetricsRow {
     id: Uuid,
-    user_id: Uuid,
     name: String,
     color: String,
     icon: String,
     account_type: String,
     balance: i64,
-    created_at: DateTime<Utc>,
     spend_limit: Option<i32>,
     currency_id: Uuid,
     currency_name: String,
@@ -69,7 +60,6 @@ struct AccountMetricsRow {
     currency_code: String,
     currency_decimal_places: i32,
     currency_symbol_position: SymbolPosition,
-    currency_created_at: DateTime<Utc>,
     current_balance: i64,
     balance_change_this_period: i64,
     transaction_count: i64,
@@ -80,7 +70,6 @@ impl From<AccountMetricsRow> for AccountWithMetrics {
         AccountWithMetrics {
             account: Account {
                 id: row.id,
-                user_id: row.user_id,
                 name: row.name,
                 color: row.color,
                 icon: row.icon,
@@ -92,10 +81,8 @@ impl From<AccountMetricsRow> for AccountWithMetrics {
                     currency: row.currency_code,
                     decimal_places: row.currency_decimal_places,
                     symbol_position: row.currency_symbol_position,
-                    created_at: row.currency_created_at,
                 },
                 balance: row.balance,
-                created_at: row.created_at,
                 spend_limit: row.spend_limit,
             },
             current_balance: row.current_balance,
@@ -149,13 +136,11 @@ impl PostgresRepository {
         #[derive(sqlx::FromRow)]
         struct CreateAccountRow {
             id: Uuid,
-            user_id: Uuid,
             name: String,
             color: String,
             icon: String,
             account_type: String,
             balance: i64,
-            created_at: DateTime<Utc>,
             spend_limit: Option<i32>,
         }
 
@@ -165,14 +150,11 @@ impl PostgresRepository {
             VALUES ($1, $2, $3, $4, $5::text::account_type, $6, $7, $8)
             RETURNING
                 id,
-                user_id,
                 name,
                 color,
                 icon,
                 account_type::text as account_type,
                 balance,
-                currency_id,
-                created_at,
                 spend_limit
             "#,
         )
@@ -197,14 +179,12 @@ impl PostgresRepository {
 
         Ok(Account {
             id: row.id,
-            user_id: row.user_id,
             name: row.name,
             color: row.color,
             icon: row.icon,
             account_type: account_type_from_db(&row.account_type),
             currency,
             balance: row.balance,
-            created_at: row.created_at,
             spend_limit: row.spend_limit,
         })
     }
@@ -214,21 +194,18 @@ impl PostgresRepository {
             r#"
             SELECT
                 a.id,
-                a.user_id,
                 a.name,
                 a.color,
                 a.icon,
                 a.account_type::text as account_type,
                 a.balance,
-                a.created_at,
                 a.spend_limit,
                 c.id as currency_id,
                 c.name as currency_name,
                 c.symbol as currency_symbol,
                 c.currency as currency_code,
                 c.decimal_places as currency_decimal_places,
-                c.symbol_position as currency_symbol_position,
-                c.created_at as currency_created_at
+                c.symbol_position as currency_symbol_position
             FROM account a
             JOIN currency c ON c.id = a.currency_id
             WHERE a.id = $1 AND a.user_id = $2
@@ -253,13 +230,11 @@ impl PostgresRepository {
                 )
                 SELECT
                     a.id,
-                    a.user_id,
                     a.name,
                     a.color,
                     a.icon,
                     a.account_type::text as account_type,
                     a.balance,
-                    a.created_at,
                     a.spend_limit,
                     c.id as currency_id,
                     c.name as currency_name,
@@ -267,7 +242,6 @@ impl PostgresRepository {
                     c.currency as currency_code,
                     c.decimal_places as currency_decimal_places,
                     c.symbol_position as currency_symbol_position,
-                    c.created_at as currency_created_at,
                     (a.balance + COALESCE(SUM(
                         CASE
                             WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
@@ -321,8 +295,7 @@ impl PostgresRepository {
                     c.symbol,
                     c.currency,
                     c.decimal_places,
-                    c.symbol_position,
-                    c.created_at
+                    c.symbol_position
                 ORDER BY a.created_at DESC, a.id DESC
                 LIMIT $4
                 "#,
@@ -343,13 +316,11 @@ impl PostgresRepository {
                 )
                 SELECT
                     a.id,
-                    a.user_id,
                     a.name,
                     a.color,
                     a.icon,
                     a.account_type::text as account_type,
                     a.balance,
-                    a.created_at,
                     a.spend_limit,
                     c.id as currency_id,
                     c.name as currency_name,
@@ -357,7 +328,6 @@ impl PostgresRepository {
                     c.currency as currency_code,
                     c.decimal_places as currency_decimal_places,
                     c.symbol_position as currency_symbol_position,
-                    c.created_at as currency_created_at,
                     (a.balance + COALESCE(SUM(
                         CASE
                             WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
@@ -409,8 +379,7 @@ impl PostgresRepository {
                     c.symbol,
                     c.currency,
                     c.decimal_places,
-                    c.symbol_position,
-                    c.created_at
+                    c.symbol_position
                 ORDER BY a.created_at DESC, a.id DESC
                 LIMIT $3
                 "#,
@@ -631,13 +600,11 @@ ORDER BY a.id, d.day
         #[derive(sqlx::FromRow)]
         struct UpdateAccountRow {
             id: Uuid,
-            user_id: Uuid,
             name: String,
             color: String,
             icon: String,
             account_type: String,
             balance: i64,
-            created_at: DateTime<Utc>,
             spend_limit: Option<i32>,
         }
 
@@ -648,14 +615,11 @@ ORDER BY a.id, d.day
             WHERE id = $7 and user_id = $8
             RETURNING
                 id,
-                user_id,
                 name,
                 color,
                 icon,
                 account_type::text as account_type,
                 balance,
-                currency_id,
-                created_at,
                 spend_limit
             "#,
         )
@@ -680,14 +644,12 @@ ORDER BY a.id, d.day
 
         Ok(Account {
             id: row.id,
-            user_id: row.user_id,
             name: row.name,
             color: row.color,
             icon: row.icon,
             account_type: account_type_from_db(&row.account_type),
             currency,
             balance: row.balance,
-            created_at: row.created_at,
             spend_limit: row.spend_limit,
         })
     }

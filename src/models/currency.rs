@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
 use uuid::Uuid;
@@ -12,7 +11,7 @@ pub enum SymbolPosition {
     After,
 }
 
-#[derive(Serialize, Debug, Clone, Default, sqlx::FromRow)]
+#[derive(Debug, Clone, Default, sqlx::FromRow)]
 pub struct Currency {
     pub id: Uuid,
     pub name: String,
@@ -20,7 +19,6 @@ pub struct Currency {
     pub currency: String,
     pub decimal_places: i32,
     pub symbol_position: SymbolPosition,
-    pub created_at: DateTime<Utc>,
 }
 
 impl From<&Currency> for CurrencyResponse {

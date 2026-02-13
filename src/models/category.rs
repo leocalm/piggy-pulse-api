@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
 use serde_json::json;
@@ -13,16 +12,14 @@ pub enum CategoryType {
     Transfer,
 }
 
-#[derive(Serialize, Debug, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Category {
     pub id: Uuid,
-    pub user_id: Uuid,
     pub name: String,
     pub color: String,
     pub icon: String,
     pub parent_id: Option<Uuid>,
     pub category_type: CategoryType,
-    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Deserialize, Debug, Validate, JsonSchema)]
@@ -71,12 +68,9 @@ pub struct CategoryStats {
     pub transaction_count: i64,
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct CategoryWithStats {
-    #[serde(flatten)]
     pub category: Category,
-
-    #[serde(flatten)]
     pub stats: CategoryStats,
 }
 

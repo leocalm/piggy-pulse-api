@@ -1,6 +1,6 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
-use crate::models::password_reset::{PasswordReset, SecurityAuditLog};
+use crate::models::password_reset::PasswordReset;
 use chrono::{DateTime, Utc};
 use rand::Rng;
 use serde_json::Value as JsonValue;
@@ -36,7 +36,7 @@ impl PostgresRepository {
             r#"
             INSERT INTO password_resets (user_id, token_hash, expires_at, ip_address, user_agent)
             VALUES ($1, $2, $3, $4::inet, $5)
-            RETURNING id, user_id, token_hash, ip_address, user_agent, created_at, expires_at, used_at
+            RETURNING id, user_id, expires_at, used_at
             "#,
         )
         .bind(user_id)
@@ -54,7 +54,7 @@ impl PostgresRepository {
     pub async fn get_password_reset_by_token(&self, token_hash: &str) -> Result<Option<PasswordReset>, AppError> {
         let reset = sqlx::query_as::<_, PasswordReset>(
             r#"
-            SELECT id, user_id, token_hash, ip_address, user_agent, created_at, expires_at, used_at
+            SELECT id, user_id, expires_at, used_at
             FROM password_resets
             WHERE token_hash = $1
             "#,
@@ -140,12 +140,11 @@ impl PostgresRepository {
         ip_address: Option<String>,
         user_agent: Option<String>,
         metadata: Option<JsonValue>,
-    ) -> Result<SecurityAuditLog, AppError> {
-        let log = sqlx::query_as::<_, SecurityAuditLog>(
+    ) -> Result<(), AppError> {
+        sqlx::query(
             r#"
             INSERT INTO security_audit_log (user_id, event_type, success, ip_address, user_agent, metadata)
             VALUES ($1, $2, $3, $4::inet, $5, $6)
-            RETURNING id, user_id, event_type, ip_address, user_agent, success, metadata, created_at
             "#,
         )
         .bind(user_id)
@@ -154,10 +153,10 @@ impl PostgresRepository {
         .bind(ip_address)
         .bind(user_agent)
         .bind(metadata)
-        .fetch_one(&self.pool)
+        .execute(&self.pool)
         .await?;
 
-        Ok(log)
+        Ok(())
     }
 
     /// Update user password (used during password reset)

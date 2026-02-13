@@ -4,16 +4,11 @@ use schemars::JsonSchema;
 use uuid::Uuid;
 
 /// Database model for two-factor authentication
-#[derive(Debug, Serialize, sqlx::FromRow)]
+#[derive(Debug, sqlx::FromRow)]
 pub struct TwoFactorAuth {
-    pub id: Uuid,
-    pub user_id: Uuid,
     pub encrypted_secret: String,
     pub encryption_nonce: String,
     pub is_enabled: bool,
-    pub verified_at: Option<DateTime<Utc>>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
 }
 
 /// Response when setting up 2FA (contains sensitive data - send once only)
@@ -62,34 +57,24 @@ pub struct TwoFactorStatus {
 }
 
 /// Backup code database model
-#[derive(Debug, Serialize, sqlx::FromRow)]
+#[derive(Debug, sqlx::FromRow)]
 pub struct BackupCode {
     pub id: Uuid,
-    pub user_id: Uuid,
     pub code_hash: String,
-    pub used_at: Option<DateTime<Utc>>,
-    pub created_at: DateTime<Utc>,
 }
 
 /// Rate limit database model
-#[derive(Debug, Serialize, sqlx::FromRow)]
+#[derive(Debug, sqlx::FromRow)]
 pub struct TwoFactorRateLimit {
-    pub id: Uuid,
-    pub user_id: Uuid,
     pub failed_attempts: i32,
     pub locked_until: Option<DateTime<Utc>>,
-    pub last_attempt_at: DateTime<Utc>,
 }
 
 /// Emergency disable token model
-#[derive(Debug, Serialize, sqlx::FromRow)]
+#[derive(Debug, sqlx::FromRow)]
 pub struct EmergencyToken {
     pub id: Uuid,
     pub user_id: Uuid,
-    pub token_hash: String,
-    pub expires_at: DateTime<Utc>,
-    pub created_at: DateTime<Utc>,
-    pub used_at: Option<DateTime<Utc>>,
 }
 
 /// Request to initiate emergency 2FA disable
