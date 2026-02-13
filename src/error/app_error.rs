@@ -264,7 +264,11 @@ mod tests {
 
     #[test]
     fn test_error_response_includes_request_id() {
-        let rocket = rocket::build().attach(crate::middleware::RequestLogger).mount("/", routes![test_error_route]);
+        // In `cargo test --release`, Rocket's default profile is `release`, which rejects the default insecure secret key.
+        // Use a deterministic (but non-default) secret key so this test passes under CI's release-mode test run.
+        let rocket = rocket::custom(rocket::Config::figment().merge(("secret_key", "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")))
+            .attach(crate::middleware::RequestLogger)
+            .mount("/", routes![test_error_route]);
 
         let client = Client::tracked(rocket).expect("valid rocket instance");
         let response = client.get("/test-error").dispatch();

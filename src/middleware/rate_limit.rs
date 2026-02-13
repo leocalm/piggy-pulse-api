@@ -582,7 +582,9 @@ mod tests {
 
         let limiter = Arc::new(RateLimiter::new(config).await.expect("rate limiter"));
 
-        let rocket = rocket::build()
+        // In `cargo test --release`, Rocket's default profile is `release`, which rejects the default insecure secret key.
+        // Use a deterministic (but non-default) secret key so this test passes under CI's release-mode test run.
+        let rocket = rocket::custom(rocket::Config::figment().merge(("secret_key", "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")))
             .manage(limiter)
             .mount("/", routes![limited])
             .register("/", catchers![too_many_requests]);
