@@ -3,6 +3,11 @@ kind: pipeline
 type: docker
 name: test
 
+trigger:
+  event:
+    - push
+    - pull_request
+
 steps:
   - name: format-check
     image: rust:1.93
@@ -15,11 +20,24 @@ steps:
     volumes:
       - name: cargo-registry
         path: /usr/local/cargo/registry
+      - name: cargo-git
+        path: /usr/local/cargo/git
+      - name: sccache
+        path: /root/.cache/sccache
+      - name: target
+        path: /drone/src/target
     environment:
       CARGO_BUILD_JOBS: 1
+      CARGO_TARGET_DIR: /drone/src/target
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: /root/.cache/sccache
+      SCCACHE_CACHE_SIZE: 10G
     commands:
+      - apt-get update
+      - apt-get install -y --no-install-recommends sccache
       - rustup component add clippy
-      - cargo clippy --all-targets --no-deps -- -D warnings
+      # Run clippy in release mode so the artifacts can be reused by the release test step.
+      - cargo clippy --all-targets --no-deps --release -- -D warnings
 
   - name: test
     image: rust:1.93
@@ -28,31 +46,45 @@ steps:
         path: /usr/local/cargo/registry
       - name: cargo-git
         path: /usr/local/cargo/git
+      - name: sccache
+        path: /root/.cache/sccache
       - name: target
         path: /drone/src/target
     environment:
       CARGO_BUILD_JOBS: 1
       CARGO_INCREMENTAL: 0
+      CARGO_TARGET_DIR: /drone/src/target
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: /root/.cache/sccache
+      SCCACHE_CACHE_SIZE: 10G
       RUST_MIN_STACK: 8388608
     commands:
+      - apt-get update
+      - apt-get install -y --no-install-recommends sccache
       - echo "Running tests in release mode (optimized for memory)..."
       - cargo test --all --release -- --test-threads=1
 
 volumes:
   - name: cargo-registry
     host:
-      path: /tmp/drone-cargo-registry
+      path: /opt/drone-cache/cargo-registry
   - name: cargo-git
     host:
-      path: /tmp/drone-cargo-git
+      path: /opt/drone-cache/cargo-git
+  - name: sccache
+    host:
+      path: /opt/drone-cache/sccache
   - name: target
     host:
-      path: /tmp/drone-target
+      path: /opt/drone-cache/target
 
 ---
 kind: pipeline
 type: docker
 name: build-and-deploy
+
+depends_on:
+  - test
 
 trigger:
   branch:
