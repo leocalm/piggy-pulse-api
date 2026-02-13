@@ -3,7 +3,6 @@ use crate::error::app_error::AppError;
 use crate::models::budget_period::BudgetPeriod;
 use crate::models::category::{Category, CategoryRequest, CategoryStats, CategoryType, CategoryWithStats, difference_vs_average_percentage};
 use crate::models::pagination::CursorParams;
-use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 // Intermediate struct for sqlx query results with category_type as text
@@ -11,26 +10,22 @@ use uuid::Uuid;
 #[allow(dead_code)]
 struct CategoryRow {
     id: Uuid,
-    user_id: Uuid,
     name: String,
     color: String,
     icon: String,
     parent_id: Option<Uuid>,
     category_type: String,
-    created_at: DateTime<Utc>,
 }
 
 impl From<CategoryRow> for Category {
     fn from(row: CategoryRow) -> Self {
         Category {
             id: row.id,
-            user_id: row.user_id,
             name: row.name,
             color: row.color,
             icon: row.icon,
             parent_id: row.parent_id,
             category_type: category_type_from_db(&row.category_type),
-            created_at: row.created_at,
         }
     }
 }
@@ -38,13 +33,11 @@ impl From<CategoryRow> for Category {
 #[derive(Debug, sqlx::FromRow)]
 struct CategoryWithStatsRow {
     id: Uuid,
-    user_id: Uuid,
     name: String,
     color: String,
     icon: String,
     parent_id: Option<Uuid>,
     category_type: String,
-    created_at: DateTime<Utc>,
     used_in_period: i64,
     average_period_usage: i64,
     transaction_count: i64,
@@ -55,13 +48,11 @@ impl From<CategoryWithStatsRow> for CategoryWithStats {
         CategoryWithStats {
             category: Category {
                 id: row.id,
-                user_id: row.user_id,
                 name: row.name,
                 color: row.color,
                 icon: row.icon,
                 parent_id: row.parent_id,
                 category_type: category_type_from_db(&row.category_type),
-                created_at: row.created_at,
             },
             stats: CategoryStats {
                 used_in_period: row.used_in_period,
@@ -98,13 +89,11 @@ impl PostgresRepository {
             VALUES ($1, $2, $3, $4, $5, $6::text::category_type)
             RETURNING
                 id,
-                user_id,
                 name,
                 COALESCE(color, '') as color,
                 COALESCE(icon, '') as icon,
                 parent_id,
-                category_type::text as category_type,
-                created_at
+                category_type::text as category_type
             "#,
         )
         .bind(user_id)
@@ -132,13 +121,11 @@ impl PostgresRepository {
             r#"
             SELECT
                 id,
-                user_id,
                 name,
                 COALESCE(color, '') as color,
                 COALESCE(icon, '') as icon,
                 parent_id,
-                category_type::text as category_type,
-                created_at
+                category_type::text as category_type
             FROM category
             WHERE id = $1 AND user_id = $2
             "#,
@@ -202,13 +189,11 @@ selected_period_counts AS (
 )
 SELECT
     c.id,
-    c.user_id,
     c.name,
     COALESCE(c.color, '') as color,
     COALESCE(c.icon, '') as icon,
     c.parent_id,
     c.category_type::text as category_type,
-    c.created_at,
     COALESCE(spt.used_this_period, 0) AS used_in_period,
     COALESCE(at.avg_period_amount, 0) AS average_period_usage,
     COALESCE(spc.transaction_count, 0) AS transaction_count
@@ -279,13 +264,11 @@ selected_period_counts AS (
 )
 SELECT
     c.id,
-    c.user_id,
     c.name,
     COALESCE(c.color, '') as color,
     COALESCE(c.icon, '') as icon,
     c.parent_id,
     c.category_type::text as category_type,
-    c.created_at,
     COALESCE(spt.used_this_period, 0) AS used_in_period,
     COALESCE(at.avg_period_amount, 0) AS average_period_usage,
     COALESCE(spc.transaction_count, 0) AS transaction_count
@@ -346,13 +329,11 @@ LIMIT $4
             WHERE id = $6 AND user_id = $7
             RETURNING
                 id,
-                user_id,
                 name,
                 COALESCE(color, '') as color,
                 COALESCE(icon, '') as icon,
                 parent_id,
-                category_type::text as category_type,
-                created_at
+                category_type::text as category_type
             "#,
         )
         .bind(&request.name)
@@ -382,13 +363,11 @@ LIMIT $4
                 r#"
                 SELECT
                     c.id,
-                    c.user_id,
                     c.name,
                     COALESCE(c.color, '') as color,
                     COALESCE(c.icon, '') as icon,
                     c.parent_id,
-                    c.category_type::text as category_type,
-                    c.created_at
+                    c.category_type::text as category_type
                 FROM category c
                 LEFT JOIN budget_category bc ON c.id = bc.category_id
                 WHERE bc.id IS NULL
@@ -409,13 +388,11 @@ LIMIT $4
                 r#"
                 SELECT
                     c.id,
-                    c.user_id,
                     c.name,
                     COALESCE(c.color, '') as color,
                     COALESCE(c.icon, '') as icon,
                     c.parent_id,
-                    c.category_type::text as category_type,
-                    c.created_at
+                    c.category_type::text as category_type
                 FROM category c
                 LEFT JOIN budget_category bc ON c.id = bc.category_id
                 WHERE bc.id IS NULL
@@ -439,13 +416,11 @@ LIMIT $4
             r#"
             SELECT
                 c.id,
-                c.user_id,
                 c.name,
                 COALESCE(c.color, '') as color,
                 COALESCE(c.icon, '') as icon,
                 c.parent_id,
-                c.category_type::text as category_type,
-                c.created_at
+                c.category_type::text as category_type
             FROM category c
             WHERE c.user_id = $1
             ORDER BY c.created_at DESC, c.id DESC

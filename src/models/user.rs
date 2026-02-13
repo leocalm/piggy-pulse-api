@@ -1,17 +1,15 @@
-use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
 use uuid::Uuid;
 use validator::{Validate, ValidationError};
 use zxcvbn::zxcvbn;
 
-#[derive(Serialize, Debug, sqlx::FromRow)]
+#[derive(Debug, sqlx::FromRow)]
 pub struct User {
     pub id: Uuid,
     pub name: String,
     pub email: String,
     pub password_hash: String,
-    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Serialize, Debug, JsonSchema)]

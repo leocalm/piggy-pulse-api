@@ -22,18 +22,15 @@ impl From<&TransactionRequest> for Transaction {
 
         Self {
             id: Uuid::new_v4(),
-            user_id: Uuid::nil(),
             amount: transaction_request.amount,
             description: transaction_request.description.clone(),
             occurred_at: transaction_request.occurred_at,
             category: Category {
                 id: transaction_request.category_id,
-                user_id: Uuid::nil(),
                 ..Category::default()
             },
             from_account: Account {
                 id: transaction_request.from_account_id,
-                user_id: Uuid::nil(),
                 ..Account::default()
             },
             to_account,
@@ -56,7 +53,6 @@ impl From<&AccountRequest> for Account {
             },
             balance: request.balance,
             spend_limit: request.spend_limit,
-            ..Account::default()
         }
     }
 }
@@ -78,7 +74,6 @@ impl From<&BudgetCategoryRequest> for BudgetCategory {
 pub fn sample_account() -> Account {
     Account {
         id: Uuid::new_v4(),
-        user_id: Uuid::nil(),
         name: "Sample Account".to_string(),
         color: "#000000".to_string(),
         icon: "icon".to_string(),
@@ -93,14 +88,12 @@ pub fn sample_account() -> Account {
         },
         balance: 1_000,
         spend_limit: None,
-        ..Account::default()
     }
 }
 
 pub fn sample_transaction() -> Transaction {
     Transaction {
         id: Uuid::new_v4(),
-        user_id: Uuid::nil(),
         amount: 500,
         description: "Sample".into(),
         occurred_at: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
@@ -115,7 +108,6 @@ pub fn sample_transaction() -> Transaction {
         vendor: Some(Vendor {
             id: Uuid::new_v4(),
             name: "Vendor".into(),
-            ..Vendor::default()
         }),
     }
 }
@@ -123,7 +115,6 @@ pub fn sample_transaction() -> Transaction {
 pub fn sample_budget_category() -> BudgetCategory {
     BudgetCategory {
         id: Uuid::new_v4(),
-        user_id: Uuid::nil(),
         category: Category {
             id: Uuid::new_v4(),
             name: "Food".into(),

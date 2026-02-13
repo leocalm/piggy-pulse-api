@@ -3,42 +3,34 @@ use crate::error::app_error::AppError;
 use crate::models::budget_category::{BudgetCategory, BudgetCategoryRequest};
 use crate::models::category::Category;
 use crate::models::pagination::CursorParams;
-use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 // Intermediate struct for sqlx query results with JOINed category data
 #[derive(Debug, sqlx::FromRow)]
 struct BudgetCategoryRow {
     id: Uuid,
-    user_id: Uuid,
     category_id: Uuid,
     budgeted_value: i32,
-    created_at: DateTime<Utc>,
     category_name: String,
     category_color: String,
     category_icon: String,
     category_parent_id: Option<Uuid>,
     category_category_type: String,
-    category_created_at: DateTime<Utc>,
 }
 
 impl From<BudgetCategoryRow> for BudgetCategory {
     fn from(row: BudgetCategoryRow) -> Self {
         BudgetCategory {
             id: row.id,
-            user_id: row.user_id,
             category_id: row.category_id,
             budgeted_value: row.budgeted_value,
-            created_at: row.created_at,
             category: Category {
                 id: row.category_id,
-                user_id: Uuid::nil(),
                 name: row.category_name,
                 color: row.category_color,
                 icon: row.category_icon,
                 parent_id: row.category_parent_id,
                 category_type: crate::database::category::category_type_from_db(&row.category_category_type),
-                created_at: row.category_created_at,
             },
         }
     }
@@ -84,16 +76,13 @@ impl PostgresRepository {
             r#"
             SELECT
                 bc.id,
-                bc.user_id,
                 bc.category_id,
                 bc.budgeted_value,
-                bc.created_at,
                 c.name as category_name,
                 COALESCE(c.color, '') as category_color,
                 COALESCE(c.icon, '') as category_icon,
                 c.parent_id as category_parent_id,
-                c.category_type::text as category_category_type,
-                c.created_at as category_created_at
+                c.category_type::text as category_category_type
             FROM budget_category bc
             JOIN category c
                 ON c.id = bc.category_id
@@ -114,16 +103,13 @@ impl PostgresRepository {
                 r#"
                 SELECT
                     bc.id,
-                    bc.user_id,
                     bc.category_id,
                     bc.budgeted_value,
-                    bc.created_at,
                     c.name as category_name,
                     COALESCE(c.color, '') as category_color,
                     COALESCE(c.icon, '') as category_icon,
                     c.parent_id as category_parent_id,
-                    c.category_type::text as category_category_type,
-                    c.created_at as category_created_at
+                    c.category_type::text as category_category_type
                 FROM budget_category bc
                 JOIN category c ON c.id = bc.category_id
                 WHERE bc.user_id = $1
@@ -144,16 +130,13 @@ impl PostgresRepository {
                 r#"
                 SELECT
                     bc.id,
-                    bc.user_id,
                     bc.category_id,
                     bc.budgeted_value,
-                    bc.created_at,
                     c.name as category_name,
                     COALESCE(c.color, '') as category_color,
                     COALESCE(c.icon, '') as category_icon,
                     c.parent_id as category_parent_id,
-                    c.category_type::text as category_category_type,
-                    c.created_at as category_created_at
+                    c.category_type::text as category_category_type
                 FROM budget_category bc
                 JOIN category c ON c.id = bc.category_id
                 WHERE bc.user_id = $1

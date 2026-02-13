@@ -8,14 +8,13 @@ use crate::models::pagination::CursorParams;
 use crate::models::transaction::{Transaction, TransactionRequest};
 use crate::models::transaction_summary::TransactionSummary;
 use crate::models::vendor::Vendor;
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::NaiveDate;
 use uuid::Uuid;
 
 // Intermediate struct for sqlx query results with all JOINed data
 #[derive(Debug, sqlx::FromRow)]
 struct TransactionRow {
     id: Uuid,
-    user_id: Uuid,
     amount: i64,
     description: String,
     occurred_at: NaiveDate,
@@ -26,7 +25,6 @@ struct TransactionRow {
     category_icon: String,
     category_parent_id: Option<Uuid>,
     category_category_type: String,
-    category_created_at: DateTime<Utc>,
     // From account fields
     from_account_id: Uuid,
     from_account_name: String,
@@ -34,7 +32,6 @@ struct TransactionRow {
     from_account_icon: String,
     from_account_account_type: String,
     from_account_balance: i64,
-    from_account_created_at: DateTime<Utc>,
     from_account_spend_limit: Option<i32>,
     from_account_currency_id: Uuid,
     from_account_currency_name: String,
@@ -42,7 +39,6 @@ struct TransactionRow {
     from_account_currency_code: String,
     from_account_currency_decimal_places: i32,
     from_account_currency_symbol_position: SymbolPosition,
-    from_account_currency_created_at: DateTime<Utc>,
     // To account fields (optional)
     to_account_id: Option<Uuid>,
     to_account_name: Option<String>,
@@ -50,7 +46,6 @@ struct TransactionRow {
     to_account_icon: Option<String>,
     to_account_account_type: Option<String>,
     to_account_balance: Option<i64>,
-    to_account_created_at: Option<DateTime<Utc>>,
     to_account_spend_limit: Option<i32>,
     to_account_currency_id: Option<Uuid>,
     to_account_currency_name: Option<String>,
@@ -58,11 +53,9 @@ struct TransactionRow {
     to_account_currency_code: Option<String>,
     to_account_currency_decimal_places: Option<i32>,
     to_account_currency_symbol_position: Option<SymbolPosition>,
-    to_account_currency_created_at: Option<DateTime<Utc>>,
     // Vendor fields (optional)
     vendor_id: Option<Uuid>,
     vendor_name: Option<String>,
-    vendor_created_at: Option<DateTime<Utc>>,
 }
 
 impl From<TransactionRow> for Transaction {
@@ -70,7 +63,6 @@ impl From<TransactionRow> for Transaction {
         let to_account = if let Some(to_account_id) = row.to_account_id {
             Some(Account {
                 id: to_account_id,
-                user_id: Uuid::nil(),
                 name: row.to_account_name.unwrap(),
                 color: row.to_account_color.unwrap(),
                 icon: row.to_account_icon.unwrap(),
@@ -82,10 +74,8 @@ impl From<TransactionRow> for Transaction {
                     currency: row.to_account_currency_code.unwrap(),
                     decimal_places: row.to_account_currency_decimal_places.unwrap(),
                     symbol_position: row.to_account_currency_symbol_position.unwrap(),
-                    created_at: row.to_account_currency_created_at.unwrap(),
                 },
                 balance: row.to_account_balance.unwrap(),
-                created_at: row.to_account_created_at.unwrap(),
                 spend_limit: row.to_account_spend_limit,
             })
         } else {
@@ -95,9 +85,7 @@ impl From<TransactionRow> for Transaction {
         let vendor = if let Some(vendor_id) = row.vendor_id {
             Some(Vendor {
                 id: vendor_id,
-                user_id: Uuid::nil(),
                 name: row.vendor_name.unwrap(),
-                created_at: row.vendor_created_at.unwrap(),
             })
         } else {
             None
@@ -105,24 +93,20 @@ impl From<TransactionRow> for Transaction {
 
         Transaction {
             id: row.id,
-            user_id: row.user_id,
             amount: row.amount,
             description: row.description,
             occurred_at: row.occurred_at,
             category: Category {
                 id: row.category_id,
-                user_id: Uuid::nil(),
                 name: row.category_name,
                 color: row.category_color,
                 icon: row.category_icon,
                 parent_id: row.category_parent_id,
                 category_type: category_type_from_db(&row.category_category_type),
-                created_at: row.category_created_at,
             },
 
             from_account: Account {
                 id: row.from_account_id,
-                user_id: Uuid::nil(),
                 name: row.from_account_name,
                 color: row.from_account_color,
                 icon: row.from_account_icon,
@@ -134,10 +118,8 @@ impl From<TransactionRow> for Transaction {
                     currency: row.from_account_currency_code,
                     decimal_places: row.from_account_currency_decimal_places,
                     symbol_position: row.from_account_currency_symbol_position,
-                    created_at: row.from_account_currency_created_at,
                 },
                 balance: row.from_account_balance,
-                created_at: row.from_account_created_at,
                 spend_limit: row.from_account_spend_limit,
             },
 
@@ -150,7 +132,6 @@ impl From<TransactionRow> for Transaction {
 // Common SELECT clause for transaction queries with all joined data
 const TRANSACTION_SELECT_FIELDS: &str = r#"
     t.id,
-    t.user_id,
     t.amount,
     t.description,
     t.occurred_at,
@@ -160,14 +141,12 @@ const TRANSACTION_SELECT_FIELDS: &str = r#"
     COALESCE(c.icon, '') as category_icon,
     c.parent_id as category_parent_id,
     c.category_type::text as category_category_type,
-    c.created_at as category_created_at,
     fa.id as from_account_id,
     fa.name as from_account_name,
     fa.color as from_account_color,
     fa.icon as from_account_icon,
     fa.account_type::text as from_account_account_type,
     fa.balance as from_account_balance,
-    fa.created_at as from_account_created_at,
     fa.spend_limit as from_account_spend_limit,
     cfa.id as from_account_currency_id,
     cfa.name as from_account_currency_name,
@@ -175,14 +154,12 @@ const TRANSACTION_SELECT_FIELDS: &str = r#"
     cfa.currency as from_account_currency_code,
     cfa.decimal_places as from_account_currency_decimal_places,
     cfa.symbol_position as from_account_currency_symbol_position,
-    cfa.created_at as from_account_currency_created_at,
     ta.id as to_account_id,
     ta.name as to_account_name,
     ta.color as to_account_color,
     ta.icon as to_account_icon,
     ta.account_type::text as to_account_account_type,
     ta.balance as to_account_balance,
-    ta.created_at as to_account_created_at,
     ta.spend_limit as to_account_spend_limit,
     cta.id as to_account_currency_id,
     cta.name as to_account_currency_name,
@@ -190,10 +167,8 @@ const TRANSACTION_SELECT_FIELDS: &str = r#"
     cta.currency as to_account_currency_code,
     cta.decimal_places as to_account_currency_decimal_places,
     cta.symbol_position as to_account_currency_symbol_position,
-    cta.created_at as to_account_currency_created_at,
     v.id as vendor_id,
-    v.name as vendor_name,
-    v.created_at as vendor_created_at
+    v.name as vendor_name
 "#;
 
 // Common JOIN clauses for transaction queries
@@ -289,7 +264,7 @@ impl PostgresRepository {
                     vendor_id
                 )
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                RETURNING id, user_id, amount, description, occurred_at, category_id, from_account_id, to_account_id, vendor_id
+                RETURNING id, amount, description, occurred_at, category_id, from_account_id, to_account_id, vendor_id
             )
             {}
             "#,
@@ -418,7 +393,7 @@ impl PostgresRepository {
                     to_account_id = $6,
                     vendor_id = $7
                 WHERE id = $8 AND user_id = $9
-                RETURNING id, user_id, amount, description, occurred_at, category_id, from_account_id, to_account_id, vendor_id
+                RETURNING id, amount, description, occurred_at, category_id, from_account_id, to_account_id, vendor_id
             )
             {}
             "#,

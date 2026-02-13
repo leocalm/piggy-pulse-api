@@ -1,6 +1,5 @@
 use crate::models::currency::{Currency, CurrencyResponse};
 use crate::models::dashboard::BudgetPerDayResponse;
-use chrono::{DateTime, Utc};
 use rocket::serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
 use uuid::Uuid;
@@ -16,17 +15,15 @@ pub enum AccountType {
     Allowance,
 }
 
-#[derive(Serialize, Debug, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Account {
     pub id: Uuid,
-    pub user_id: Uuid,
     pub name: String,
     pub color: String,
     pub icon: String,
     pub account_type: AccountType,
     pub currency: Currency,
     pub balance: i64,
-    pub created_at: DateTime<Utc>,
     pub spend_limit: Option<i32>,
 }
 

@@ -271,9 +271,11 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
             "/overlays" => app_routes::overlay::routes(),
             "/two-factor" => app_routes::two_factor::routes(),
         }
-        let docs_path = join_base_path(primary_base_path, "docs");
-        let primary_openapi_url = join_base_path(primary_base_path, "openapi.json");
-        rocket = rocket.mount(docs_path, make_swagger_ui(&get_swagger_config(&primary_openapi_url)));
+        if config.api.expose_swagger_ui {
+            let docs_path = join_base_path(primary_base_path, "docs");
+            let primary_openapi_url = join_base_path(primary_base_path, "openapi.json");
+            rocket = rocket.mount(docs_path, make_swagger_ui(&get_swagger_config(&primary_openapi_url)));
+        }
     } else {
         rocket = mount_api_routes(rocket, primary_base_path);
     }
@@ -303,9 +305,11 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
                 "/overlays" => app_routes::overlay::routes(),
                 "/two-factor" => app_routes::two_factor::routes(),
             }
-            let docs_path = join_base_path(base_path, "docs");
-            let docs_openapi_url = join_base_path(base_path, "openapi.json");
-            rocket = rocket.mount(docs_path, make_swagger_ui(&get_swagger_config(&docs_openapi_url)));
+            if config.api.expose_swagger_ui {
+                let docs_path = join_base_path(base_path, "docs");
+                let docs_openapi_url = join_base_path(base_path, "openapi.json");
+                rocket = rocket.mount(docs_path, make_swagger_ui(&get_swagger_config(&docs_openapi_url)));
+            }
         } else {
             rocket = mount_api_routes(rocket, base_path);
         }

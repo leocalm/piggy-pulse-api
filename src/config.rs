@@ -126,6 +126,7 @@ pub struct ApiConfig {
     pub base_path: String,
     pub additional_base_paths: Vec<String>,
     pub expose_docs: bool,
+    pub expose_swagger_ui: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -211,6 +212,7 @@ impl Default for ApiConfig {
             base_path: DEFAULT_API_BASE_PATH.to_string(),
             additional_base_paths: Vec::new(),
             expose_docs: false,
+            expose_swagger_ui: false,
         }
     }
 }

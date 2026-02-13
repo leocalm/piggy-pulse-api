@@ -675,19 +675,17 @@ impl PostgresRepository {
         #[derive(sqlx::FromRow)]
         struct AccountRow {
             id: Uuid,
-            user_id: Uuid,
             name: String,
             color: String,
             icon: String,
             account_type: String,
             currency_id: Uuid,
             spend_limit: Option<i32>,
-            created_at: DateTime<Utc>,
         }
 
         let account_row = sqlx::query_as::<_, AccountRow>(
             r#"
-            SELECT id, user_id, name, color, icon, account_type, currency_id, spend_limit, created_at
+            SELECT id, name, color, icon, account_type, currency_id, spend_limit
             FROM account
             WHERE id = $1 AND user_id = $2
             "#,
@@ -700,7 +698,7 @@ impl PostgresRepository {
         // Fetch currency
         let currency = sqlx::query_as::<_, crate::models::currency::Currency>(
             r#"
-            SELECT id, name, symbol, currency, decimal_places, created_at
+            SELECT id, name, symbol, currency, decimal_places
             FROM currency
             WHERE id = $1
             "#,
@@ -711,7 +709,6 @@ impl PostgresRepository {
 
         Ok(crate::models::account::Account {
             id: account_row.id,
-            user_id: account_row.user_id,
             name: account_row.name,
             color: account_row.color,
             icon: account_row.icon,
@@ -719,7 +716,6 @@ impl PostgresRepository {
             currency,
             balance: 0, // Not needed for overlay context
             spend_limit: account_row.spend_limit,
-            created_at: account_row.created_at,
         })
     }
 
