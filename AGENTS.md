@@ -147,6 +147,33 @@ Always run the full PR check suite locally before pushing:
 *   `cargo test --verbose`
 *   `cargo audit`
 
+### Conventional Commits (Required)
+
+This repo enforces **Conventional Commits** for:
+
+* PR titles
+* Commit subjects in the PR (merge commits are ignored)
+
+Format:
+
+* `type(scope)!: description`
+* `type: description`
+
+Allowed `type` values:
+
+* `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`
+
+Examples:
+
+* `feat(api): add cursor pagination`
+* `fix(auth)!: reject invalid session cookie`
+* `docs: document local dev setup`
+
+If CI fails on commit messages, rewrite history (for a branch PR):
+
+* Reword commits: `git rebase -i origin/main` then change `pick` to `reword`
+* Or squash to a single Conventional Commit
+
 ### VPS Facts (Production)
 
 *   **OS:** Ubuntu 24.04 LTS.

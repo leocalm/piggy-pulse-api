@@ -219,6 +219,35 @@ CI will fail on formatting or lint warnings.
 
 ---
 
+# Conventional Commits (Required)
+
+CI enforces **Conventional Commits** for both:
+
+- PR titles
+- Commit subjects in the PR (merge commits are ignored)
+
+Required format:
+
+- `type(scope)!: description`
+- `type: description`
+
+Allowed `type` values:
+
+- `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`
+
+Examples:
+
+- `feat(api): add cursor pagination`
+- `fix(auth)!: reject invalid session cookie`
+- `docs: update local dev steps`
+
+Fixing failures:
+
+- Reword commits: `git rebase -i origin/main` then change `pick` to `reword`
+- Squash commits: interactive rebase and squash into a single Conventional Commit
+
+---
+
 # Deployment Model (High-Level)
 
 Production deployment:
