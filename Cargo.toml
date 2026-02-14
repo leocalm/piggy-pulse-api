@@ -18,7 +18,7 @@ password-hash = "0.5"
 argon2 = "0.5"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-log = "0.4.28"
+log = "0.4.29"
 async-trait = "0.1.89"
 validator = { version = "0.20", features = ["derive"] }
 thiserror = "2.0"
