@@ -263,6 +263,47 @@ dependencies = [
 ]
 
 [[package]]
+name = "piggy-pulse"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "argon2",
+ "async-trait",
+ "base64",
+ "chrono",
+ "data-encoding",
+ "dotenvy",
+ "figment",
+ "hex",
+ "lettre",
+ "log",
+ "okapi",
+ "password-hash",
+ "proptest",
+ "qrcode",
+ "rand 0.8.5",
+ "redis",
+ "rocket",
+ "rocket_cors",
+ "rocket_okapi",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "toml",
+ "totp-rs",
+ "tracing",
+ "tracing-subscriber",
+ "urlencoding",
+ "uuid",
+ "validator",
+ "zxcvbn",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
