@@ -62,6 +62,9 @@ services:
       PIGGY_PULSE_LOGGING__LEVEL: ${PIGGY_PULSE_LOGGING_LEVEL:-info}
       PIGGY_PULSE_LOGGING__JSON_FORMAT: ${PIGGY_PULSE_LOGGING_JSON_FORMAT:-false}
 
+      # Two-Factor Authentication
+      PIGGY_PULSE_TWO_FACTOR__ENCRYPTION_KEY: ${PIGGY_PULSE_TWO_FACTOR_ENCRYPTION_KEY:?PIGGY_PULSE_TWO_FACTOR_ENCRYPTION_KEY is required}
+
       # Rocket secret key (required for production)
       ROCKET_SECRET_KEY: ${ROCKET_SECRET_KEY:?ROCKET_SECRET_KEY is required}
     healthcheck:
