@@ -6,6 +6,7 @@ mod db;
 mod error;
 mod middleware;
 mod models;
+mod compatibility_adapter;
 mod routes;
 mod service;
 
