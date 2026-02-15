@@ -1,6 +1,6 @@
 blank_issues_enabled: true
 contact_links:
   - name: Security report
-    url: https://github.com/leocalm/budget/security/advisories/new
+    url: https://github.com/leocalm/piggy-pulse-api/security/advisories/new
     about: Please report security vulnerabilities via GitHub Security Advisories.
 

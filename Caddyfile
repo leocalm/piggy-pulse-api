@@ -8,10 +8,10 @@
     tls internal
     
 
-    # Reverse proxy to budget API
-    reverse_proxy {$BUDGET_UPSTREAM:budget:8000} {
+    # Reverse proxy to PiggyPulse API
+    reverse_proxy {$PIGGY_PULSE_UPSTREAM:piggy-pulse:8000} {
         # Health check
-        health_uri {$BUDGET_HEALTH_URI:/api/v1/health}
+        health_uri {$PIGGY_PULSE_HEALTH_URI:/api/v1/health}
         health_interval 30s
         health_timeout 5s
 

@@ -31,9 +31,9 @@ fn init_tracing(log_level: &str, json_format: bool) {
     // RUST_LOG environment variable can be used for fine-grained control per module:
     // Examples:
     //   RUST_LOG=debug                    - Set all to debug
-    //   RUST_LOG=budget=debug             - Set budget crate to debug
-    //   RUST_LOG=budget::routes=trace     - Set specific module to trace
-    //   RUST_LOG=info,budget::routes=debug - Global info, routes at debug
+    //   RUST_LOG=piggy_pulse=debug             - Set piggy_pulse crate to debug
+    //   RUST_LOG=piggy_pulse::routes=trace     - Set specific module to trace
+    //   RUST_LOG=info,piggy_pulse::routes=debug - Global info, routes at debug
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
 
     let subscriber = tracing_subscriber::fmt().with_env_filter(filter).with_target(true).with_line_number(true);
@@ -65,13 +65,13 @@ fn ensure_two_factor_encryption_key(two_factor_config: &config::TwoFactorConfig)
 
     if two_factor_config.encryption_key_is_default() {
         panic!(
-            "BUDGET_TWO_FACTOR__ENCRYPTION_KEY must be set for profile '{}' and cannot use the insecure default. Generate one with: openssl rand -hex 32",
+            "PIGGY_PULSE_TWO_FACTOR__ENCRYPTION_KEY must be set for profile '{}' and cannot use the insecure default. Generate one with: openssl rand -hex 32",
             profile
         );
     }
 
     if let Err(err) = two_factor_config.parse_encryption_key() {
-        panic!("Invalid BUDGET_TWO_FACTOR__ENCRYPTION_KEY for profile '{}': {}", profile, err);
+        panic!("Invalid PIGGY_PULSE_TWO_FACTOR__ENCRYPTION_KEY for profile '{}': {}", profile, err);
     }
 }
 

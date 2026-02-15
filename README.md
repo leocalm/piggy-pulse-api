@@ -272,7 +272,7 @@ The project serves both as a personal financial tool and as an exploration of bu
 
 Create a `.env` file with:
 
-BUDGET_DATABASE__URL=postgres://user:password@localhost:5432/budget_db
+PIGGY_PULSE_DATABASE__URL=postgres://user:password@localhost:5432/piggy_pulse_db
 
 ### Run with Cargo
 

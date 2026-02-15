@@ -148,7 +148,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_create_vendor_validation_error() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
@@ -172,7 +172,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_get_vendor_invalid_uuid() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
@@ -186,7 +186,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_delete_vendor_invalid_uuid() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
@@ -200,7 +200,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_list_vendors_includes_period_stats() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
@@ -373,7 +373,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_list_vendors_missing_period_id() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
@@ -419,7 +419,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_get_vendor_options() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");

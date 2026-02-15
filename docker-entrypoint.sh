@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-echo "Starting Budget API..."
+echo "Starting PiggyPulse API..."
 
 # Start the application
-echo "Starting Budget API server..."
-exec /app/budget "$@"
+echo "Starting PiggyPulse API server..."
+exec /app/piggy-pulse "$@"

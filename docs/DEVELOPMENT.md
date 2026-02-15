@@ -31,7 +31,7 @@ Configuration is handled via:
 - `.env`
 - `dotenv`
 - `figment`
-- Optional `Budget.toml`
+- Optional `PiggyPulse.toml`
 
 ---
 
@@ -60,15 +60,15 @@ This uses the same `docker-compose.yml` as production.
 Create a `.env` file with:
 
 ```bash
-    BUDGET_DATABASE__URL=postgres://user:password@localhost:5432/budget
+    PIGGY_PULSE_DATABASE__URL=postgres://user:password@localhost:5432/piggy_pulse
     ROCKET_SECRET_KEY=<generate_secure_key>
 
-    BUDGET_CORS__ALLOWED_ORIGINS=["http://localhost:5173"]
-    BUDGET_CORS__ALLOW_CREDENTIALS=true
-    BUDGET_API__EXPOSE_DOCS=true
-    BUDGET_SESSION__COOKIE_SECURE=false
+    PIGGY_PULSE_CORS__ALLOWED_ORIGINS=["http://localhost:5173"]
+    PIGGY_PULSE_CORS__ALLOW_CREDENTIALS=true
+    PIGGY_PULSE_API__EXPOSE_DOCS=true
+    PIGGY_PULSE_SESSION__COOKIE_SECURE=false
 
-    BUDGET_EMAIL__ENABLED=false
+    PIGGY_PULSE_EMAIL__ENABLED=false
 ```
 
 Then run:
@@ -121,16 +121,16 @@ Configuration uses:
 
 - `.env`
 - Environment variables
-- Optional `Budget.toml`
+- Optional `PiggyPulse.toml`
 
 The system uses nested config structure via environment variable names.
 
 Example:
 
 ```bash
-    BUDGET_DATABASE__URL=
-    BUDGET_CORS__ALLOWED_ORIGINS=
-    BUDGET_EMAIL__SMTP_HOST=
+    PIGGY_PULSE_DATABASE__URL=
+    PIGGY_PULSE_CORS__ALLOWED_ORIGINS=
+    PIGGY_PULSE_EMAIL__SMTP_HOST=
 ```
 
 ---
@@ -140,22 +140,22 @@ Example:
 Minimum required:
 
 ```bash
-    BUDGET_DATABASE__URL
+    PIGGY_PULSE_DATABASE__URL
     ROCKET_SECRET_KEY
-    BUDGET_CORS__ALLOWED_ORIGINS=["<your_local_frontend_url>"]
-    BUDGET_CORS__ALLOW_CREDENTIALS=true
+    PIGGY_PULSE_CORS__ALLOWED_ORIGINS=["<your_local_frontend_url>"]
+    PIGGY_PULSE_CORS__ALLOW_CREDENTIALS=true
 ```
 
 Optional (email support):
 
 ```bash
-    BUDGET_EMAIL__SMTP_HOST
-    BUDGET_EMAIL__SMTP_PORT
-    BUDGET_EMAIL__SMTP_USERNAME
-    BUDGET_EMAIL__SMTP_PASSWORD
-    BUDGET_EMAIL__FROM_ADDRESS
-    BUDGET_EMAIL__FROM_NAME
-    BUDGET_EMAIL__ENABLED
+    PIGGY_PULSE_EMAIL__SMTP_HOST
+    PIGGY_PULSE_EMAIL__SMTP_PORT
+    PIGGY_PULSE_EMAIL__SMTP_USERNAME
+    PIGGY_PULSE_EMAIL__SMTP_PASSWORD
+    PIGGY_PULSE_EMAIL__FROM_ADDRESS
+    PIGGY_PULSE_EMAIL__FROM_NAME
+    PIGGY_PULSE_EMAIL__ENABLED
 ```
 
 ---
@@ -187,8 +187,8 @@ OpenAPI documentation is generated automatically at runtime.
 To use the documentation UI locally, add the following variables to `.env`:
 
 ```bash
-    BUDGET_API__EXPOSE_DOCS=true
-    BUDGET_SESSION__COOKIE_SECURE=false
+    PIGGY_PULSE_API__EXPOSE_DOCS=true
+    PIGGY_PULSE_SESSION__COOKIE_SECURE=false
 ```
 
 Local endpoint:
@@ -260,8 +260,8 @@ Deployment command:
 
 ```bash
     docker compose pull
-    docker compose down cron budget
-    docker compose up -d cron budget
+    docker compose down cron piggy-pulse
+    docker compose up -d cron piggy-pulse
 ```
 
 More details available in `docs/DEPLOYMENT.md`.

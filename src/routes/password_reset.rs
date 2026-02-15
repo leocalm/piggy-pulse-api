@@ -269,7 +269,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_request_password_reset_always_returns_success() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.session.cookie_secure = false;
         config.email.enabled = false; // Disable email for testing
 

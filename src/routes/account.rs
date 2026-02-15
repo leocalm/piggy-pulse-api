@@ -292,7 +292,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_create_account_validation_error() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.rate_limit.require_client_ip = false;
         config.session.cookie_secure = false;
 
@@ -321,7 +321,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_get_account_invalid_uuid() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.rate_limit.require_client_ip = false;
         config.session.cookie_secure = false;
 
@@ -336,7 +336,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_list_accounts_includes_balance_metrics() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.rate_limit.require_client_ip = false;
         config.session.cookie_secure = false;
 
@@ -382,7 +382,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_list_accounts_missing_period_id() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.rate_limit.require_client_ip = false;
         config.session.cookie_secure = false;
 
@@ -400,7 +400,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_list_accounts_invalid_period_id() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.rate_limit.require_client_ip = false;
         config.session.cookie_secure = false;
 
@@ -418,7 +418,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_list_accounts_nonexistent_period_id() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.rate_limit.require_client_ip = false;
         config.session.cookie_secure = false;
 
@@ -434,7 +434,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_accounts_summary() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.rate_limit.require_client_ip = false;
         config.session.cookie_secure = false;
 
@@ -498,7 +498,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_accounts_summary_empty() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.rate_limit.require_client_ip = false;
         config.session.cookie_secure = false;
 
@@ -520,7 +520,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_account_options_empty() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.rate_limit.require_client_ip = false;
         config.session.cookie_secure = false;
 
@@ -541,7 +541,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_account_options_multiple_accounts() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.rate_limit.require_client_ip = false;
         config.session.cookie_secure = false;
 

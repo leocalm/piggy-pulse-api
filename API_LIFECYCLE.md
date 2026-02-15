@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Budget API uses URL-based versioning to ensure backward compatibility and allow for smooth transitions between API versions. All endpoints are prefixed with a version identifier (e.g., `/api/v1/`).
+The PiggyPulse API uses URL-based versioning to ensure backward compatibility and allow for smooth transitions between API versions. All endpoints are prefixed with a version identifier (e.g., `/api/v1/`).
 
 ## Current Version
 

@@ -350,7 +350,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_2fa_setup_generates_qr_and_backup_codes() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
@@ -381,7 +381,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_2fa_verify_with_invalid_code_fails() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
@@ -412,7 +412,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_2fa_status_returns_correct_state() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
@@ -437,7 +437,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_emergency_disable_request_always_returns_success() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.session.cookie_secure = false;
         config.email.enabled = false; // Disable email for testing
 
@@ -463,7 +463,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_disable_2fa_requires_password_and_code() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
@@ -492,7 +492,7 @@ mod tests {
     #[ignore = "requires database"]
     async fn test_regenerate_backup_codes_requires_valid_code() {
         let mut config = Config::default();
-        config.database.url = "postgres://postgres:example@127.0.0.1:5432/budget_db".to_string();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.session.cookie_secure = false;
 
         let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");

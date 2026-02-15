@@ -1,4 +1,4 @@
-use budget::{Config, build_rocket};
+use piggy_pulse::{Config, build_rocket};
 use rocket::{Build, Rocket};
 
 #[rocket::launch]

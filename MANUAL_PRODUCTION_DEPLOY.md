@@ -145,7 +145,7 @@ On server:
 
 ```bash
 sudo systemctl status piggypulse-stack.service --no-pager
-sudo docker compose -f /opt/piggypulse/budget/deploy/production/docker-compose.yml --env-file /opt/piggypulse/budget/deploy/production/.env ps
+sudo docker compose -f /opt/piggypulse/piggy-pulse/deploy/production/docker-compose.yml --env-file /opt/piggypulse/piggy-pulse/deploy/production/.env ps
 ss -lntup
 ```
 
@@ -193,7 +193,7 @@ ansible-playbook site.yml --ask-vault-pass
 ## 10. Post-Deployment Checks
 
 - Cloudflare SSL/TLS mode: `Full (strict)`
-- `BUDGET_API_EXPOSE_DOCS=false`
+- `PIGGY_PULSE_API_EXPOSE_DOCS=false`
 - CORS only `https://piggy-pulse.com`
 - Scheduled DB backups tested with restore
 - Monitoring/alerts active for 5xx/auth failures/disk pressure

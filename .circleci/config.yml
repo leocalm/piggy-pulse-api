@@ -121,7 +121,7 @@ jobs:
           command: |
             ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no $HETZNER_USER@100.67.187.36 '
               set -e
-              cd /opt/piggypulse/budget
+              cd /opt/piggypulse/piggy-pulse
               echo "🐋 Pulling latest images..."
               docker compose pull
               echo "🚀 Restarting services..."

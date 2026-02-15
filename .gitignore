@@ -7,7 +7,7 @@ debug
 
 # Environment and configuration files
 .env
-Budget.toml
+PiggyPulse.toml
 
 .gemini/
 gha-creds-*.json

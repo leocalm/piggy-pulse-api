@@ -1,13 +1,13 @@
 # Docker Deployment Guide
 
-This guide covers running the Budget API using Docker Compose with Caddy as a reverse proxy.
+This guide covers running the PiggyPulse API using Docker Compose with Caddy as a reverse proxy.
 
 ## Architecture
 
 The Docker Compose setup includes:
 
 - **PostgreSQL**: Database server with persistent storage
-- **Budget API**: Rust/Rocket application running on port 8000 (internal)
+- **PiggyPulse API**: Rust/Rocket application running on port 8000 (internal)
 - **Cron Worker**: Lightweight cron container that runs `/app/cron generate-periods`
 - **Caddy**: Reverse proxy and web server (ports 80/443)
 - **Adminer**: Database management UI (debug profile only, port 8080)
@@ -44,7 +44,7 @@ docker compose up -d
 
 This will:
 1. Start PostgreSQL database
-2. Build and start the Budget API
+2. Build and start the PiggyPulse API
 3. Build and start the cron worker
 4. Start Caddy reverse proxy
 
@@ -61,7 +61,7 @@ All configuration is managed through the `.env` file. Key settings:
 ### Database Configuration
 
 ```env
-POSTGRES_DB=budget_db
+POSTGRES_DB=piggy_pulse_db
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=your-secure-password
 ```
@@ -69,9 +69,9 @@ POSTGRES_PASSWORD=your-secure-password
 ### API Server
 
 ```env
-BUDGET_SERVER_PORT=8000
-BUDGET_API_BASE_PATH=/api/v1
-BUDGET_API_EXPOSE_DOCS=true
+PIGGY_PULSE_SERVER_PORT=8000
+PIGGY_PULSE_API_BASE_PATH=/api/v1
+PIGGY_PULSE_API_EXPOSE_DOCS=true
 ```
 
 ### Cron Worker
@@ -92,11 +92,11 @@ CADDY_HTTPS_PORT=443
 
 ```env
 # Development: Allow all origins
-BUDGET_CORS_ALLOWED_ORIGINS=["*"]
+PIGGY_PULSE_CORS_ALLOWED_ORIGINS=["*"]
 
 # Production: Restrict to your domain
-# BUDGET_CORS_ALLOWED_ORIGINS=["https://yourdomain.com"]
-BUDGET_CORS_ALLOW_CREDENTIALS=false
+# PIGGY_PULSE_CORS_ALLOWED_ORIGINS=["https://yourdomain.com"]
+PIGGY_PULSE_CORS_ALLOW_CREDENTIALS=false
 ```
 
 ## Common Operations
@@ -108,7 +108,7 @@ BUDGET_CORS_ALLOW_CREDENTIALS=false
 docker compose logs -f
 
 # Specific service
-docker compose logs -f budget
+docker compose logs -f piggy-pulse
 docker compose logs -f caddy
 docker compose logs -f db
 ```
@@ -120,7 +120,7 @@ Database migrations are embedded in the API binary and run automatically during 
 If you need to run them manually from an operator workstation, use `sqlx-cli` against the target database:
 
 ```bash
-DATABASE_URL=postgres://postgres:<password>@<host>:5432/budget_db \
+DATABASE_URL=postgres://postgres:<password>@<host>:5432/piggy_pulse_db \
   sqlx migrate run --source migrations
 ```
 
@@ -137,14 +137,14 @@ Then open http://localhost:8080 and connect with:
 - **Server**: db
 - **Username**: postgres (or your POSTGRES_USER)
 - **Password**: (your POSTGRES_PASSWORD)
-- **Database**: budget_db (or your POSTGRES_DB)
+- **Database**: piggy_pulse_db (or your POSTGRES_DB)
 
 ### Rebuild Application
 
 After code changes:
 
 ```bash
-docker compose up -d --build budget
+docker compose up -d --build piggy-pulse
 ```
 
 ### Stop Services
@@ -178,17 +178,17 @@ docker compose down -v
 
 4. **Restrict CORS**
    ```env
-   BUDGET_CORS_ALLOWED_ORIGINS=["https://yourdomain.com"]
+   PIGGY_PULSE_CORS_ALLOWED_ORIGINS=["https://yourdomain.com"]
    ```
 
 5. **Disable API Documentation** (optional)
    ```env
-   BUDGET_API_EXPOSE_DOCS=false
+   PIGGY_PULSE_API_EXPOSE_DOCS=false
    ```
 
 6. **Enable JSON Logging**
    ```env
-   BUDGET_LOGGING_JSON_FORMAT=true
+   PIGGY_PULSE_LOGGING_JSON_FORMAT=true
    ```
 
 ### HTTPS with Caddy
@@ -206,7 +206,7 @@ No additional configuration needed!
 Add resource limits in `docker-compose.yaml`:
 
 ```yaml
-budget:
+piggy-pulse:
   deploy:
     resources:
       limits:
@@ -219,9 +219,9 @@ budget:
 
 ## Troubleshooting
 
-### Budget API won't start
+### PiggyPulse API won't start
 
-1. Check logs: `docker compose logs budget`
+1. Check logs: `docker compose logs piggy-pulse`
 2. Verify DATABASE_URL is correct
 3. Ensure ROCKET_SECRET_KEY is set
 4. Check database is healthy: `docker compose ps db`
@@ -236,7 +236,7 @@ docker compose ps db
 docker compose logs db
 
 # Test database connection
-docker compose exec db psql -U postgres -d budget_db -c "SELECT 1;"
+docker compose exec db psql -U postgres -d piggy_pulse_db -c "SELECT 1;"
 ```
 
 ### Caddy not accessible
@@ -293,13 +293,13 @@ Expected response:
 ### Backup Database
 
 ```bash
-docker compose exec db pg_dump -U postgres budget_db > backup.sql
+docker compose exec db pg_dump -U postgres piggy_pulse_db > backup.sql
 ```
 
 ### Restore Database
 
 ```bash
-cat backup.sql | docker compose exec -T db psql -U postgres budget_db
+cat backup.sql | docker compose exec -T db psql -U postgres piggy_pulse_db
 ```
 
 ## Environment Variables Reference
@@ -307,12 +307,12 @@ cat backup.sql | docker compose exec -T db psql -U postgres budget_db
 See `.env` file for all available configuration options. Key categories:
 
 - **POSTGRES_***: PostgreSQL configuration
-- **BUDGET_DATABASE_***: Database connection pool settings
-- **BUDGET_SERVER_***: API server configuration
-- **BUDGET_API_***: API endpoint settings
-- **BUDGET_CORS_***: CORS policy
-- **BUDGET_RATE_LIMIT_***: Rate limiting settings
-- **BUDGET_LOGGING_***: Logging configuration
+- **PIGGY_PULSE_DATABASE_***: Database connection pool settings
+- **PIGGY_PULSE_SERVER_***: API server configuration
+- **PIGGY_PULSE_API_***: API endpoint settings
+- **PIGGY_PULSE_CORS_***: CORS policy
+- **PIGGY_PULSE_RATE_LIMIT_***: Rate limiting settings
+- **PIGGY_PULSE_LOGGING_***: Logging configuration
 - **ROCKET_SECRET_KEY**: Session encryption key (required)
 - **CADDY_***: Reverse proxy settings
 - **ADMINER_***: Database UI settings

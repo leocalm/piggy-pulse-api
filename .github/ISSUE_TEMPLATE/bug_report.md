@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a defect in Budget API behavior
+about: Report a defect in PiggyPulse API behavior
 title: "bug: "
 labels: bug
 assignees: ""

@@ -1,4 +1,4 @@
-use budget::{Config, generate_periods};
+use piggy_pulse::{Config, generate_periods};
 use tracing_subscriber::EnvFilter;
 
 fn print_usage(bin_name: &str) {
