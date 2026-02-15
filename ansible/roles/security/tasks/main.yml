@@ -1,0 +1,110 @@
+---
+- name: Install security packages
+  ansible.builtin.apt:
+    name:
+      - fail2ban
+      - nftables
+    state: present
+
+- name: Ensure docker group exists
+  ansible.builtin.group:
+    name: docker
+    state: present
+
+- name: Ensure deploy group exists
+  ansible.builtin.group:
+    name: "{{ security_deploy_group }}"
+    state: present
+
+- name: Ensure deploy user exists
+  ansible.builtin.user:
+    name: "{{ security_deploy_user }}"
+    group: "{{ security_deploy_group }}"
+    groups: sudo,docker
+    shell: /bin/bash
+    append: true
+    create_home: true
+
+- name: Ensure deploy .ssh directory exists
+  ansible.builtin.file:
+    path: "/home/{{ security_deploy_user }}/.ssh"
+    state: directory
+    owner: "{{ security_deploy_user }}"
+    group: "{{ security_deploy_group }}"
+    mode: "0700"
+
+- name: Configure deploy authorized_keys
+  become: false
+  ansible.builtin.copy:
+    dest: "/home/{{ security_deploy_user }}/.ssh/authorized_keys"
+    content: "{{ (security_deploy_ssh_public_keys | join('\n')) ~ '\n' }}"
+    owner: "{{ security_deploy_user }}"
+    group: "{{ security_deploy_group }}"
+    mode: "0600"
+
+- name: Allow passwordless sudo for deploy user
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/90-{{ security_deploy_user }}"
+    owner: root
+    group: root
+    mode: "0440"
+    content: "{{ security_deploy_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    validate: "visudo -cf %s"
+
+- name: Configure SSH daemon hardening
+  ansible.builtin.template:
+    src: sshd-hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/99-piggypulse-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart ssh
+
+- name: Configure fail2ban for SSH
+  ansible.builtin.template:
+    src: fail2ban-sshd.local.j2
+    dest: /etc/fail2ban/jail.d/sshd.local
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Configure nftables firewall policy
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nftables
+
+- name: Configure sysctl hardening
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-piggypulse-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      net.ipv4.tcp_syncookies = 1
+      net.ipv4.conf.all.accept_redirects = 0
+      net.ipv4.conf.default.accept_redirects = 0
+      net.ipv4.conf.all.send_redirects = 0
+      net.ipv4.conf.default.send_redirects = 0
+      net.ipv4.conf.all.accept_source_route = 0
+      net.ipv4.conf.default.accept_source_route = 0
+      net.ipv4.conf.all.log_martians = 1
+      net.ipv4.conf.default.log_martians = 1
+      net.ipv6.conf.all.accept_redirects = 0
+      net.ipv6.conf.default.accept_redirects = 0
+      net.ipv4.ip_forward = 1
+      net.ipv6.conf.all.forwarding = 1
+  notify: Apply sysctl
+
+- name: Ensure security services are enabled and running
+  ansible.builtin.service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - nftables
+    - fail2ban

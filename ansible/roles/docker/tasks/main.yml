@@ -1,0 +1,31 @@
+---
+- name: Install Docker engine
+  ansible.builtin.apt:
+    name:
+      - docker.io
+    state: present
+
+- name: Install Docker Compose v2 plugin package
+  ansible.builtin.apt:
+    name: docker-compose-v2
+    state: present
+  register: piggypulse_compose_v2_install
+  ignore_errors: true
+
+- name: Install docker-compose v1 fallback when v2 package is unavailable
+  ansible.builtin.apt:
+    name: docker-compose
+    state: present
+  when: piggypulse_compose_v2_install is failed
+
+- name: Ensure docker service is enabled and running
+  ansible.builtin.service:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Ensure deploy user is in docker group
+  ansible.builtin.user:
+    name: "{{ security_deploy_user }}"
+    groups: docker
+    append: true

@@ -4,14 +4,139 @@ type: docker
 name: default
 
 trigger:
-  branch:
-    - main
   event:
     - push
+    - pull_request
     - promote
     - rollback
 
 steps:
+  - name: format-check
+    image: rust:1.93
+    when:
+      event:
+        - push
+        - pull_request
+    commands:
+      - rustup component add rustfmt
+      - cargo fmt -- --check
+
+  - name: clippy
+    image: rust:1.93
+    volumes:
+      - name: cargo-registry
+        path: /usr/local/cargo/registry
+      - name: cargo-git
+        path: /usr/local/cargo/git
+      - name: sccache
+        path: /root/.cache/sccache
+      - name: target
+        path: /drone/src/target
+    environment:
+      CARGO_BUILD_JOBS: 1
+      CARGO_TARGET_DIR: /drone/src/target
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: /root/.cache/sccache
+      SCCACHE_CACHE_SIZE: 10G
+    when:
+      event:
+        - push
+        - pull_request
+    commands:
+      - apt-get update
+      - apt-get install -y --no-install-recommends sccache
+      - rustup component add clippy
+      # Run clippy in release mode so the artifacts can be reused by the release test step.
+      - cargo clippy --all-targets --no-deps --release -- -D warnings
+
+  - name: test
+    image: rust:1.93
+    volumes:
+      - name: cargo-registry
+        path: /usr/local/cargo/registry
+      - name: cargo-git
+        path: /usr/local/cargo/git
+      - name: sccache
+        path: /root/.cache/sccache
+      - name: target
+        path: /drone/src/target
+    environment:
+      CARGO_BUILD_JOBS: 1
+      CARGO_INCREMENTAL: 0
+      CARGO_TARGET_DIR: /drone/src/target
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: /root/.cache/sccache
+      SCCACHE_CACHE_SIZE: 10G
+      RUST_MIN_STACK: 8388608
+    when:
+      event:
+        - push
+        - pull_request
+    commands:
+      - apt-get update
+      - apt-get install -y --no-install-recommends sccache
+      - echo "Running tests in release mode (optimized for memory)..."
+      - cargo test --all --release -- --test-threads=1
+
+  - name: build-api
+    image: docker:27-cli
+    volumes:
+      - name: dockersock
+        path: /var/run/docker.sock
+    environment:
+      GHCR_USERNAME:
+        from_secret: ghcr_username
+      GHCR_TOKEN:
+        from_secret: ghcr_token
+    when:
+      branch:
+        - main
+      event:
+        - push
+        - promote
+        - rollback
+    commands:
+      - apk add --no-cache docker-buildx
+      - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+      - docker buildx create --use --name drone-builder || true
+      - docker buildx build
+        --cache-from type=registry,ref=ghcr.io/leocalm/piggypulse-api:buildcache
+        --cache-to type=registry,ref=ghcr.io/leocalm/piggypulse-api:buildcache,mode=max
+        --tag ghcr.io/leocalm/piggypulse-api:latest
+        --tag ghcr.io/leocalm/piggypulse-api:${DRONE_COMMIT_SHA:0:7}
+        --push
+        .
+
+  - name: build-cron
+    image: docker:27-cli
+    volumes:
+      - name: dockersock
+        path: /var/run/docker.sock
+    environment:
+      GHCR_USERNAME:
+        from_secret: ghcr_username
+      GHCR_TOKEN:
+        from_secret: ghcr_token
+    when:
+      branch:
+        - main
+      event:
+        - push
+        - promote
+        - rollback
+    commands:
+      - apk add --no-cache docker-buildx
+      - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+      - docker buildx create --use --name drone-builder || true
+      - docker buildx build
+        --cache-from type=registry,ref=ghcr.io/leocalm/piggypulse-cron:buildcache
+        --cache-to type=registry,ref=ghcr.io/leocalm/piggypulse-cron:buildcache,mode=max
+        --tag ghcr.io/leocalm/piggypulse-cron:latest
+        --tag ghcr.io/leocalm/piggypulse-cron:${DRONE_COMMIT_SHA:0:7}
+        --file Dockerfile.cron
+        --push
+        .
+
   - name: deploy
     image: docker:27-cli
     volumes:
@@ -36,9 +161,9 @@ steps:
       - apk add --no-cache docker-cli-compose
       - docker compose version
       - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-      - cd /app/budget
-      - docker compose pull budget cron
-      - docker compose up -d budget cron
+      - cd /app/piggy-pulse-api
+      - docker compose pull piggy-pulse-api cron
+      - docker compose up -d piggy-pulse-api cron
       - docker image prune -af
       - echo "✅ Deployed version ${DRONE_COMMIT_SHA:0:7}"
 
@@ -71,6 +196,18 @@ steps:
       - echo "Commit ${DRONE_COMMIT_SHA:0:7} was not deployed"
 
 volumes:
+  - name: cargo-registry
+    host:
+      path: /opt/drone-cache/cargo-registry
+  - name: cargo-git
+    host:
+      path: /opt/drone-cache/cargo-git
+  - name: sccache
+    host:
+      path: /opt/drone-cache/sccache
+  - name: target
+    host:
+      path: /opt/drone-cache/target
   - name: dockersock
     host:
       path: /var/run/docker.sock

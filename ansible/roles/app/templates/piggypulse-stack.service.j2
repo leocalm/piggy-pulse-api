@@ -1,0 +1,17 @@
+[Unit]
+Description=PiggyPulse production stack
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory={{ piggypulse_compose_dir }}
+ExecStartPre=-{{ piggypulse_compose_bin }}{% if piggypulse_compose_subcommand %} {{ piggypulse_compose_subcommand }}{% endif %} --env-file {{ piggypulse_env_path }} down --remove-orphans
+ExecStartPre={{ piggypulse_compose_bin }}{% if piggypulse_compose_subcommand %} {{ piggypulse_compose_subcommand }}{% endif %} --env-file {{ piggypulse_env_path }} pull
+ExecStart={{ piggypulse_compose_bin }}{% if piggypulse_compose_subcommand %} {{ piggypulse_compose_subcommand }}{% endif %} --env-file {{ piggypulse_env_path }} up -d --remove-orphans
+ExecStop={{ piggypulse_compose_bin }}{% if piggypulse_compose_subcommand %} {{ piggypulse_compose_subcommand }}{% endif %} --env-file {{ piggypulse_env_path }} down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

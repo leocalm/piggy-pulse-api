@@ -1,0 +1,46 @@
+hcloud_token = "replace-with-hcloud-token"
+
+# Optional if you export CLOUDFLARE_API_TOKEN in your shell.
+cloudflare_api_token = "replace-with-cloudflare-token"
+cloudflare_zone_id   = "replace-with-piggy-pulse-zone-id"
+manage_cloudflare_dns = true
+cloudflare_proxied    = false
+cloudflare_ttl        = 300
+create_ipv6_dns_record = true
+
+project_name = "piggy-pulse"
+environment  = "prod"
+api_domain   = "api.piggy-pulse.com"
+
+server_type = "cpx21"
+image       = "ubuntu-24.04"
+location    = "nbg1"
+
+# Use admin_cidr for first bootstrap, then switch to vpn_only after Ansible configures WireGuard.
+ssh_mode = "admin_cidr"
+
+# Optional: only used when ssh_mode=admin_cidr OR enable_breakglass_ssh=true.
+admin_ssh_allowed_cidrs = [
+  "203.0.113.10/32",
+]
+
+enable_breakglass_ssh = false
+
+ssh_public_keys = [
+  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEXAMPLEreplaceMe user@laptop",
+]
+
+enable_wireguard = true
+wireguard_port   = 51820
+
+# Restrict this if you can (for example, your static home IP).
+wireguard_source_cidrs = [
+  "0.0.0.0/0",
+  "::/0",
+]
+
+# WireGuard interface/peer configuration is managed in ansible/inventories/production/group_vars/all/all.yml.
+
+labels = {
+  owner = "leonardo"
+}

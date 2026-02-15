@@ -5,18 +5,18 @@ services:
     security_opt:
       - no-new-privileges:true
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-budget_db}
+      POSTGRES_DB: ${POSTGRES_DB:-piggy-pulse_db}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-budget_db}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-piggy-pulse_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - budget_internal
+      - piggy-pulse_internal
 
   redis:
     image: redis:7-alpine
@@ -45,11 +45,11 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - budget_internal
+      - piggy-pulse_internal
 
-  budget:
-    image: ${BUDGET_API_IMAGE:?BUDGET_API_IMAGE is required}
-    platform: ${BUDGET_IMAGE_PLATFORM:-linux/amd64}
+  piggy-pulse:
+    image: ${PIGGY_PULSE_API_IMAGE:?PIGGY_PULSE_API_IMAGE is required}
+    platform: ${PIGGY_PULSE_IMAGE_PLATFORM:-linux/amd64}
     restart: unless-stopped
     depends_on:
       db:
@@ -64,43 +64,43 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENC:?POSTGRES_PASSWORD_URLENC is required}@db:5432/${POSTGRES_DB:-budget_db}
-      BUDGET_DATABASE__URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENC:?POSTGRES_PASSWORD_URLENC is required}@db:5432/${POSTGRES_DB:-budget_db}
-      BUDGET_DATABASE__MAX_CONNECTIONS: ${BUDGET_DATABASE_MAX_CONNECTIONS:-16}
-      BUDGET_DATABASE__MIN_CONNECTIONS: ${BUDGET_DATABASE_MIN_CONNECTIONS:-4}
-      BUDGET_DATABASE__CONNECTION_TIMEOUT: ${BUDGET_DATABASE_CONNECTION_TIMEOUT:-5}
-      BUDGET_DATABASE__ACQUIRE_TIMEOUT: ${BUDGET_DATABASE_ACQUIRE_TIMEOUT:-5}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENC:?POSTGRES_PASSWORD_URLENC is required}@db:5432/${POSTGRES_DB:-piggy-pulse_db}
+      PIGGY_PULSE_DATABASE__URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENC:?POSTGRES_PASSWORD_URLENC is required}@db:5432/${POSTGRES_DB:-piggy-pulse_db}
+      PIGGY_PULSE_DATABASE__MAX_CONNECTIONS: ${PIGGY_PULSE_DATABASE_MAX_CONNECTIONS:-16}
+      PIGGY_PULSE_DATABASE__MIN_CONNECTIONS: ${PIGGY_PULSE_DATABASE_MIN_CONNECTIONS:-4}
+      PIGGY_PULSE_DATABASE__CONNECTION_TIMEOUT: ${PIGGY_PULSE_DATABASE_CONNECTION_TIMEOUT:-5}
+      PIGGY_PULSE_DATABASE__ACQUIRE_TIMEOUT: ${PIGGY_PULSE_DATABASE_ACQUIRE_TIMEOUT:-5}
 
-      BUDGET_SERVER__PORT: 8000
-      BUDGET_SERVER__ADDRESS: 0.0.0.0
+      PIGGY_PULSE_SERVER__PORT: 8000
+      PIGGY_PULSE_SERVER__ADDRESS: 0.0.0.0
       ROCKET_PORT: 8000
       ROCKET_ADDRESS: 0.0.0.0
       ROCKET_SECRET_KEY: ${ROCKET_SECRET_KEY:?ROCKET_SECRET_KEY is required}
 
-      BUDGET_API__BASE_PATH: /api/v1
-      BUDGET_API__EXPOSE_DOCS: ${BUDGET_API_EXPOSE_DOCS:-false}
+      PIGGY_PULSE_API__BASE_PATH: /api/v1
+      PIGGY_PULSE_API__EXPOSE_DOCS: ${PIGGY_PULSE_API_EXPOSE_DOCS:-false}
 
-      BUDGET_CORS__ALLOWED_ORIGINS: "${BUDGET_CORS_ALLOWED_ORIGINS:?BUDGET_CORS_ALLOWED_ORIGINS is required}"
-      BUDGET_CORS__ALLOW_CREDENTIALS: ${BUDGET_CORS_ALLOW_CREDENTIALS:-true}
+      PIGGY_PULSE_CORS__ALLOWED_ORIGINS: "${PIGGY_PULSE_CORS_ALLOWED_ORIGINS:?PIGGY_PULSE_CORS_ALLOWED_ORIGINS is required}"
+      PIGGY_PULSE_CORS__ALLOW_CREDENTIALS: ${PIGGY_PULSE_CORS_ALLOW_CREDENTIALS:-true}
 
-      BUDGET_RATE_LIMIT__USE_FORWARDED_IP: "true"
-      BUDGET_RATE_LIMIT__FORWARDED_IP_HEADER: x-forwarded-for
-      BUDGET_RATE_LIMIT__BACKEND: redis
-      BUDGET_RATE_LIMIT__REDIS_URL: "redis://:${REDIS_PASSWORD_URLENC:?REDIS_PASSWORD_URLENC is required}@redis:6379/0"
-      BUDGET_RATE_LIMIT__REDIS_KEY_PREFIX: "budget:rate_limit:"
+      PIGGY_PULSE_RATE_LIMIT__USE_FORWARDED_IP: "true"
+      PIGGY_PULSE_RATE_LIMIT__FORWARDED_IP_HEADER: x-forwarded-for
+      PIGGY_PULSE_RATE_LIMIT__BACKEND: redis
+      PIGGY_PULSE_RATE_LIMIT__REDIS_URL: "redis://:${REDIS_PASSWORD_URLENC:?REDIS_PASSWORD_URLENC is required}@redis:6379/0"
+      PIGGY_PULSE_RATE_LIMIT__REDIS_KEY_PREFIX: "piggy-pulse:rate_limit:"
 
-      BUDGET_LOGGING__LEVEL: ${BUDGET_LOGGING_LEVEL:-info}
-      BUDGET_LOGGING__JSON_FORMAT: ${BUDGET_LOGGING_JSON_FORMAT:-true}
+      PIGGY_PULSE_LOGGING__LEVEL: ${PIGGY_PULSE_LOGGING_LEVEL:-info}
+      PIGGY_PULSE_LOGGING__JSON_FORMAT: ${PIGGY_PULSE_LOGGING_JSON_FORMAT:-true}
 
-      BUDGET_EMAIL__ENABLED: ${BUDGET_EMAIL_ENABLED:-true}
-      BUDGET_EMAIL__SMTP_HOST: ${BUDGET_EMAIL_SMTP_HOST:?BUDGET_EMAIL_SMTP_HOST is required}
-      BUDGET_EMAIL__SMTP_PORT: ${BUDGET_EMAIL_SMTP_PORT:-587}
-      BUDGET_EMAIL__SMTP_USERNAME: ${BUDGET_EMAIL_SMTP_USERNAME:?BUDGET_EMAIL_SMTP_USERNAME is required}
-      BUDGET_EMAIL__SMTP_PASSWORD: ${BUDGET_EMAIL_SMTP_PASSWORD:?BUDGET_EMAIL_SMTP_PASSWORD is required}
-      BUDGET_EMAIL__FROM_ADDRESS: ${BUDGET_EMAIL_FROM_ADDRESS:-noreply@piggy-pulse.com}
-      BUDGET_EMAIL__FROM_NAME: ${BUDGET_EMAIL_FROM_NAME:-PiggyPulse}
+      PIGGY_PULSE_EMAIL__ENABLED: ${PIGGY_PULSE_EMAIL_ENABLED:-true}
+      PIGGY_PULSE_EMAIL__SMTP_HOST: ${PIGGY_PULSE_EMAIL_SMTP_HOST:?PIGGY_PULSE_EMAIL_SMTP_HOST is required}
+      PIGGY_PULSE_EMAIL__SMTP_PORT: ${PIGGY_PULSE_EMAIL_SMTP_PORT:-587}
+      PIGGY_PULSE_EMAIL__SMTP_USERNAME: ${PIGGY_PULSE_EMAIL_SMTP_USERNAME:?PIGGY_PULSE_EMAIL_SMTP_USERNAME is required}
+      PIGGY_PULSE_EMAIL__SMTP_PASSWORD: ${PIGGY_PULSE_EMAIL_SMTP_PASSWORD:?PIGGY_PULSE_EMAIL_SMTP_PASSWORD is required}
+      PIGGY_PULSE_EMAIL__FROM_ADDRESS: ${PIGGY_PULSE_EMAIL_FROM_ADDRESS:-noreply@piggy-pulse.com}
+      PIGGY_PULSE_EMAIL__FROM_NAME: ${PIGGY_PULSE_EMAIL_FROM_NAME:-PiggyPulse}
 
-      BUDGET_PASSWORD_RESET__FRONTEND_RESET_URL: ${BUDGET_PASSWORD_RESET_FRONTEND_RESET_URL:?BUDGET_PASSWORD_RESET_FRONTEND_RESET_URL is required}
+      PIGGY_PULSE_PASSWORD_RESET__FRONTEND_RESET_URL: ${PIGGY_PULSE_PASSWORD_RESET_FRONTEND_RESET_URL:?PIGGY_PULSE_PASSWORD_RESET_FRONTEND_RESET_URL is required}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/v1/health || exit 1"]
       interval: 30s
@@ -108,14 +108,14 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - budget_internal
+      - piggy-pulse_internal
 
   cron:
-    image: ${BUDGET_CRON_IMAGE:?BUDGET_CRON_IMAGE is required}
-    platform: ${BUDGET_IMAGE_PLATFORM:-linux/amd64}
+    image: ${PIGGY_PULSE_CRON_IMAGE:?PIGGY_PULSE_CRON_IMAGE is required}
+    platform: ${PIGGY_PULSE_IMAGE_PLATFORM:-linux/amd64}
     restart: unless-stopped
     depends_on:
-      budget:
+      piggy-pulse:
         condition: service_healthy
     security_opt:
       - no-new-privileges:true
@@ -126,21 +126,21 @@ services:
       - /tmp:rw,noexec,nosuid,size=32m
     environment:
       CRON_SCHEDULE: ${CRON_SCHEDULE:-*/15 * * * *}
-      BUDGET_DATABASE__URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENC:?POSTGRES_PASSWORD_URLENC is required}@db:5432/${POSTGRES_DB:-budget_db}
-      BUDGET_DATABASE__MAX_CONNECTIONS: ${BUDGET_DATABASE_MAX_CONNECTIONS:-8}
-      BUDGET_DATABASE__MIN_CONNECTIONS: ${BUDGET_DATABASE_MIN_CONNECTIONS:-2}
-      BUDGET_DATABASE__CONNECTION_TIMEOUT: ${BUDGET_DATABASE_CONNECTION_TIMEOUT:-5}
-      BUDGET_DATABASE__ACQUIRE_TIMEOUT: ${BUDGET_DATABASE_ACQUIRE_TIMEOUT:-5}
-      BUDGET_LOGGING__LEVEL: ${BUDGET_LOGGING_LEVEL:-info}
-      BUDGET_LOGGING__JSON_FORMAT: ${BUDGET_LOGGING_JSON_FORMAT:-true}
+      PIGGY_PULSE_DATABASE__URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENC:?POSTGRES_PASSWORD_URLENC is required}@db:5432/${POSTGRES_DB:-piggy-pulse_db}
+      PIGGY_PULSE_DATABASE__MAX_CONNECTIONS: ${PIGGY_PULSE_DATABASE_MAX_CONNECTIONS:-8}
+      PIGGY_PULSE_DATABASE__MIN_CONNECTIONS: ${PIGGY_PULSE_DATABASE_MIN_CONNECTIONS:-2}
+      PIGGY_PULSE_DATABASE__CONNECTION_TIMEOUT: ${PIGGY_PULSE_DATABASE_CONNECTION_TIMEOUT:-5}
+      PIGGY_PULSE_DATABASE__ACQUIRE_TIMEOUT: ${PIGGY_PULSE_DATABASE_ACQUIRE_TIMEOUT:-5}
+      PIGGY_PULSE_LOGGING__LEVEL: ${PIGGY_PULSE_LOGGING_LEVEL:-info}
+      PIGGY_PULSE_LOGGING__JSON_FORMAT: ${PIGGY_PULSE_LOGGING_JSON_FORMAT:-true}
     networks:
-      - budget_internal
+      - piggy-pulse_internal
 
   caddy:
     image: caddy:2.8-alpine
     restart: unless-stopped
     depends_on:
-      budget:
+      piggy-pulse:
         condition: service_healthy
     security_opt:
       - no-new-privileges:true
@@ -156,10 +156,10 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     networks:
-      - budget_internal
+      - piggy-pulse_internal
 
 networks:
-  budget_internal:
+  piggy-pulse_internal:
     driver: bridge
 
 volumes:

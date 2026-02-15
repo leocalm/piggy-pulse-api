@@ -5,4 +5,4 @@ echo "Starting Budget API..."
 
 # Start the application
 echo "Starting Budget API server..."
-exec /app/budget "$@"
+exec /app/piggy-pulse-api "$@"

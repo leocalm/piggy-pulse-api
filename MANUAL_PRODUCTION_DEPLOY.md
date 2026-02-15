@@ -113,7 +113,7 @@ Update `inventories/production/group_vars/all/all.yml`:
 
 - `piggypulse_api_image`
 - `piggypulse_cron_image`
-- `piggypulse_budget_image_platform` (keep `linux/amd64` for Hetzner x86_64)
+- `piggypulse_piggy-pulse_image_platform` (keep `linux/amd64` for Hetzner x86_64)
 
 Use immutable digest refs (`ghcr.io/...@sha256:...`).
 
@@ -145,7 +145,7 @@ On server:
 
 ```bash
 sudo systemctl status piggypulse-stack.service --no-pager
-sudo docker compose -f /opt/piggypulse/budget/deploy/production/docker-compose.yml --env-file /opt/piggypulse/budget/deploy/production/.env ps
+sudo docker compose -f /opt/piggypulse/piggy-pulse/deploy/production/docker-compose.yml --env-file /opt/piggypulse/piggy-pulse/deploy/production/.env ps
 ss -lntup
 ```
 
@@ -193,7 +193,7 @@ ansible-playbook site.yml --ask-vault-pass
 ## 10. Post-Deployment Checks
 
 - Cloudflare SSL/TLS mode: `Full (strict)`
-- `BUDGET_API_EXPOSE_DOCS=false`
+- `PIGGY_PULSE_API_EXPOSE_DOCS=false`
 - CORS only `https://piggy-pulse.com`
 - Scheduled DB backups tested with restore
 - Monitoring/alerts active for 5xx/auth failures/disk pressure

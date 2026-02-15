@@ -1,0 +1,70 @@
+---
+# General
+server_timezone: UTC
+
+# Security role
+security_deploy_user: deploy
+security_deploy_group: deploy
+security_deploy_ssh_public_keys:
+  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB0Nm4VeWCU4xblN2h0aneK6sWv2CsFA7e/SU6y1qAWU leonardo.almeida@Leonardos-Mac-mini.local"
+
+security_ssh_mode: vpn_only # admin_cidr or vpn_only
+security_enable_breakglass_ssh: false
+security_admin_ssh_allowed_cidrs:
+  - "143.179.194.121/32"
+
+security_enable_wireguard: true
+security_wireguard_interface: wg0
+security_wireguard_port: 51820
+security_https_port: 443
+
+security_fail2ban_maxretry: 5
+security_fail2ban_findtime: 10m
+security_fail2ban_bantime: 1h
+
+# WireGuard role
+wireguard_enabled: true
+wireguard_interface: wg0
+wireguard_server_address: 10.66.0.1/24
+wireguard_listen_port: 51820
+wireguard_peers:
+  - name: leonardo-laptop
+    public_key: jLpIpMnGREldi8LXkS49kZAELUXgmRZ71CevANUz7VM=
+    allowed_ip: 10.66.0.2/32
+
+# App role
+piggypulse_project_root: /opt/piggypulse
+piggypulse_deploy_mode: image_only # repo or image_only
+piggypulse_local_assets_dir: "{{ playbook_dir }}/../deploy/production"
+piggypulse_repo_url: https://github.com/leocalm/piggy-pulse.git
+piggypulse_repo_version: main
+piggypulse_repo_update: true
+piggypulse_repo_requires_auth: false
+piggypulse_ghcr_requires_auth: true
+piggypulse_repo_dest: /opt/piggypulse/piggy-pulse-api
+piggypulse_compose_dir: /opt/piggypulse/stack/production
+piggypulse_env_path: /opt/piggypulse/stack/production/.env
+piggypulse_systemd_unit: piggypulse-stack.service
+piggypulse_api_image: ghcr.io/leocalm/piggy-pulse-api
+piggypulse_cron_image: ghcr.io/leocalm/piggy-pulse-cron
+piggypulse_budget_image_platform: linux/amd64
+
+piggypulse_api_domain: api.piggy-pulse.com
+piggypulse_frontend_origin: https://piggy-pulse.com
+piggypulse_caddy_log_level: INFO
+piggypulse_cron_schedule: "*/15 * * * *"
+piggypulse_db_name: piggy_pulse_db
+piggypulse_db_user: postgres
+piggypulse_db_max_connections: 16
+piggypulse_db_min_connections: 4
+piggypulse_db_connection_timeout: 5
+piggypulse_db_acquire_timeout: 5
+piggypulse_api_expose_docs: false
+piggypulse_cors_allow_credentials: true
+piggypulse_logging_level: info
+piggypulse_logging_json_format: true
+piggypulse_email_enabled: true
+piggypulse_email_smtp_port: 587
+piggypulse_email_from_address: noreply@piggy-pulse.com
+piggypulse_email_from_name: PiggyPulse
+piggypulse_password_reset_frontend_url: https://piggy-pulse.com/reset-password

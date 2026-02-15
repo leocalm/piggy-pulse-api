@@ -102,7 +102,7 @@ After enabling 2FA, you'll be prompted for a 6-digit code when logging in:
 
 ### Backend Configuration
 
-Add the following to your `Budget.toml`:
+Add the following to your `PiggyPulse.toml`:
 
 ```toml
 [two_factor]
@@ -119,13 +119,13 @@ You can override configuration using environment variables:
 
 ```bash
 # Encryption key for TOTP secrets
-export BUDGET_TWO_FACTOR__ENCRYPTION_KEY="your-64-char-hex-key-here"
+export PIGGY_PULSE_TWO_FACTOR__ENCRYPTION_KEY="your-64-char-hex-key-here"
 
 # Issuer name shown in authenticator apps
-export BUDGET_TWO_FACTOR__ISSUER_NAME="PiggyPulse"
+export PIGGY_PULSE_TWO_FACTOR__ISSUER_NAME="PiggyPulse"
 
 # Frontend URL for emergency disable confirmation
-export BUDGET_TWO_FACTOR__FRONTEND_EMERGENCY_DISABLE_URL="https://yourdomain.com/auth/emergency-2fa-disable"
+export PIGGY_PULSE_TWO_FACTOR__FRONTEND_EMERGENCY_DISABLE_URL="https://yourdomain.com/auth/emergency-2fa-disable"
 ```
 
 ### Generating a Secure Encryption Key
@@ -142,7 +142,7 @@ openssl rand -hex 32
 
 ### Email Configuration
 
-2FA emergency disable requires email to be configured. Add to `Budget.toml`:
+2FA emergency disable requires email to be configured. Add to `PiggyPulse.toml`:
 
 ```toml
 [email]
@@ -510,7 +510,7 @@ curl http://localhost:8000/api/v1/two-factor/status \
 
 **Issue**: Emergency disable email not received
 - **Cause**: Email service not configured or disabled
-- **Solution**: Check email configuration in `Budget.toml`
+- **Solution**: Check email configuration in `PiggyPulse.toml`
 - **Solution**: Verify `email.enabled = true`
 - **Solution**: Check spam/junk folder
 
@@ -551,7 +551,7 @@ If you're adding 2FA to an existing PiggyPulse installation:
 
 2. **Update Configuration**
    - Generate encryption key: `openssl rand -hex 32`
-   - Add `[two_factor]` section to `Budget.toml`
+   - Add `[two_factor]` section to `PiggyPulse.toml`
    - Configure email settings if not already done
 
 3. **Test on Staging**

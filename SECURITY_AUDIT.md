@@ -1,4 +1,4 @@
-# Security Audit Report — Budget API
+# Security Audit Report — PiggyPulse API
 
 **Date:** 2026-02-06
 **Scope:** Full codebase review for cloud deployment readiness (Hetzner)
@@ -50,7 +50,7 @@ The login handler returns `200 OK` regardless of whether the email exists. This 
 
 ### C3. No Rocket Secret Key Configuration
 
-**Files:** `Rocket.toml`, `Budget.toml.example`, `src/config.rs`
+**Files:** `Rocket.toml`, `PiggyPulse.toml.example`, `src/config.rs`
 
 Rocket's private cookies (used for authentication) are encrypted using a `secret_key` configured in `Rocket.toml`. The current `Rocket.toml` only sets `cli_colors = false` — no secret key. In debug mode, Rocket generates a volatile random key (changes every restart, invalidating all sessions). In **release mode, Rocket refuses to start without a secret key**, or historically has used an insecure default.
 
@@ -146,7 +146,7 @@ Minimum password length is 8 characters with no complexity requirements. No chec
 
 **File:** `migrations/0001_init/up.sql`
 
-`account.name`, `category.name`, `vendor.name`, `budget_period.name` are globally UNIQUE — not scoped to `(user_id, name)`. This means:
+`account.name`, `category.name`, `vendor.name`, `piggy-pulse_period.name` are globally UNIQUE — not scoped to `(user_id, name)`. This means:
 - User A creates account "Main Checking"
 - User B tries to create "Main Checking" → gets a database constraint error
 
@@ -192,7 +192,7 @@ The migration uses `INTEGER` for `transaction.amount` but `BIGINT` for `account.
 
 ### L5. No Audit Trail for Financial Operations
 
-For a budgeting app handling financial data, there is no audit log of who changed what and when. The `created_at` field exists but there's no `updated_at`, no change history, and no immutable transaction log.
+For a piggy-pulseing app handling financial data, there is no audit log of who changed what and when. The `created_at` field exists but there's no `updated_at`, no change history, and no immutable transaction log.
 
 ---
 
@@ -235,7 +235,7 @@ For a budgeting app handling financial data, there is no audit log of who change
 
 10. **Database:** Use Hetzner's managed PostgreSQL or at minimum set strong credentials, enable SSL connections, and restrict `pg_hba.conf` to your server's IP.
 
-11. **Secrets Management:** Use environment variables (not files in the repo) for `BUDGET_DATABASE__URL` and `ROCKET_SECRET_KEY`. Consider Hetzner's cloud-init or a secrets manager.
+11. **Secrets Management:** Use environment variables (not files in the repo) for `PIGGY_PULSE_DATABASE__URL` and `ROCKET_SECRET_KEY`. Consider Hetzner's cloud-init or a secrets manager.
 
 12. **Backups:** Configure automated PostgreSQL backups. This is financial data.
 
@@ -243,7 +243,7 @@ For a budgeting app handling financial data, there is no audit log of who change
 
 ### Fix M4 (Global Unique Constraints)
 
-Migrate the UNIQUE constraints on `account.name`, `category.name`, `vendor.name`, and `budget_period.name` to be composite unique on `(user_id, name)` instead of just `(name)`. This is a data model bug that will cause issues at scale even without the security implications.
+Migrate the UNIQUE constraints on `account.name`, `category.name`, `vendor.name`, and `piggy-pulse_period.name` to be composite unique on `(user_id, name)` instead of just `(name)`. This is a data model bug that will cause issues at scale even without the security implications.
 
 ---
 

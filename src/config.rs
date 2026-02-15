@@ -1,6 +1,7 @@
+use figment::providers::Env;
 use rocket::figment::{
     Figment,
-    providers::{Env, Format, Toml},
+    providers::{Format, Toml},
 };
 use serde::{Deserialize, Serialize};
 
@@ -22,7 +23,7 @@ pub const INSECURE_DEFAULT_TWO_FACTOR_ENCRYPTION_KEY: &str = "000000000000000000
 fn default_encryption_key() -> String {
     // WARNING: This is a placeholder key for development only
     // Generate a secure key with: openssl rand -hex 32
-    // Set BUDGET_TWO_FACTOR__ENCRYPTION_KEY environment variable in production
+    // Set PIGGY_PULSE_TWO_FACTOR__ENCRYPTION_KEY environment variable in production
     INSECURE_DEFAULT_TWO_FACTOR_ENCRYPTION_KEY.to_string()
 }
 
@@ -192,7 +193,7 @@ impl Default for RateLimitConfig {
             forwarded_ip_header: "x-forwarded-for".to_string(),
             backend: RateLimitBackend::InMemory,
             redis_url: "redis://127.0.0.1:6379/0".to_string(),
-            redis_key_prefix: "budget:rate_limit:".to_string(),
+            redis_key_prefix: "piggy_pulse:rate_limit:".to_string(),
         }
     }
 }
@@ -245,26 +246,17 @@ impl Config {
     /// Load configuration from multiple sources in priority order:
     /// 1. Budget.toml (base configuration file)
     /// 2. Environment variables (prefixed with BUDGET_)
-    /// 3. DATABASE_URL environment variable (fallback/backwards-compat)
     pub fn load() -> Result<Self, Box<figment::Error>> {
-        let mut cfg: Self = Figment::new()
-            // Start with defaults.
+        let figment = Figment::new()
+            // Start with defaults
             .merge(Toml::string(&toml::to_string(&Config::default()).unwrap()))
-            // Layer on Budget.toml if it exists.
-            .merge(Toml::file("Budget.toml"))
-            // Layer on environment variables (e.g., BUDGET_DATABASE__URL).
-            .merge(Env::prefixed("BUDGET_").split("__"))
+            // Layer on PiggyPulse.toml if it exists
+            .merge(Toml::file("PiggyPulse.toml"))
+            // Layer on environment variables (e.g., PIGGY_PULSE_DATABASE_URL)
+            .merge(Env::prefixed("PIGGY_PULSE_").split("__"))
             .extract()?;
 
-        // Backwards-compat: DATABASE_URL overrides the default/TOML value, but not an explicitly
-        // set BUDGET_DATABASE__URL.
-        if std::env::var_os("BUDGET_DATABASE__URL").is_none()
-            && let Ok(url) = std::env::var("DATABASE_URL")
-        {
-            cfg.database.url = url;
-        }
-
-        Ok(cfg)
+        Ok(figment)
     }
 }
 

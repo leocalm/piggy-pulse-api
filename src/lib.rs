@@ -31,9 +31,9 @@ fn init_tracing(log_level: &str, json_format: bool) {
     // RUST_LOG environment variable can be used for fine-grained control per module:
     // Examples:
     //   RUST_LOG=debug                    - Set all to debug
-    //   RUST_LOG=budget=debug             - Set budget crate to debug
-    //   RUST_LOG=budget::routes=trace     - Set specific module to trace
-    //   RUST_LOG=info,budget::routes=debug - Global info, routes at debug
+    //   RUST_LOG=piggy_pulse_api=debug             - Set piggy-pulse-api crate to debug
+    //   RUST_LOG=piggy_pulse_api::routes=trace     - Set specific module to trace
+    //   RUST_LOG=info,piggy_pulse_api::routes=debug - Global info, routes at debug
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
 
     let subscriber = tracing_subscriber::fmt().with_env_filter(filter).with_target(true).with_line_number(true);
@@ -231,7 +231,6 @@ fn mount_api_routes(mut rocket: Rocket<Build>, base_path: &str) -> Rocket<Build>
 }
 
 pub fn build_rocket(config: Config) -> Rocket<Build> {
-    dotenvy::dotenv().ok();
     init_tracing(&config.logging.level, config.logging.json_format);
     ensure_rocket_secret_key();
     ensure_two_factor_encryption_key(&config.two_factor);

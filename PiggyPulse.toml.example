@@ -1,8 +1,8 @@
-# Budget API Configuration (Example)
+# PiggyPulse API Configuration (Example)
 #
-# Copy this file to Budget.toml for local development.
+# Copy this file to PiggyPulse.toml for local development.
 # Environment variables take precedence over this file.
-# Use BUDGET_ prefix for env vars (e.g., BUDGET_DATABASE__URL)
+# Use PIGGY_PULSE_ prefix for env vars (e.g., PIGGY_PULSE_DATABASE__URL)
 
 [database]
 url = "postgres://user:password@localhost:5432/budget_db"
@@ -39,7 +39,7 @@ use_forwarded_ip = false
 forwarded_ip_header = "x-forwarded-for"
 backend = "in_memory"
 redis_url = "redis://127.0.0.1:6379/0"
-redis_key_prefix = "budget:rate_limit:"
+redis_key_prefix = "piggy_pulse:rate_limit:"
 
 [session]
 ttl_seconds = 2592000

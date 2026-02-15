@@ -4,11 +4,11 @@ This file provides guidance to AI coding agents when working with code in this r
 
 ## Project Overview
 
-**Project Name:** Budget API
-**Description:** A high-performance Rust backend for a personal budgeting tool.
+**Project Name:** PiggyPulse API
+**Description:** A high-performance Rust backend for a personal piggy-pulse-apiing tool.
 **Date:** February 13, 2026
 
-The application provides a RESTful API for managing personal finances, including budgets, transactions, accounts, categories, and vendors.
+The application provides a RESTful API for managing personal finances, including piggy-pulse-apis, transactions, accounts, categories, and vendors.
 
 ### Tech Stack
 
@@ -54,23 +54,23 @@ The application provides a RESTful API for managing personal finances, including
 
 Configuration is loaded via `figment` in priority order (highest wins):
 
-1. Environment variables prefixed with `BUDGET_` — use `__` to separate nested keys (e.g. `BUDGET_DATABASE__URL`)
-2. `Budget.toml` in the project root
+1. Environment variables prefixed with `PIGGY_PULSE_` — use `__` to separate nested keys (e.g. `PIGGY_PULSE_DATABASE__URL`)
+2. `PiggyPulse.toml` in the project root
 3. Compiled-in defaults
 
 ### Setup
 
 1.  **Environment Variables:**
-    *   `DATABASE_URL`: `postgres://user:password@localhost:5432/budget_db`
+    *   `DATABASE_URL`: `postgres://user:password@localhost:5432/piggy-pulse-api_db`
     *   `ROCKET_SECRET_KEY`: Required for non-debug profiles. Generate with `openssl rand -base64 32`.
 2.  **Config File:**
-    *   Copy `Budget.toml.example` to `Budget.toml` for local overrides.
+    *   Copy `PiggyPulse.toml.example` to `PiggyPulse.toml` for local overrides.
 
 ### Key Config Sections
 
 | Section | Key | Default |
 |---|---|---|
-| `[database]` | `url` | `postgres://localhost/budget_db` |
+| `[database]` | `url` | `postgres://localhost/piggy-pulse-api_db` |
 | | `max_connections` | 16 |
 | | `min_connections` | 4 |
 | `[server]` | `port` | 8000 |
@@ -110,7 +110,7 @@ sqlx migrate add <description>   # create new migration
     *   Base path: `/api/v1`.
     *   Follows semantic versioning. Breaking changes trigger a new major version (v2).
 *   **Documentation:**
-    *   OpenAPI docs are disabled by default. Enable via `api.expose_docs = true` (or `BUDGET_API__EXPOSE_DOCS=true`).
+    *   OpenAPI docs are disabled by default. Enable via `api.expose_docs = true` (or `PIGGY_PULSE_API__EXPOSE_DOCS=true`).
     *   Docs URL: `/api/v1/docs` (Swagger UI).
     *   Spec URL: `/api/v1/openapi.json`.
 
@@ -147,39 +147,12 @@ Always run the full PR check suite locally before pushing:
 *   `cargo test --verbose`
 *   `cargo audit`
 
-### Conventional Commits (Required)
-
-This repo enforces **Conventional Commits** for:
-
-* PR titles
-* Commit subjects in the PR (merge commits are ignored)
-
-Format:
-
-* `type(scope)!: description`
-* `type: description`
-
-Allowed `type` values:
-
-* `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`
-
-Examples:
-
-* `feat(api): add cursor pagination`
-* `fix(auth)!: reject invalid session cookie`
-* `docs: document local dev setup`
-
-If CI fails on commit messages, rewrite history (for a branch PR):
-
-* Reword commits: `git rebase -i origin/main` then change `pick` to `reword`
-* Or squash to a single Conventional Commit
-
 ### VPS Facts (Production)
 
 *   **OS:** Ubuntu 24.04 LTS.
 *   **Docker:** rootful Docker daemon via `/var/run/docker.sock`.
 *   **Deploy User:** `deploy` (key-only SSH, member of `docker` group).
-*   **Location:** `/opt/piggypulse/budget`.
+*   **Location:** `/opt/piggypulse/piggy-pulse-api`.
 
 ### Key Implementation Patterns
 

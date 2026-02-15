@@ -1,0 +1,9 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart piggypulse stack
+  ansible.builtin.systemd:
+    name: "{{ piggypulse_systemd_unit }}"
+    state: restarted
