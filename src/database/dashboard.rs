@@ -1,6 +1,8 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
-use crate::models::dashboard::{BudgetPerDayResponse, MonthProgressResponse, MonthlyBurnInResponse, SpentPerCategoryResponse, TotalAssetsResponse};
+use crate::models::dashboard::{
+    BudgetPerDayResponse, MonthProgressResponse, MonthlyBurnInResponse, NetPositionResponse, SpentPerCategoryResponse, TotalAssetsResponse,
+};
 
 use chrono::NaiveDate;
 use uuid::Uuid;
@@ -281,6 +283,115 @@ GROUP BY aib.balance_total
 
         Ok(TotalAssetsResponse {
             total_assets: row.total_assets,
+        })
+    }
+
+    pub async fn get_net_position(&self, budget_period_id: &Uuid, user_id: &Uuid) -> Result<NetPositionResponse, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct NetPositionRow {
+            total_net_position: i64,
+            change_this_period: i64,
+            liquid_balance: i64,
+            protected_balance: i64,
+            debt_balance: i64,
+            account_count: i64,
+        }
+
+        self.get_budget_period(budget_period_id, user_id).await?;
+
+        let row = sqlx::query_as::<_, NetPositionRow>(
+            r#"
+WITH account_balances AS (
+    SELECT
+        a.id,
+        a.account_type::text AS account_type,
+        (
+            a.balance + COALESCE(
+                SUM(
+                    CASE
+                        WHEN c.category_type = 'Incoming' THEN t.amount
+                        WHEN c.category_type = 'Outgoing' THEN -t.amount
+                        WHEN c.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount
+                        WHEN c.category_type = 'Transfer' AND t.to_account_id = a.id THEN t.amount
+                        ELSE 0
+                    END
+                ),
+                0
+            )
+        )::bigint AS current_balance
+    FROM account a
+    LEFT JOIN transaction t
+        ON (t.from_account_id = a.id OR t.to_account_id = a.id)
+        AND t.user_id = $1
+    LEFT JOIN category c ON c.id = t.category_id
+    WHERE a.user_id = $1
+    GROUP BY a.id, a.account_type, a.balance
+),
+period_change AS (
+    SELECT
+        COALESCE(
+            SUM(
+                CASE
+                    WHEN c.category_type = 'Incoming' THEN t.amount
+                    WHEN c.category_type = 'Outgoing' THEN -t.amount
+                    ELSE 0
+                END
+            ),
+            0
+        )::bigint AS value
+    FROM transaction t
+    JOIN category c ON c.id = t.category_id
+    JOIN budget_period bp ON bp.id = $2 AND bp.user_id = $1
+    WHERE t.user_id = $1
+      AND t.occurred_at >= bp.start_date
+      AND t.occurred_at <= LEAST(bp.end_date, CURRENT_DATE)
+)
+SELECT
+    COALESCE(SUM(ab.current_balance), 0)::bigint AS total_net_position,
+    (SELECT value FROM period_change)::bigint AS change_this_period,
+    COALESCE(
+        SUM(
+            CASE
+                WHEN ab.account_type IN ('Checking', 'Wallet', 'Allowance') THEN ab.current_balance
+                ELSE 0
+            END
+        ),
+        0
+    )::bigint AS liquid_balance,
+    COALESCE(
+        SUM(
+            CASE
+                WHEN ab.account_type = 'Savings' THEN ab.current_balance
+                ELSE 0
+            END
+        ),
+        0
+    )::bigint AS protected_balance,
+    COALESCE(
+        SUM(
+            CASE
+                WHEN ab.account_type = 'CreditCard' THEN ab.current_balance
+                ELSE 0
+            END
+        ),
+        0
+    )::bigint AS debt_balance,
+    COUNT(ab.id)::bigint AS account_count
+FROM account_balances ab
+            "#,
+        )
+        .bind(user_id)
+        .bind(budget_period_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(NetPositionResponse {
+            total_net_position: row.total_net_position,
+            change_this_period: row.change_this_period,
+            liquid_balance: row.liquid_balance,
+            protected_balance: row.protected_balance,
+            debt_balance: row.debt_balance,
+            account_count: row.account_count,
         })
     }
 }
