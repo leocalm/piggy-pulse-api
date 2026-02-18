@@ -11,8 +11,8 @@ impl PostgresRepository {
     /// Generate a cryptographically secure password reset token
     /// Returns: (plain_token, token_hash)
     pub fn generate_reset_token() -> (String, String) {
-        let mut rng = rand::thread_rng();
-        let token_bytes: [u8; 32] = rng.r#gen();
+        let mut rng = rand::rng();
+        let token_bytes: [u8; 32] = rng.random();
         let token = hex::encode(token_bytes);
 
         // Store hash, send plain token via email

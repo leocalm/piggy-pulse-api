@@ -83,3 +83,12 @@ pub struct BudgetStabilityResponse {
     pub total_closed_periods: u32,
     pub recent_closed_periods: Vec<BudgetStabilityPeriodResponse>,
 }
+
+pub struct NetPositionResponse {
+    pub total_net_position: i64,
+    pub change_this_period: i64,
+    pub liquid_balance: i64,
+    pub protected_balance: i64,
+    pub debt_balance: i64,
+    pub account_count: i64,
+}

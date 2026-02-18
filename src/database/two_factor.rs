@@ -25,7 +25,7 @@ const RATE_LIMIT_LOCKOUT_MINUTES: i64 = 15;
 impl PostgresRepository {
     /// Generate a new TOTP secret (32 characters, base32 encoded)
     pub fn generate_totp_secret() -> String {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut secret_bytes = [0u8; 20];
         rand::RngCore::fill_bytes(&mut rng, &mut secret_bytes);
         // Use standard RFC4648 base32 without padding
@@ -36,7 +36,7 @@ impl PostgresRepository {
     /// Returns (encrypted_base64, nonce_base64)
     pub fn encrypt_secret(secret: &str, key: &[u8; 32]) -> Result<(String, String), AppError> {
         let cipher = Aes256Gcm::new(key.into());
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut nonce_bytes = [0u8; 12];
         rand::RngCore::fill_bytes(&mut rng, &mut nonce_bytes);
         let nonce = Nonce::from_slice(&nonce_bytes);
@@ -166,11 +166,11 @@ impl PostgresRepository {
 
     /// Generate backup codes synchronously (returns codes with hashes)
     pub fn generate_backup_codes_sync() -> Result<Vec<(String, String)>, AppError> {
-        use rand::distributions::{Alphanumeric, DistString};
+        use rand::distr::{Alphanumeric, SampleString};
 
         let mut codes_with_hashes = Vec::new();
         let argon2 = Argon2::default();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         for _ in 0..BACKUP_CODE_COUNT {
             // Generate random alphanumeric code
@@ -401,7 +401,7 @@ impl PostgresRepository {
     pub async fn create_emergency_token(&self, user_id: &Uuid) -> Result<String, AppError> {
         // Generate random token (32 bytes = 64 hex chars)
         let token = {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             let mut token_bytes = [0u8; 32];
             rand::RngCore::fill_bytes(&mut rng, &mut token_bytes);
             hex::encode(token_bytes)

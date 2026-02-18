@@ -115,6 +115,21 @@ pub async fn get_budget_stability(pool: &State<PgPool>, _rate_limit: RateLimit, 
     Ok(Json(repo.budget_stability(&current_user.id).await?))
 }
 
+/// Get net financial position for a budget period.
+/// Returns 400 if `period_id` is missing ("Missing period_id query parameter") or invalid.
+#[openapi(tag = "Dashboard")]
+#[get("/net-position?<period_id>")]
+pub async fn get_net_position(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    period_id: Option<String>,
+) -> Result<Json<NetPositionResponse>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let budget_period_uuid = parse_period_id(period_id)?;
+    Ok(Json(repo.get_net_position(&budget_period_uuid, &current_user.id).await?))
+}
+
 pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
     rocket_okapi::openapi_get_routes_spec![
         get_balance_per_day,
@@ -124,6 +139,7 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
         get_recent_transactions,
         get_total_assets,
         get_budget_stability,
+        get_net_position,
     ]
 }
 
@@ -132,6 +148,7 @@ mod tests {
     use super::parse_period_id;
     use crate::error::app_error::AppError;
     use crate::{Config, build_rocket};
+    use chrono::{Duration, Utc};
     use rocket::http::{ContentType, Status};
     use rocket::local::asynchronous::Client;
     use serde_json::Value;
@@ -202,6 +219,47 @@ mod tests {
         (user_json["id"].as_str().expect("user id").to_string(), user_email)
     }
 
+    async fn create_budget_period(client: &Client) -> String {
+        let today = Utc::now().date_naive();
+        let payload = serde_json::json!({
+            "name": format!("Period {}", Uuid::new_v4()),
+            "start_date": (today - Duration::days(10)).to_string(),
+            "end_date": (today + Duration::days(10)).to_string(),
+        });
+
+        let response = client
+            .post("/api/v1/budget_period/")
+            .header(ContentType::JSON)
+            .body(payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Created);
+        let body = response.into_string().await.expect("budget period response body");
+        let json: Value = serde_json::from_str(&body).expect("valid budget period json");
+        json["id"].as_str().expect("period id").to_string()
+    }
+
+    async fn create_account(client: &Client, account_type: &str, balance: i64) {
+        let payload = serde_json::json!({
+            "name": format!("{} {}", account_type, Uuid::new_v4()),
+            "color": "#123456",
+            "icon": "wallet",
+            "account_type": account_type,
+            "balance": balance,
+            "spend_limit": null,
+        });
+
+        let response = client
+            .post("/api/v1/accounts/")
+            .header(ContentType::JSON)
+            .body(payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(response.status(), Status::Created);
+    }
+
     #[rocket::async_test]
     #[ignore = "requires database"]
     async fn total_assets_returns_zero_without_accounts_or_transactions() {
@@ -256,5 +314,63 @@ mod tests {
         let body = response.into_string().await.expect("total assets response body");
         let json: Value = serde_json::from_str(&body).expect("valid total assets json");
         assert_eq!(json["total_assets"].as_i64().unwrap_or_default(), 5000);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn net_position_returns_empty_state_values_without_accounts() {
+        let mut config = Config::default();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
+        config.rate_limit.require_client_ip = false;
+        config.session.cookie_secure = false;
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+        create_user_and_auth(&client).await;
+        let period_id = create_budget_period(&client).await;
+
+        let response = client.get(format!("/api/v1/dashboard/net-position?period_id={period_id}")).dispatch().await;
+        assert_eq!(response.status(), Status::Ok);
+
+        let body = response.into_string().await.expect("net position response body");
+        let json: Value = serde_json::from_str(&body).expect("valid net position json");
+
+        assert_eq!(json["account_count"].as_i64().unwrap_or_default(), 0);
+        assert_eq!(json["total_net_position"].as_i64().unwrap_or_default(), 0);
+        assert_eq!(json["change_this_period"].as_i64().unwrap_or_default(), 0);
+        assert_eq!(json["liquid_balance"].as_i64().unwrap_or_default(), 0);
+        assert_eq!(json["protected_balance"].as_i64().unwrap_or_default(), 0);
+        assert_eq!(json["debt_balance"].as_i64().unwrap_or_default(), 0);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn net_position_returns_expected_breakdown_for_account_types() {
+        let mut config = Config::default();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
+        config.rate_limit.require_client_ip = false;
+        config.session.cookie_secure = false;
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+        create_user_and_auth(&client).await;
+        let period_id = create_budget_period(&client).await;
+
+        create_account(&client, "Checking", 10_000).await;
+        create_account(&client, "Wallet", 2_000).await;
+        create_account(&client, "Allowance", -500).await;
+        create_account(&client, "Savings", 30_000).await;
+        create_account(&client, "CreditCard", -8_000).await;
+
+        let response = client.get(format!("/api/v1/dashboard/net-position?period_id={period_id}")).dispatch().await;
+        assert_eq!(response.status(), Status::Ok);
+
+        let body = response.into_string().await.expect("net position response body");
+        let json: Value = serde_json::from_str(&body).expect("valid net position json");
+
+        assert_eq!(json["account_count"].as_i64().unwrap_or_default(), 5);
+        assert_eq!(json["liquid_balance"].as_i64().unwrap_or_default(), 11_500);
+        assert_eq!(json["protected_balance"].as_i64().unwrap_or_default(), 30_000);
+        assert_eq!(json["debt_balance"].as_i64().unwrap_or_default(), -8_000);
+        assert_eq!(json["total_net_position"].as_i64().unwrap_or_default(), 33_500);
+        assert_eq!(json["change_this_period"].as_i64().unwrap_or_default(), 0);
     }
 }

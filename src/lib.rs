@@ -1,4 +1,5 @@
 mod auth;
+mod compatibility_adapter;
 mod config;
 mod cron_tasks;
 mod database;
