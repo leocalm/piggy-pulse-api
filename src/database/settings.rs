@@ -8,6 +8,7 @@ impl PostgresRepository {
         let settings = sqlx::query_as::<_, Settings>(
             r#"
             SELECT id, user_id, theme, language, default_currency_id,
+                   budget_stability_tolerance_basis_points,
                    created_at, updated_at
             FROM settings
             WHERE user_id = $1
@@ -25,15 +26,26 @@ impl PostgresRepository {
 
         let settings = sqlx::query_as::<_, Settings>(
             r#"
-            INSERT INTO settings (user_id, theme, language, default_currency_id)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO settings (
+                user_id,
+                theme,
+                language,
+                default_currency_id,
+                budget_stability_tolerance_basis_points
+            )
+            VALUES ($1, $2, $3, $4, COALESCE($5, 1000))
             ON CONFLICT (user_id)
             DO UPDATE SET
                 theme = EXCLUDED.theme,
                 language = EXCLUDED.language,
                 default_currency_id = EXCLUDED.default_currency_id,
+                budget_stability_tolerance_basis_points = COALESCE(
+                    EXCLUDED.budget_stability_tolerance_basis_points,
+                    settings.budget_stability_tolerance_basis_points
+                ),
                 updated_at = now()
             RETURNING id, user_id, theme, language, default_currency_id,
+                      budget_stability_tolerance_basis_points,
                       created_at, updated_at
             "#,
         )
@@ -41,6 +53,7 @@ impl PostgresRepository {
         .bind(&request.theme)
         .bind(&request.language)
         .bind(request.default_currency_id)
+        .bind(request.budget_stability_tolerance_basis_points)
         .fetch_one(&mut *transaction)
         .await?;
 
@@ -66,9 +79,16 @@ impl PostgresRepository {
     pub async fn create_default_settings(&self, user_id: &Uuid) -> Result<Settings, AppError> {
         let settings = sqlx::query_as::<_, Settings>(
             r#"
-            INSERT INTO settings (user_id, theme, language, default_currency_id)
-            VALUES ($1, 'light', 'en', NULL)
+            INSERT INTO settings (
+                user_id,
+                theme,
+                language,
+                default_currency_id,
+                budget_stability_tolerance_basis_points
+            )
+            VALUES ($1, 'light', 'en', NULL, 1000)
             RETURNING id, user_id, theme, language, default_currency_id,
+                      budget_stability_tolerance_basis_points,
                       created_at, updated_at
             "#,
         )

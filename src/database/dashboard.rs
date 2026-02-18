@@ -1,6 +1,10 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
-use crate::models::dashboard::{BudgetPerDayResponse, MonthProgressResponse, MonthlyBurnInResponse, SpentPerCategoryResponse, TotalAssetsResponse};
+use crate::models::dashboard::{
+    BudgetPerDayResponse, BudgetStabilityPeriodResponse, BudgetStabilityResponse, MonthProgressResponse, MonthlyBurnInResponse, SpentPerCategoryResponse,
+    TotalAssetsResponse,
+};
+use crate::service::dashboard::is_outside_tolerance;
 
 use chrono::NaiveDate;
 use uuid::Uuid;
@@ -281,6 +285,96 @@ GROUP BY aib.balance_total
 
         Ok(TotalAssetsResponse {
             total_assets: row.total_assets,
+        })
+    }
+
+    pub async fn budget_stability(&self, user_id: &Uuid) -> Result<BudgetStabilityResponse, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct ToleranceRow {
+            budget_stability_tolerance_basis_points: i32,
+        }
+
+        #[derive(sqlx::FromRow)]
+        struct ClosedPeriodRow {
+            period_id: String,
+            total_budget: i64,
+            spent_budget: i64,
+        }
+
+        let tolerance_row = sqlx::query_as::<_, ToleranceRow>(
+            r#"
+            SELECT budget_stability_tolerance_basis_points
+            FROM settings
+            WHERE user_id = $1
+            "#,
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let tolerance_basis_points = tolerance_row.map(|row| row.budget_stability_tolerance_basis_points).unwrap_or(1000);
+
+        let closed_period_rows = sqlx::query_as::<_, ClosedPeriodRow>(
+            r#"
+            WITH total_budget AS (
+                SELECT COALESCE(SUM(budgeted_value), 0)::bigint AS value
+                FROM budget_category
+                WHERE user_id = $1
+            )
+            SELECT
+                bp.id::text AS period_id,
+                tb.value AS total_budget,
+                COALESCE(SUM(
+                    CASE
+                        WHEN c.category_type = 'Outgoing' THEN t.amount
+                        ELSE 0
+                    END
+                ), 0)::bigint AS spent_budget
+            FROM budget_period bp
+            CROSS JOIN total_budget tb
+            LEFT JOIN transaction t
+                ON t.user_id = $1
+                AND t.occurred_at >= bp.start_date
+                AND t.occurred_at <= bp.end_date
+            LEFT JOIN category c
+                ON c.id = t.category_id
+            WHERE bp.user_id = $1
+                AND bp.end_date < CURRENT_DATE
+            GROUP BY bp.id, bp.end_date, tb.value
+            ORDER BY bp.end_date DESC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let total_closed_periods = closed_period_rows.len() as u32;
+        let periods_within_tolerance = closed_period_rows
+            .iter()
+            .filter(|row| !is_outside_tolerance(row.spent_budget, row.total_budget, tolerance_basis_points))
+            .count() as u32;
+
+        let within_tolerance_percentage = if total_closed_periods == 0 {
+            0
+        } else {
+            (periods_within_tolerance * 100) / total_closed_periods
+        };
+
+        let mut recent_closed_periods: Vec<BudgetStabilityPeriodResponse> = closed_period_rows
+            .iter()
+            .take(6)
+            .map(|row| BudgetStabilityPeriodResponse {
+                period_id: row.period_id.clone(),
+                is_outside_tolerance: is_outside_tolerance(row.spent_budget, row.total_budget, tolerance_basis_points),
+            })
+            .collect();
+        recent_closed_periods.reverse();
+
+        Ok(BudgetStabilityResponse {
+            within_tolerance_percentage,
+            periods_within_tolerance,
+            total_closed_periods,
+            recent_closed_periods,
         })
     }
 }

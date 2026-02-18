@@ -11,6 +11,7 @@ pub struct Settings {
     pub theme: String,
     pub language: String,
     pub default_currency_id: Option<Uuid>,
+    pub budget_stability_tolerance_basis_points: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -21,6 +22,7 @@ pub struct SettingsResponse {
     pub theme: String,
     pub language: String,
     pub default_currency_id: Option<Uuid>,
+    pub budget_stability_tolerance_basis_points: i32,
     pub updated_at: DateTime<Utc>,
 }
 
@@ -31,6 +33,7 @@ impl From<&Settings> for SettingsResponse {
             theme: value.theme.clone(),
             language: value.language.clone(),
             default_currency_id: value.default_currency_id,
+            budget_stability_tolerance_basis_points: value.budget_stability_tolerance_basis_points,
             updated_at: value.updated_at,
         }
     }
@@ -47,4 +50,7 @@ pub struct SettingsRequest {
     pub language: String,
 
     pub default_currency_id: Option<Uuid>,
+
+    #[validate(range(min = 0, max = 10000))]
+    pub budget_stability_tolerance_basis_points: Option<i32>,
 }
