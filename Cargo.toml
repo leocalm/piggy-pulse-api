@@ -29,7 +29,7 @@ lettre = { version = "0.11", default-features = false, features = ["tokio1-rustl
 # Cryptography for secure token generation
 sha2 = "0.10"
 hex = "0.4"
-rand = "0.8"
+rand = "0.9"
 # Database access with sqlx
 sqlx = { version = "0.8.6", default-features = false, features = ["chrono", "uuid", "migrate", "postgres", "runtime-tokio-rustls", "macros"] }
 # OpenAPI/Swagger documentation
