@@ -2,7 +2,7 @@ use rocket::serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
 use uuid::Uuid;
 use validator::{Validate, ValidationError};
-use zxcvbn::zxcvbn;
+use zxcvbn::{Score, zxcvbn};
 
 #[derive(Debug, sqlx::FromRow)]
 pub struct User {
@@ -49,8 +49,8 @@ impl From<&User> for UserResponse {
 }
 
 pub fn validate_password_strength(password: &str) -> Result<(), ValidationError> {
-    let estimate = zxcvbn(password, &[]).map_err(|_| ValidationError::new("password_strength"))?;
-    if estimate.score() < 3 {
+    let estimate = zxcvbn(password, &[]);
+    if estimate.score() < Score::Three {
         let mut error = ValidationError::new("password_strength");
         error.message = Some("Password is too weak".into());
         return Err(error);
