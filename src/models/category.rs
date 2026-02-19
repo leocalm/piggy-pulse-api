@@ -21,6 +21,8 @@ pub struct Category {
     pub icon: String,
     pub parent_id: Option<Uuid>,
     pub category_type: CategoryType,
+    pub is_archived: bool,
+    pub description: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Validate, JsonSchema)]
@@ -32,6 +34,7 @@ pub struct CategoryRequest {
     pub icon: String,
     pub parent_id: Option<Uuid>,
     pub category_type: CategoryType,
+    pub description: Option<String>,
 }
 
 #[derive(Serialize, Debug, Clone, JsonSchema)]
@@ -42,6 +45,8 @@ pub struct CategoryResponse {
     pub icon: String,
     pub parent_id: Option<Uuid>,
     pub category_type: CategoryType,
+    pub is_archived: bool,
+    pub description: Option<String>,
 }
 
 #[derive(Serialize, Debug, Clone, JsonSchema)]
@@ -148,6 +153,8 @@ impl From<&Category> for CategoryResponse {
             icon: category.icon.clone(),
             parent_id: category.parent_id,
             category_type: category.category_type,
+            is_archived: category.is_archived,
+            description: category.description.clone(),
         }
     }
 }
@@ -203,6 +210,60 @@ impl From<&CategoriesDiagnostics> for CategoriesDiagnosticsResponse {
             unbudgeted_rows: value.unbudgeted_rows.iter().map(CategoryUnbudgetedDiagnosticsRowResponse::from).collect(),
         }
     }
+}
+
+/// Category row for the management view with global transaction count and children info.
+#[derive(Debug, Clone)]
+pub struct CategoryManagementRow {
+    pub category: Category,
+    /// Global transaction count (all time, not period-scoped)
+    pub global_transaction_count: i64,
+    /// Number of active children (for archive blocking logic)
+    pub active_children_count: i64,
+}
+
+#[derive(Serialize, Debug, Clone, JsonSchema)]
+#[schemars(example = "category_management_response_example")]
+pub struct CategoryManagementResponse {
+    #[serde(flatten)]
+    pub category: CategoryResponse,
+    /// Global transaction count (all time, not period-scoped)
+    pub global_transaction_count: i64,
+    /// Number of active children
+    pub active_children_count: i64,
+}
+
+impl From<&CategoryManagementRow> for CategoryManagementResponse {
+    fn from(row: &CategoryManagementRow) -> Self {
+        Self {
+            category: (&row.category).into(),
+            global_transaction_count: row.global_transaction_count,
+            active_children_count: row.active_children_count,
+        }
+    }
+}
+
+/// Response for the categories management list endpoint.
+#[derive(Serialize, Debug, Clone, JsonSchema)]
+pub struct CategoriesManagementListResponse {
+    pub incoming: Vec<CategoryManagementResponse>,
+    pub outgoing: Vec<CategoryManagementResponse>,
+    pub archived: Vec<CategoryManagementResponse>,
+}
+
+fn category_management_response_example() -> serde_json::Value {
+    json!({
+        "id": "d2719f56-2b88-4b7a-b7c1-0b6b92d5c4d4",
+        "name": "Dining",
+        "color": "#FF6B6B",
+        "icon": "🍽️",
+        "parent_id": null,
+        "category_type": "Outgoing",
+        "is_archived": false,
+        "description": "Meals outside home and food delivery",
+        "global_transaction_count": 21,
+        "active_children_count": 2
+    })
 }
 
 pub fn difference_vs_average_percentage(used_in_period: i64, average_period_usage: i64) -> i32 {

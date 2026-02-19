@@ -25,6 +25,8 @@ struct TransactionRow {
     category_icon: String,
     category_parent_id: Option<Uuid>,
     category_category_type: String,
+    category_is_archived: bool,
+    category_description: Option<String>,
     // From account fields
     from_account_id: Uuid,
     from_account_name: String,
@@ -103,6 +105,8 @@ impl From<TransactionRow> for Transaction {
                 icon: row.category_icon,
                 parent_id: row.category_parent_id,
                 category_type: category_type_from_db(&row.category_category_type),
+                is_archived: row.category_is_archived,
+                description: row.category_description,
             },
 
             from_account: Account {
@@ -141,6 +145,8 @@ const TRANSACTION_SELECT_FIELDS: &str = r#"
     COALESCE(c.icon, '') as category_icon,
     c.parent_id as category_parent_id,
     c.category_type::text as category_category_type,
+    c.is_archived as category_is_archived,
+    c.description as category_description,
     fa.id as from_account_id,
     fa.name as from_account_name,
     fa.color as from_account_color,
