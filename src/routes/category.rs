@@ -3,7 +3,7 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::RateLimit;
 use crate::models::category::{
-    CategoriesDiagnostics, CategoriesDiagnosticsResponse, CategoryOption, CategoryRequest, CategoryResponse, CategoryWithStatsResponse,
+    CategoriesDiagnostics, CategoriesDiagnosticsResponse, CategoriesManagementListResponse, CategoryManagementResponse, CategoryOption, CategoryRequest, CategoryResponse, CategoryWithStatsResponse,
 };
 use crate::models::dashboard::PeriodContextSummaryResponse;
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
@@ -150,6 +150,69 @@ pub async fn list_categories_not_in_budget(
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.id)))
 }
 
+/// List all categories for the management view (grouped by Incoming, Outgoing, Archived)
+#[openapi(tag = "Categories")]
+#[get("/management")]
+pub async fn list_categories_for_management(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+) -> Result<Json<CategoriesManagementListResponse>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let categories = repo.list_categories_for_management(&current_user.id).await?;
+
+    let mut incoming: Vec<CategoryManagementResponse> = Vec::new();
+    let mut outgoing: Vec<CategoryManagementResponse> = Vec::new();
+    let mut archived: Vec<CategoryManagementResponse> = Vec::new();
+
+    for row in categories {
+        let response = CategoryManagementResponse::from(&row);
+        if row.category.is_archived {
+            archived.push(response);
+        } else if row.category.category_type == crate::models::category::CategoryType::Incoming {
+            incoming.push(response);
+        } else {
+            outgoing.push(response);
+        }
+    }
+
+    Ok(Json(CategoriesManagementListResponse {
+        incoming,
+        outgoing,
+        archived,
+    }))
+}
+
+/// Archive a category (soft delete)
+#[openapi(tag = "Categories")]
+#[post("/<id>/archive")]
+pub async fn archive_category(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    id: &str,
+) -> Result<Json<CategoryResponse>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
+    let category = repo.archive_category(&uuid, &current_user.id).await?;
+    Ok(Json(CategoryResponse::from(&category)))
+}
+
+/// Restore an archived category
+#[openapi(tag = "Categories")]
+#[post("/<id>/restore")]
+pub async fn restore_category(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    id: &str,
+) -> Result<Json<CategoryResponse>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
+    let category = repo.restore_category(&uuid, &current_user.id).await?;
+    Ok(Json(CategoryResponse::from(&category)))
+}
+
 pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
     rocket_okapi::openapi_get_routes_spec![
         create_category,
@@ -159,7 +222,10 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
         get_category,
         delete_category,
         put_category,
-        list_categories_not_in_budget
+        list_categories_not_in_budget,
+        list_categories_for_management,
+        archive_category,
+        restore_category
     ]
 }
 

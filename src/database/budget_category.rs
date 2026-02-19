@@ -16,6 +16,8 @@ struct BudgetCategoryRow {
     category_icon: String,
     category_parent_id: Option<Uuid>,
     category_category_type: String,
+    category_is_archived: bool,
+    category_description: Option<String>,
 }
 
 impl From<BudgetCategoryRow> for BudgetCategory {
@@ -31,6 +33,8 @@ impl From<BudgetCategoryRow> for BudgetCategory {
                 icon: row.category_icon,
                 parent_id: row.category_parent_id,
                 category_type: crate::database::category::category_type_from_db(&row.category_category_type),
+                is_archived: row.category_is_archived,
+                description: row.category_description,
             },
         }
     }
@@ -82,7 +86,9 @@ impl PostgresRepository {
                 COALESCE(c.color, '') as category_color,
                 COALESCE(c.icon, '') as category_icon,
                 c.parent_id as category_parent_id,
-                c.category_type::text as category_category_type
+                c.category_type::text as category_category_type,
+                c.is_archived as category_is_archived,
+                c.description as category_description
             FROM budget_category bc
             JOIN category c
                 ON c.id = bc.category_id
@@ -109,7 +115,9 @@ impl PostgresRepository {
                     COALESCE(c.color, '') as category_color,
                     COALESCE(c.icon, '') as category_icon,
                     c.parent_id as category_parent_id,
-                    c.category_type::text as category_category_type
+                    c.category_type::text as category_category_type,
+                    c.is_archived as category_is_archived,
+                    c.description as category_description
                 FROM budget_category bc
                 JOIN category c ON c.id = bc.category_id
                 WHERE bc.user_id = $1
@@ -136,7 +144,9 @@ impl PostgresRepository {
                     COALESCE(c.color, '') as category_color,
                     COALESCE(c.icon, '') as category_icon,
                     c.parent_id as category_parent_id,
-                    c.category_type::text as category_category_type
+                    c.category_type::text as category_category_type,
+                    c.is_archived as category_is_archived,
+                    c.description as category_description
                 FROM budget_category bc
                 JOIN category c ON c.id = bc.category_id
                 WHERE bc.user_id = $1

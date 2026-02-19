@@ -2,7 +2,7 @@ use crate::database::postgres_repository::{PostgresRepository, is_unique_violati
 use crate::error::app_error::AppError;
 use crate::models::budget_period::BudgetPeriod;
 use crate::models::category::{
-    Category, CategoryBudgetedDiagnosticsRow, CategoryRequest, CategoryStats, CategoryType, CategoryUnbudgetedDiagnosticsRow, CategoryWithStats,
+    Category, CategoryBudgetedDiagnosticsRow, CategoryManagementRow, CategoryRequest, CategoryStats, CategoryType, CategoryUnbudgetedDiagnosticsRow, CategoryWithStats,
     difference_vs_average_percentage, progress_basis_points, share_of_total_basis_points, variance_value,
 };
 use crate::models::dashboard::BudgetStabilityPeriodResponse;
@@ -21,6 +21,8 @@ struct CategoryRow {
     icon: String,
     parent_id: Option<Uuid>,
     category_type: String,
+    is_archived: bool,
+    description: Option<String>,
 }
 
 impl From<CategoryRow> for Category {
@@ -32,6 +34,8 @@ impl From<CategoryRow> for Category {
             icon: row.icon,
             parent_id: row.parent_id,
             category_type: category_type_from_db(&row.category_type),
+            is_archived: row.is_archived,
+            description: row.description,
         }
     }
 }
@@ -44,6 +48,8 @@ struct CategoryWithStatsRow {
     icon: String,
     parent_id: Option<Uuid>,
     category_type: String,
+    is_archived: bool,
+    description: Option<String>,
     used_in_period: i64,
     average_period_usage: i64,
     transaction_count: i64,
@@ -57,6 +63,8 @@ struct BudgetedCategoryDiagnosticsDbRow {
     icon: String,
     parent_id: Option<Uuid>,
     category_type: String,
+    is_archived: bool,
+    description: Option<String>,
     budgeted_value: i32,
     actual_value: i64,
 }
@@ -69,6 +77,8 @@ struct UnbudgetedCategoryDiagnosticsDbRow {
     icon: String,
     parent_id: Option<Uuid>,
     category_type: String,
+    is_archived: bool,
+    description: Option<String>,
     actual_value: i64,
 }
 
@@ -77,6 +87,39 @@ struct BudgetedCategoryClosedPeriodDbRow {
     category_id: Uuid,
     period_id: Uuid,
     actual_value: i64,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct CategoryManagementDbRow {
+    id: Uuid,
+    name: String,
+    color: String,
+    icon: String,
+    parent_id: Option<Uuid>,
+    category_type: String,
+    is_archived: bool,
+    description: Option<String>,
+    global_transaction_count: i64,
+    active_children_count: i64,
+}
+
+impl From<CategoryManagementDbRow> for CategoryManagementRow {
+    fn from(row: CategoryManagementDbRow) -> Self {
+        Self {
+            category: Category {
+                id: row.id,
+                name: row.name,
+                color: row.color,
+                icon: row.icon,
+                parent_id: row.parent_id,
+                category_type: category_type_from_db(&row.category_type),
+                is_archived: row.is_archived,
+                description: row.description,
+            },
+            global_transaction_count: row.global_transaction_count,
+            active_children_count: row.active_children_count,
+        }
+    }
 }
 
 impl From<CategoryWithStatsRow> for CategoryWithStats {
@@ -89,6 +132,8 @@ impl From<CategoryWithStatsRow> for CategoryWithStats {
                 icon: row.icon,
                 parent_id: row.parent_id,
                 category_type: category_type_from_db(&row.category_type),
+                is_archived: row.is_archived,
+                description: row.description,
             },
             stats: CategoryStats {
                 used_in_period: row.used_in_period,
@@ -109,6 +154,8 @@ impl From<BudgetedCategoryDiagnosticsDbRow> for CategoryBudgetedDiagnosticsRow {
                 icon: row.icon,
                 parent_id: row.parent_id,
                 category_type: category_type_from_db(&row.category_type),
+                is_archived: row.is_archived,
+                description: row.description,
             },
             budgeted_value: row.budgeted_value,
             actual_value: row.actual_value,
@@ -121,6 +168,46 @@ impl From<BudgetedCategoryDiagnosticsDbRow> for CategoryBudgetedDiagnosticsRow {
 
 impl PostgresRepository {
     pub async fn create_category(&self, request: &CategoryRequest, user_id: &Uuid) -> Result<Category, AppError> {
+        // Validate max depth = 1 (cannot set parent_id to a category that already has a parent)
+        if let Some(parent_id) = request.parent_id {
+            let parent: Option<CategoryRow> = sqlx::query_as(
+                r#"
+                SELECT
+                    id,
+                    name,
+                    COALESCE(color, '') as color,
+                    COALESCE(icon, '') as icon,
+                    parent_id,
+                    category_type::text as category_type,
+                    is_archived,
+                    description
+                FROM category
+                WHERE id = $1 AND user_id = $2
+                "#,
+            )
+            .bind(parent_id)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+            if let Some(parent) = parent {
+                if parent.parent_id.is_some() {
+                    return Err(AppError::BadRequest(
+                        "Cannot create a subcategory under another subcategory. Maximum depth is 1.".to_string(),
+                    ));
+                }
+                // Verify type matches parent
+                let parent_type = category_type_from_db(&parent.category_type);
+                if parent_type != request.category_type {
+                    return Err(AppError::BadRequest(
+                        "Subcategory must have the same type as its parent.".to_string(),
+                    ));
+                }
+            } else {
+                return Err(AppError::NotFound("Parent category not found".to_string()));
+            }
+        }
+
         let name_exists: bool = sqlx::query_scalar(
             r#"
             SELECT EXISTS (
@@ -141,15 +228,17 @@ impl PostgresRepository {
 
         let row = sqlx::query_as::<_, CategoryRow>(
             r#"
-            INSERT INTO category (user_id, name, color, icon, parent_id, category_type)
-            VALUES ($1, $2, $3, $4, $5, $6::text::category_type)
+            INSERT INTO category (user_id, name, color, icon, parent_id, category_type, is_archived, description)
+            VALUES ($1, $2, $3, $4, $5, $6::text::category_type, FALSE, $7)
             RETURNING
                 id,
                 name,
                 COALESCE(color, '') as color,
                 COALESCE(icon, '') as icon,
                 parent_id,
-                category_type::text as category_type
+                category_type::text as category_type,
+                is_archived,
+                description
             "#,
         )
         .bind(user_id)
@@ -158,6 +247,7 @@ impl PostgresRepository {
         .bind(&request.icon)
         .bind(request.parent_id)
         .bind(request.category_type_to_db())
+        .bind(&request.description)
         .fetch_one(&self.pool)
         .await;
 
@@ -181,7 +271,9 @@ impl PostgresRepository {
                 COALESCE(color, '') as color,
                 COALESCE(icon, '') as icon,
                 parent_id,
-                category_type::text as category_type
+                category_type::text as category_type,
+                is_archived,
+                description
             FROM category
             WHERE id = $1 AND user_id = $2
             "#,
@@ -250,6 +342,8 @@ SELECT
     COALESCE(c.icon, '') as icon,
     c.parent_id,
     c.category_type::text as category_type,
+    c.is_archived,
+    c.description,
     COALESCE(spt.used_this_period, 0) AS used_in_period,
     COALESCE(at.avg_period_amount, 0) AS average_period_usage,
     COALESCE(spc.transaction_count, 0) AS transaction_count
@@ -325,6 +419,8 @@ SELECT
     COALESCE(c.icon, '') as icon,
     c.parent_id,
     c.category_type::text as category_type,
+    c.is_archived,
+    c.description,
     COALESCE(spt.used_this_period, 0) AS used_in_period,
     COALESCE(at.avg_period_amount, 0) AS average_period_usage,
     COALESCE(spc.transaction_count, 0) AS transaction_count
@@ -372,6 +468,8 @@ SELECT
     COALESCE(c.icon, '') as icon,
     c.parent_id,
     c.category_type::text as category_type,
+    c.is_archived,
+    c.description,
     bc.budgeted_value,
     COALESCE(sps.actual_value, 0) AS actual_value
 FROM budget_category bc
@@ -479,6 +577,8 @@ SELECT
     COALESCE(c.icon, '') as icon,
     c.parent_id,
     c.category_type::text as category_type,
+    c.is_archived,
+    c.description,
     COALESCE(SUM(t.amount), 0)::bigint AS actual_value
 FROM category c
          LEFT JOIN budget_category bc
@@ -492,7 +592,7 @@ FROM category c
 WHERE c.user_id = $1
   AND c.category_type = 'Outgoing'
   AND bc.id IS NULL
-GROUP BY c.id, c.name, c.color, c.icon, c.parent_id, c.category_type
+GROUP BY c.id, c.name, c.color, c.icon, c.parent_id, c.category_type, c.is_archived, c.description
 ORDER BY actual_value DESC, c.name
             "#,
         )
@@ -514,6 +614,8 @@ ORDER BY actual_value DESC, c.name
                     icon: row.icon,
                     parent_id: row.parent_id,
                     category_type: category_type_from_db(&row.category_type),
+                    is_archived: row.is_archived,
+                    description: row.description,
                 },
                 actual_value: row.actual_value,
                 share_of_total_basis_points: share_of_total_basis_points(row.actual_value, total_unbudgeted_actual),
@@ -522,6 +624,44 @@ ORDER BY actual_value DESC, c.name
     }
 
     pub async fn delete_category(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
+        // Check for transactions
+        let transaction_count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)::bigint
+            FROM transaction
+            WHERE category_id = $1 AND user_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        if transaction_count > 0 {
+            return Err(AppError::BadRequest(
+                "Cannot delete category with existing transactions. Archive it instead.".to_string(),
+            ));
+        }
+
+        // Check for children
+        let children_count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)::bigint
+            FROM category
+            WHERE parent_id = $1 AND user_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        if children_count > 0 {
+            return Err(AppError::BadRequest(
+                "Cannot delete category with subcategories. Delete or archive subcategories first.".to_string(),
+            ));
+        }
+
         sqlx::query("DELETE FROM category WHERE id = $1 AND user_id = $2")
             .bind(id)
             .bind(user_id)
@@ -554,15 +694,17 @@ ORDER BY actual_value DESC, c.name
         let row = sqlx::query_as::<_, CategoryRow>(
             r#"
             UPDATE category
-            SET name = $1, color = $2, icon = $3, parent_id = $4, category_type = $5::text::category_type
-            WHERE id = $6 AND user_id = $7
+            SET name = $1, color = $2, icon = $3, parent_id = $4, category_type = $5::text::category_type, description = $6
+            WHERE id = $7 AND user_id = $8
             RETURNING
                 id,
                 name,
                 COALESCE(color, '') as color,
                 COALESCE(icon, '') as icon,
                 parent_id,
-                category_type::text as category_type
+                category_type::text as category_type,
+                is_archived,
+                description
             "#,
         )
         .bind(&request.name)
@@ -570,6 +712,7 @@ ORDER BY actual_value DESC, c.name
         .bind(&request.icon)
         .bind(request.parent_id)
         .bind(request.category_type_to_db())
+        .bind(&request.description)
         .bind(id)
         .bind(user_id)
         .fetch_one(&self.pool)
@@ -596,7 +739,9 @@ ORDER BY actual_value DESC, c.name
                     COALESCE(c.color, '') as color,
                     COALESCE(c.icon, '') as icon,
                     c.parent_id,
-                    c.category_type::text as category_type
+                    c.category_type::text as category_type,
+                    c.is_archived,
+                    c.description
                 FROM category c
                 LEFT JOIN budget_category bc ON c.id = bc.category_id
                 WHERE bc.id IS NULL
@@ -621,7 +766,9 @@ ORDER BY actual_value DESC, c.name
                     COALESCE(c.color, '') as color,
                     COALESCE(c.icon, '') as icon,
                     c.parent_id,
-                    c.category_type::text as category_type
+                    c.category_type::text as category_type,
+                    c.is_archived,
+                    c.description
                 FROM category c
                 LEFT JOIN budget_category bc ON c.id = bc.category_id
                 WHERE bc.id IS NULL
@@ -649,7 +796,9 @@ ORDER BY actual_value DESC, c.name
                 COALESCE(c.color, '') as color,
                 COALESCE(c.icon, '') as icon,
                 c.parent_id,
-                c.category_type::text as category_type
+                c.category_type::text as category_type,
+                c.is_archived,
+                c.description
             FROM category c
             WHERE c.user_id = $1
             ORDER BY c.created_at DESC, c.id DESC
@@ -660,6 +809,149 @@ ORDER BY actual_value DESC, c.name
         .await?;
 
         Ok(rows.into_iter().map(Category::from).collect())
+    }
+
+    /// List all categories organized for management view (Incoming, Outgoing, Archived sections)
+    pub async fn list_categories_for_management(&self, user_id: &Uuid) -> Result<Vec<CategoryManagementRow>, AppError> {
+        let rows = sqlx::query_as::<_, CategoryManagementDbRow>(
+            r#"
+            WITH transaction_counts AS (
+                SELECT
+                    category_id,
+                    COUNT(*)::bigint AS global_transaction_count
+                FROM transaction
+                WHERE user_id = $1
+                GROUP BY category_id
+            ),
+            children_counts AS (
+                SELECT
+                    parent_id,
+                    COUNT(*)::bigint AS active_children_count
+                FROM category
+                WHERE user_id = $1
+                  AND parent_id IS NOT NULL
+                  AND is_archived = FALSE
+                GROUP BY parent_id
+            )
+            SELECT
+                c.id,
+                c.name,
+                COALESCE(c.color, '') as color,
+                COALESCE(c.icon, '') as icon,
+                c.parent_id,
+                c.category_type::text as category_type,
+                c.is_archived,
+                c.description,
+                COALESCE(tc.global_transaction_count, 0) AS global_transaction_count,
+                COALESCE(cc.active_children_count, 0) AS active_children_count
+            FROM category c
+            LEFT JOIN transaction_counts tc ON c.id = tc.category_id
+            LEFT JOIN children_counts cc ON c.id = cc.parent_id
+            WHERE c.user_id = $1
+            ORDER BY
+                c.is_archived ASC,
+                c.category_type ASC,
+                c.name ASC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(CategoryManagementRow::from).collect())
+    }
+
+    /// Archive a category (soft delete)
+    pub async fn archive_category(&self, id: &Uuid, user_id: &Uuid) -> Result<Category, AppError> {
+        // Check for active children
+        let active_children_count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)::bigint
+            FROM category
+            WHERE parent_id = $1 AND user_id = $2 AND is_archived = FALSE
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        if active_children_count > 0 {
+            return Err(AppError::BadRequest(
+                "Cannot archive category with active subcategories. Archive subcategories first.".to_string(),
+            ));
+        }
+
+        let row = sqlx::query_as::<_, CategoryRow>(
+            r#"
+            UPDATE category
+            SET is_archived = TRUE
+            WHERE id = $1 AND user_id = $2
+            RETURNING
+                id,
+                name,
+                COALESCE(color, '') as color,
+                COALESCE(icon, '') as icon,
+                parent_id,
+                category_type::text as category_type,
+                is_archived,
+                description
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(Category::from(row))
+    }
+
+    /// Restore an archived category
+    pub async fn restore_category(&self, id: &Uuid, user_id: &Uuid) -> Result<Category, AppError> {
+        // Check if parent is archived (if has parent)
+        let parent_archived: bool = sqlx::query_scalar(
+            r#"
+            SELECT COALESCE(
+                (SELECT is_archived FROM category c2 WHERE c2.id = c.parent_id),
+                FALSE
+            )
+            FROM category c
+            WHERE c.id = $1 AND c.user_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        if parent_archived {
+            return Err(AppError::BadRequest(
+                "Cannot restore subcategory when parent is archived. Restore parent first.".to_string(),
+            ));
+        }
+
+        let row = sqlx::query_as::<_, CategoryRow>(
+            r#"
+            UPDATE category
+            SET is_archived = FALSE
+            WHERE id = $1 AND user_id = $2
+            RETURNING
+                id,
+                name,
+                COALESCE(color, '') as color,
+                COALESCE(icon, '') as icon,
+                parent_id,
+                category_type::text as category_type,
+                is_archived,
+                description
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(Category::from(row))
     }
 }
 
@@ -711,6 +1003,7 @@ mod tests {
             icon: "icon".to_string(),
             parent_id: None,
             category_type: CategoryType::Incoming,
+            description: None,
         };
         assert_eq!(request.category_type_to_db(), "Incoming");
 
@@ -720,6 +1013,7 @@ mod tests {
             icon: "icon".to_string(),
             parent_id: None,
             category_type: CategoryType::Outgoing,
+            description: None,
         };
         assert_eq!(request_outgoing.category_type_to_db(), "Outgoing");
 
@@ -729,6 +1023,7 @@ mod tests {
             icon: "icon".to_string(),
             parent_id: None,
             category_type: CategoryType::Transfer,
+            description: None,
         };
         assert_eq!(request_transfer.category_type_to_db(), "Transfer");
     }
@@ -742,6 +1037,8 @@ mod tests {
             icon: "bolt".to_string(),
             parent_id: None,
             category_type: "Outgoing".to_string(),
+            is_archived: false,
+            description: None,
             budgeted_value: 0,
             actual_value: 4200,
         };
@@ -762,6 +1059,8 @@ mod tests {
             icon: "rotate".to_string(),
             parent_id: None,
             category_type: "Outgoing".to_string(),
+            is_archived: false,
+            description: None,
             budgeted_value: 1000,
             actual_value: -250,
         };
