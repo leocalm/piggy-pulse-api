@@ -1,3 +1,4 @@
+use crate::models::dashboard::{BudgetStabilityPeriodResponse, PeriodContextSummaryResponse};
 use rocket::serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
 use serde_json::json;
@@ -84,6 +85,60 @@ pub struct CategoryWithStatsResponse {
     pub stats: CategoryStats,
 }
 
+#[derive(Debug, Clone)]
+pub struct CategoryBudgetedDiagnosticsRow {
+    pub category: Category,
+    pub budgeted_value: i32,
+    pub actual_value: i64,
+    pub variance_value: i64,
+    /// Progress in basis points (percent * 100). Example: 12_500 = 125.00%.
+    pub progress_basis_points: i32,
+    pub recent_closed_periods: Vec<BudgetStabilityPeriodResponse>,
+}
+
+#[derive(Serialize, Debug, Clone, JsonSchema)]
+pub struct CategoryBudgetedDiagnosticsRowResponse {
+    #[serde(flatten)]
+    pub category: CategoryResponse,
+    pub budgeted_value: i32,
+    pub actual_value: i64,
+    pub variance_value: i64,
+    /// Progress in basis points (percent * 100). Example: 12_500 = 125.00%.
+    pub progress_basis_points: i32,
+    pub recent_closed_periods: Vec<BudgetStabilityPeriodResponse>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CategoryUnbudgetedDiagnosticsRow {
+    pub category: Category,
+    pub actual_value: i64,
+    /// Share in basis points (percent * 100). Example: 2_500 = 25.00%.
+    pub share_of_total_basis_points: i32,
+}
+
+#[derive(Serialize, Debug, Clone, JsonSchema)]
+pub struct CategoryUnbudgetedDiagnosticsRowResponse {
+    #[serde(flatten)]
+    pub category: CategoryResponse,
+    pub actual_value: i64,
+    /// Share in basis points (percent * 100). Example: 2_500 = 25.00%.
+    pub share_of_total_basis_points: i32,
+}
+
+#[derive(Debug, Clone)]
+pub struct CategoriesDiagnostics {
+    pub period_summary: PeriodContextSummaryResponse,
+    pub budgeted_rows: Vec<CategoryBudgetedDiagnosticsRow>,
+    pub unbudgeted_rows: Vec<CategoryUnbudgetedDiagnosticsRow>,
+}
+
+#[derive(Serialize, Debug, Clone, JsonSchema)]
+pub struct CategoriesDiagnosticsResponse {
+    pub period_summary: PeriodContextSummaryResponse,
+    pub budgeted_rows: Vec<CategoryBudgetedDiagnosticsRowResponse>,
+    pub unbudgeted_rows: Vec<CategoryUnbudgetedDiagnosticsRowResponse>,
+}
+
 impl From<&Category> for CategoryResponse {
     fn from(category: &Category) -> Self {
         Self {
@@ -117,6 +172,39 @@ impl From<&CategoryWithStats> for CategoryWithStatsResponse {
     }
 }
 
+impl From<&CategoryBudgetedDiagnosticsRow> for CategoryBudgetedDiagnosticsRowResponse {
+    fn from(row: &CategoryBudgetedDiagnosticsRow) -> Self {
+        Self {
+            category: (&row.category).into(),
+            budgeted_value: row.budgeted_value,
+            actual_value: row.actual_value,
+            variance_value: row.variance_value,
+            progress_basis_points: row.progress_basis_points,
+            recent_closed_periods: row.recent_closed_periods.clone(),
+        }
+    }
+}
+
+impl From<&CategoryUnbudgetedDiagnosticsRow> for CategoryUnbudgetedDiagnosticsRowResponse {
+    fn from(row: &CategoryUnbudgetedDiagnosticsRow) -> Self {
+        Self {
+            category: (&row.category).into(),
+            actual_value: row.actual_value,
+            share_of_total_basis_points: row.share_of_total_basis_points,
+        }
+    }
+}
+
+impl From<&CategoriesDiagnostics> for CategoriesDiagnosticsResponse {
+    fn from(value: &CategoriesDiagnostics) -> Self {
+        Self {
+            period_summary: value.period_summary.clone(),
+            budgeted_rows: value.budgeted_rows.iter().map(CategoryBudgetedDiagnosticsRowResponse::from).collect(),
+            unbudgeted_rows: value.unbudgeted_rows.iter().map(CategoryUnbudgetedDiagnosticsRowResponse::from).collect(),
+        }
+    }
+}
+
 pub fn difference_vs_average_percentage(used_in_period: i64, average_period_usage: i64) -> i32 {
     if average_period_usage <= 0 {
         0
@@ -124,6 +212,31 @@ pub fn difference_vs_average_percentage(used_in_period: i64, average_period_usag
         let percent = (used_in_period.saturating_mul(100)) / average_period_usage;
         percent.clamp(i32::MIN as i64, i32::MAX as i64) as i32
     }
+}
+
+pub fn variance_value(actual_value: i64, budgeted_value: i32) -> i64 {
+    actual_value.saturating_sub(i64::from(budgeted_value))
+}
+
+pub fn progress_basis_points(actual_value: i64, budgeted_value: i32) -> i32 {
+    if budgeted_value <= 0 {
+        return 0;
+    }
+
+    let safe_actual = actual_value.max(0);
+    let points = safe_actual.saturating_mul(10_000) / i64::from(budgeted_value);
+    points.clamp(i32::MIN as i64, i32::MAX as i64) as i32
+}
+
+pub fn share_of_total_basis_points(value: i64, total: i64) -> i32 {
+    let safe_total = total.max(0);
+    if safe_total == 0 {
+        return 0;
+    }
+
+    let safe_value = value.max(0);
+    let points = safe_value.saturating_mul(10_000) / safe_total;
+    points.clamp(i32::MIN as i64, i32::MAX as i64) as i32
 }
 
 fn category_used_in_period_example() -> i64 {
@@ -154,7 +267,7 @@ fn category_with_stats_response_example() -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
-    use super::difference_vs_average_percentage;
+    use super::{difference_vs_average_percentage, progress_basis_points, share_of_total_basis_points, variance_value};
 
     #[test]
     fn test_difference_vs_average_percentage_zero_average() {
@@ -165,5 +278,25 @@ mod tests {
     fn test_difference_vs_average_percentage_basic() {
         assert_eq!(difference_vs_average_percentage(50, 100), 50);
         assert_eq!(difference_vs_average_percentage(150, 100), 150);
+    }
+
+    #[test]
+    fn test_variance_value() {
+        assert_eq!(variance_value(15_000, 10_000), 5_000);
+        assert_eq!(variance_value(8_000, 10_000), -2_000);
+    }
+
+    #[test]
+    fn test_progress_basis_points() {
+        assert_eq!(progress_basis_points(12_500, 10_000), 12_500);
+        assert_eq!(progress_basis_points(-50, 10_000), 0);
+        assert_eq!(progress_basis_points(1_000, 0), 0);
+    }
+
+    #[test]
+    fn test_share_of_total_basis_points() {
+        assert_eq!(share_of_total_basis_points(250, 1_000), 2_500);
+        assert_eq!(share_of_total_basis_points(-50, 1_000), 0);
+        assert_eq!(share_of_total_basis_points(100, 0), 0);
     }
 }

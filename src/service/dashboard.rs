@@ -36,4 +36,19 @@ mod tests {
     fn marks_positive_spend_with_zero_budget_as_outside() {
         assert!(is_outside_tolerance(1, 0, 1000));
     }
+
+    #[test]
+    fn marks_zero_spend_with_zero_budget_as_inside() {
+        assert!(!is_outside_tolerance(0, 0, 1000));
+    }
+
+    #[test]
+    fn marks_negative_spend_with_zero_budget_as_inside() {
+        assert!(!is_outside_tolerance(-100, 0, 1000));
+    }
+
+    #[test]
+    fn clamps_negative_spend_to_zero_for_positive_budget() {
+        assert!(is_outside_tolerance(-100, 10_000, 1000));
+    }
 }

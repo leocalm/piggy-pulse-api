@@ -70,7 +70,7 @@ pub struct TotalAssetsResponse {
     pub total_assets: i64,
 }
 
-#[derive(Serialize, Debug, JsonSchema)]
+#[derive(Serialize, Debug, Clone, JsonSchema)]
 pub struct BudgetStabilityPeriodResponse {
     pub period_id: String,
     pub is_outside_tolerance: bool,
@@ -82,6 +82,29 @@ pub struct BudgetStabilityResponse {
     pub periods_within_tolerance: u32,
     pub total_closed_periods: u32,
     pub recent_closed_periods: Vec<BudgetStabilityPeriodResponse>,
+}
+
+#[derive(Serialize, Debug, Clone, JsonSchema)]
+pub struct PeriodContextSummaryResponse {
+    pub total_budget: i64,
+    pub spent_budget: i64,
+    pub remaining_budget: i64,
+    pub days_in_period: u32,
+    pub remaining_days: u32,
+    pub days_passed_percentage: u32,
+}
+
+impl PeriodContextSummaryResponse {
+    pub fn from_period_metrics(monthly_burn_in: &MonthlyBurnInResponse, month_progress: &MonthProgressResponse) -> Self {
+        Self {
+            total_budget: monthly_burn_in.total_budget,
+            spent_budget: monthly_burn_in.spent_budget,
+            remaining_budget: monthly_burn_in.total_budget - monthly_burn_in.spent_budget,
+            days_in_period: month_progress.days_in_period,
+            remaining_days: month_progress.remaining_days,
+            days_passed_percentage: month_progress.days_passed_percentage,
+        }
+    }
 }
 
 #[derive(Serialize, Debug, JsonSchema)]

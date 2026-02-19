@@ -11,3 +11,4 @@ PiggyPulse.toml
 
 .gemini/
 gha-creds-*.json
+.serena/
