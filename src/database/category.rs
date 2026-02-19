@@ -2,8 +2,8 @@ use crate::database::postgres_repository::{PostgresRepository, is_unique_violati
 use crate::error::app_error::AppError;
 use crate::models::budget_period::BudgetPeriod;
 use crate::models::category::{
-    Category, CategoryBudgetedDiagnosticsRow, CategoryManagementRow, CategoryRequest, CategoryStats, CategoryType, CategoryUnbudgetedDiagnosticsRow, CategoryWithStats,
-    difference_vs_average_percentage, progress_basis_points, share_of_total_basis_points, variance_value,
+    Category, CategoryBudgetedDiagnosticsRow, CategoryManagementRow, CategoryRequest, CategoryStats, CategoryType, CategoryUnbudgetedDiagnosticsRow,
+    CategoryWithStats, difference_vs_average_percentage, progress_basis_points, share_of_total_basis_points, variance_value,
 };
 use crate::models::dashboard::BudgetStabilityPeriodResponse;
 use crate::models::pagination::CursorParams;
@@ -199,9 +199,7 @@ impl PostgresRepository {
                 // Verify type matches parent
                 let parent_type = category_type_from_db(&parent.category_type);
                 if parent_type != request.category_type {
-                    return Err(AppError::BadRequest(
-                        "Subcategory must have the same type as its parent.".to_string(),
-                    ));
+                    return Err(AppError::BadRequest("Subcategory must have the same type as its parent.".to_string()));
                 }
             } else {
                 return Err(AppError::NotFound("Parent category not found".to_string()));
@@ -672,6 +670,54 @@ ORDER BY actual_value DESC, c.name
     }
 
     pub async fn update_category(&self, id: &Uuid, request: &CategoryRequest, user_id: &Uuid) -> Result<Category, AppError> {
+        // Validate parent_id if being set
+        if let Some(parent_id) = request.parent_id {
+            // Prevent setting parent_id to self
+            if parent_id == *id {
+                return Err(AppError::BadRequest("A category cannot be its own parent.".to_string()));
+            }
+
+            let parent: Option<CategoryRow> = sqlx::query_as(
+                r#"
+                SELECT
+                    id,
+                    name,
+                    COALESCE(color, '') as color,
+                    COALESCE(icon, '') as icon,
+                    parent_id,
+                    category_type::text as category_type,
+                    is_archived,
+                    description
+                FROM category
+                WHERE id = $1 AND user_id = $2
+                "#,
+            )
+            .bind(parent_id)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+            if let Some(parent) = parent {
+                // Max depth = 1: parent cannot already have a parent
+                if parent.parent_id.is_some() {
+                    return Err(AppError::BadRequest(
+                        "Cannot create a subcategory under another subcategory. Maximum depth is 1.".to_string(),
+                    ));
+                }
+                // Parent must be same type
+                let parent_type = category_type_from_db(&parent.category_type);
+                if parent_type != request.category_type {
+                    return Err(AppError::BadRequest("Subcategory must have the same type as its parent.".to_string()));
+                }
+                // Parent cannot be archived
+                if parent.is_archived {
+                    return Err(AppError::BadRequest("Cannot set parent to an archived category.".to_string()));
+                }
+            } else {
+                return Err(AppError::NotFound("Parent category not found".to_string()));
+            }
+        }
+
         let name_exists: bool = sqlx::query_scalar(
             r#"
             SELECT EXISTS (
