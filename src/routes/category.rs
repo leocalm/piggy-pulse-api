@@ -3,7 +3,8 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::RateLimit;
 use crate::models::category::{
-    CategoriesDiagnostics, CategoriesDiagnosticsResponse, CategoriesManagementListResponse, CategoryManagementResponse, CategoryOption, CategoryRequest, CategoryResponse, CategoryWithStatsResponse,
+    CategoriesDiagnostics, CategoriesDiagnosticsResponse, CategoriesManagementListResponse, CategoryManagementResponse, CategoryOption, CategoryRequest,
+    CategoryResponse, CategoryWithStatsResponse,
 };
 use crate::models::dashboard::PeriodContextSummaryResponse;
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
@@ -176,22 +177,13 @@ pub async fn list_categories_for_management(
         }
     }
 
-    Ok(Json(CategoriesManagementListResponse {
-        incoming,
-        outgoing,
-        archived,
-    }))
+    Ok(Json(CategoriesManagementListResponse { incoming, outgoing, archived }))
 }
 
 /// Archive a category (soft delete)
 #[openapi(tag = "Categories")]
 #[post("/<id>/archive")]
-pub async fn archive_category(
-    pool: &State<PgPool>,
-    _rate_limit: RateLimit,
-    current_user: CurrentUser,
-    id: &str,
-) -> Result<Json<CategoryResponse>, AppError> {
+pub async fn archive_category(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser, id: &str) -> Result<Json<CategoryResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
     let category = repo.archive_category(&uuid, &current_user.id).await?;
@@ -201,12 +193,7 @@ pub async fn archive_category(
 /// Restore an archived category
 #[openapi(tag = "Categories")]
 #[post("/<id>/restore")]
-pub async fn restore_category(
-    pool: &State<PgPool>,
-    _rate_limit: RateLimit,
-    current_user: CurrentUser,
-    id: &str,
-) -> Result<Json<CategoryResponse>, AppError> {
+pub async fn restore_category(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser, id: &str) -> Result<Json<CategoryResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
     let category = repo.restore_category(&uuid, &current_user.id).await?;
