@@ -38,8 +38,20 @@ pub struct AccountRequest {
     #[validate(length(min = 3))]
     pub icon: String,
     pub account_type: AccountType,
-    #[validate(range(min = 0))]
     pub balance: i64,
+    pub spend_limit: Option<i32>,
+    pub next_transfer_amount: Option<i64>,
+}
+
+#[derive(Deserialize, Debug, Validate, JsonSchema)]
+pub struct AccountUpdateRequest {
+    #[validate(length(min = 3))]
+    pub name: String,
+    #[validate(length(min = 3))]
+    pub color: String,
+    #[validate(length(min = 3))]
+    pub icon: String,
+    pub account_type: AccountType,
     pub spend_limit: Option<i32>,
     pub next_transfer_amount: Option<i64>,
 }

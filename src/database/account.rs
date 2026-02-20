@@ -1,6 +1,6 @@
 use crate::database::postgres_repository::{PostgresRepository, is_unique_violation};
 use crate::error::app_error::AppError;
-use crate::models::account::{Account, AccountBalancePerDay, AccountManagementResponse, AccountRequest, AccountType, AccountWithMetrics};
+use crate::models::account::{Account, AccountBalancePerDay, AccountManagementResponse, AccountRequest, AccountType, AccountUpdateRequest, AccountWithMetrics};
 use crate::models::currency::{Currency, CurrencyResponse, SymbolPosition};
 use crate::models::pagination::CursorParams;
 use uuid::Uuid;
@@ -161,7 +161,7 @@ impl PostgresRepository {
             .await?
             .ok_or_else(|| AppError::NotFound(format!("Default currency {} not found", currency_id)))?;
 
-        let account_type_str = request.account_type_to_db();
+        let account_type_str = account_type_to_db(&request.account_type);
 
         #[derive(sqlx::FromRow)]
         struct CreateAccountRow {
@@ -804,7 +804,7 @@ ORDER BY a.id, d.day
         Ok((total_net_worth, row.total_assets, row.total_liabilities))
     }
 
-    pub async fn update_account(&self, id: &Uuid, request: &AccountRequest, user_id: &Uuid) -> Result<Account, AppError> {
+    pub async fn update_account(&self, id: &Uuid, request: &AccountUpdateRequest, user_id: &Uuid) -> Result<Account, AppError> {
         let name_exists: bool = sqlx::query_scalar(
             r#"
             SELECT EXISTS (
@@ -831,7 +831,7 @@ ORDER BY a.id, d.day
             .ok_or_else(|| AppError::NotFound("Account not found".to_string()))?;
         let currency = existing_account.currency;
 
-        let account_type_str = request.account_type_to_db();
+        let account_type_str = account_type_to_db(&request.account_type);
 
         #[derive(sqlx::FromRow)]
         struct UpdateAccountRow {
@@ -908,19 +908,13 @@ pub fn account_type_from_db<T: AsRef<str>>(value: T) -> AccountType {
     }
 }
 
-trait AccountRequestDbExt {
-    fn account_type_to_db(&self) -> String;
-}
-
-impl AccountRequestDbExt for AccountRequest {
-    fn account_type_to_db(&self) -> String {
-        match self.account_type {
-            AccountType::Checking => "Checking".to_string(),
-            AccountType::Savings => "Savings".to_string(),
-            AccountType::CreditCard => "CreditCard".to_string(),
-            AccountType::Wallet => "Wallet".to_string(),
-            AccountType::Allowance => "Allowance".to_string(),
-        }
+pub fn account_type_to_db(account_type: &AccountType) -> String {
+    match account_type {
+        AccountType::Checking => "Checking".to_string(),
+        AccountType::Savings => "Savings".to_string(),
+        AccountType::CreditCard => "CreditCard".to_string(),
+        AccountType::Wallet => "Wallet".to_string(),
+        AccountType::Allowance => "Allowance".to_string(),
     }
 }
 
@@ -954,7 +948,7 @@ mod tests {
             spend_limit: None,
             next_transfer_amount: None,
         };
-        assert_eq!(request.account_type_to_db(), "Checking");
+        assert_eq!(account_type_to_db(&request.account_type), "Checking");
 
         let request_savings = AccountRequest {
             name: "Test".to_string(),
@@ -965,7 +959,7 @@ mod tests {
             spend_limit: None,
             next_transfer_amount: None,
         };
-        assert_eq!(request_savings.account_type_to_db(), "Savings");
+        assert_eq!(account_type_to_db(&request_savings.account_type), "Savings");
 
         let request_credit = AccountRequest {
             name: "Test".to_string(),
@@ -976,6 +970,6 @@ mod tests {
             spend_limit: None,
             next_transfer_amount: None,
         };
-        assert_eq!(request_credit.account_type_to_db(), "CreditCard");
+        assert_eq!(account_type_to_db(&request_credit.account_type), "CreditCard");
     }
 }

@@ -3,7 +3,7 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::RateLimit;
 use crate::models::account::{
-    AccountListResponse, AccountManagementResponse, AccountOptionResponse, AccountRequest, AccountResponse, AccountsSummaryResponse,
+    AccountListResponse, AccountManagementResponse, AccountOptionResponse, AccountRequest, AccountResponse, AccountUpdateRequest, AccountsSummaryResponse,
     AdjustStartingBalanceRequest,
 };
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
@@ -102,7 +102,7 @@ pub async fn put_account(
     _rate_limit: RateLimit,
     current_user: CurrentUser,
     id: &str,
-    payload: Json<AccountRequest>,
+    payload: Json<AccountUpdateRequest>,
 ) -> Result<Json<AccountResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
