@@ -1,0 +1,2 @@
+ALTER TABLE budget_category
+ADD COLUMN is_excluded BOOLEAN NOT NULL DEFAULT FALSE;

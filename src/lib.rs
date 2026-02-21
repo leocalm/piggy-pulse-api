@@ -221,6 +221,7 @@ fn mount_api_routes(mut rocket: Rocket<Build>, base_path: &str) -> Rocket<Build>
     rocket = rocket.mount(join_base_path(base_path, "currency"), app_routes::currency::routes().0);
     rocket = rocket.mount(join_base_path(base_path, "categories"), app_routes::category::routes().0);
     rocket = rocket.mount(join_base_path(base_path, "budget-categories"), app_routes::budget_category::routes().0);
+    rocket = rocket.mount(join_base_path(base_path, "category-targets"), app_routes::category_target::routes().0);
     rocket = rocket.mount(join_base_path(base_path, "transactions"), app_routes::transaction::routes().0);
     rocket = rocket.mount(join_base_path(base_path, "vendors"), app_routes::vendor::routes().0);
     rocket = rocket.mount(join_base_path(base_path, "health"), app_routes::health::routes().0);
@@ -261,6 +262,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
             "/currency" => app_routes::currency::routes(),
             "/categories" => app_routes::category::routes(),
             "/budget-categories" => app_routes::budget_category::routes(),
+            "/category-targets" => app_routes::category_target::routes(),
             "/transactions" => app_routes::transaction::routes(),
             "/vendors" => app_routes::vendor::routes(),
             "/health" => app_routes::health::routes(),
@@ -294,17 +296,18 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
                 "/settings" => app_routes::settings::routes(),
                 "/currency" => app_routes::currency::routes(),
                 "/categories" => app_routes::category::routes(),
-                "/budget-categories" => app_routes::budget_category::routes(),
-                "/transactions" => app_routes::transaction::routes(),
-                "/vendors" => app_routes::vendor::routes(),
-                "/health" => app_routes::health::routes(),
-                "/dashboard" => app_routes::dashboard::routes(),
-                "/budget_period" => app_routes::budget_period::routes(),
-                "/overlays" => app_routes::overlay::routes(),
-                "/two-factor" => app_routes::two_factor::routes(),
-            }
-            if config.api.expose_swagger_ui {
-                let docs_path = join_base_path(base_path, "docs");
+            "/budget-categories" => app_routes::budget_category::routes(),
+            "/category-targets" => app_routes::category_target::routes(),
+            "/transactions" => app_routes::transaction::routes(),
+            "/vendors" => app_routes::vendor::routes(),
+            "/health" => app_routes::health::routes(),
+            "/dashboard" => app_routes::dashboard::routes(),
+            "/budget_period" => app_routes::budget_period::routes(),
+            "/overlays" => app_routes::overlay::routes(),
+            "/two-factor" => app_routes::two_factor::routes(),
+        }
+        if config.api.expose_swagger_ui {
+            let docs_path = join_base_path(base_path, "docs");
                 let docs_openapi_url = join_base_path(base_path, "openapi.json");
                 rocket = rocket.mount(docs_path, make_swagger_ui(&get_swagger_config(&docs_openapi_url)));
             }
