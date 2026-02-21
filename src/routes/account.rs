@@ -3,8 +3,8 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::RateLimit;
 use crate::models::account::{
-    AccountDetailResponse, AccountListResponse, AccountManagementResponse, AccountOptionResponse, AccountRequest, AccountResponse, AccountUpdateRequest,
-    AccountsSummaryResponse, AdjustStartingBalanceRequest,
+    AccountBalanceHistoryPoint, AccountDetailResponse, AccountListResponse, AccountManagementResponse, AccountOptionResponse, AccountRequest, AccountResponse,
+    AccountUpdateRequest, AccountsSummaryResponse, AdjustStartingBalanceRequest,
 };
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use crate::service::account::AccountService;
@@ -190,6 +190,38 @@ pub async fn get_account_detail(
     Ok(Json(detail))
 }
 
+/// Get balance history for an account
+#[openapi(tag = "Accounts")]
+#[get("/<id>/balance-history?<range>&<period_id>")]
+pub async fn get_account_balance_history(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    id: &str,
+    range: String,
+    period_id: Option<String>,
+) -> Result<Json<Vec<AccountBalanceHistoryPoint>>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let account_uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
+
+    let today = chrono::Utc::now().date_naive();
+    let (start, end) = match range.as_str() {
+        "30d" => (today - chrono::Duration::days(30), today),
+        "90d" => (today - chrono::Duration::days(90), today),
+        "1y" => (today - chrono::Duration::days(365), today),
+        "period" => {
+            let pid = period_id.ok_or_else(|| AppError::BadRequest("period_id required for range=period".to_string()))?;
+            let period_uuid = Uuid::parse_str(&pid).map_err(|e| AppError::uuid("Invalid period id", e))?;
+            let period = repo.get_budget_period(&period_uuid, &current_user.id).await?;
+            (period.start_date, period.end_date)
+        }
+        _ => return Err(AppError::BadRequest("Invalid range. Use: period, 30d, 90d, 1y".to_string())),
+    };
+
+    let points = repo.get_account_balance_history(&account_uuid, start, end, &current_user.id).await?;
+    Ok(Json(points))
+}
+
 pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
     rocket_okapi::openapi_get_routes_spec![
         create_account,
@@ -203,7 +235,8 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
         adjust_starting_balance,
         get_accounts_summary,
         get_account_options,
-        get_account_detail
+        get_account_detail,
+        get_account_balance_history
     ]
 }
 
@@ -736,5 +769,54 @@ mod tests {
         assert_eq!(json["inflows"].as_i64().unwrap(), 50_000);
         assert_eq!(json["outflows"].as_i64().unwrap(), 20_000);
         assert_eq!(json["net"].as_i64().unwrap(), 30_000);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_get_account_balance_history_period() {
+        let mut config = Config::default();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
+        config.rate_limit.require_client_ip = false;
+        config.session.cookie_secure = false;
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+        create_user_and_auth(&client).await;
+
+        let category_id = create_category(&client, "Salary", "Incoming").await;
+        let account_id = create_account(&client, "Test Checking", 100_000).await;
+        let today = Utc::now().date_naive();
+        let start = today.checked_sub_signed(Duration::days(5)).unwrap_or(today);
+        let period_id = create_budget_period(&client, start, today).await;
+        create_transaction(&client, &category_id, &account_id, start, 50_000).await;
+
+        let response = client
+            .get(format!("/api/v1/accounts/{}/balance-history?range=period&period_id={}", account_id, period_id))
+            .dispatch()
+            .await;
+        assert_eq!(response.status(), Status::Ok);
+        let json: Value = serde_json::from_str(&response.into_string().await.unwrap()).unwrap();
+        assert!(!json.as_array().unwrap().is_empty());
+        let point = &json[0];
+        assert!(point["date"].as_str().is_some());
+        assert!(point["balance"].as_i64().is_some());
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_get_account_balance_history_invalid_range() {
+        let mut config = Config::default();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
+        config.rate_limit.require_client_ip = false;
+        config.session.cookie_secure = false;
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+        create_user_and_auth(&client).await;
+        let account_id = create_account(&client, "Test Checking", 100_000).await;
+
+        let response = client
+            .get(format!("/api/v1/accounts/{}/balance-history?range=bad", account_id))
+            .dispatch()
+            .await;
+        assert_eq!(response.status(), Status::BadRequest);
     }
 }

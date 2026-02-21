@@ -176,3 +176,9 @@ pub struct AccountDetailResponse {
     pub period_start: NaiveDate,
     pub period_end: NaiveDate,
 }
+
+#[derive(Serialize, Debug, JsonSchema)]
+pub struct AccountBalanceHistoryPoint {
+    pub date: String, // "YYYY-MM-DD"
+    pub balance: i64, // integer cents
+}

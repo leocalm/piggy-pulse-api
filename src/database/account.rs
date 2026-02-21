@@ -1,6 +1,6 @@
 use crate::database::postgres_repository::{PostgresRepository, is_unique_violation};
 use crate::error::app_error::AppError;
-use crate::models::account::{Account, AccountBalancePerDay, AccountDetailResponse, AccountManagementResponse, AccountRequest, AccountType, AccountUpdateRequest, AccountWithMetrics};
+use crate::models::account::{Account, AccountBalanceHistoryPoint, AccountBalancePerDay, AccountDetailResponse, AccountManagementResponse, AccountRequest, AccountType, AccountUpdateRequest, AccountWithMetrics};
 use crate::models::currency::{Currency, CurrencyResponse, SymbolPosition};
 use crate::models::pagination::CursorParams;
 use chrono::NaiveDate;
@@ -977,6 +977,86 @@ WHERE a.id = $1 AND a.user_id = $3
             period_start: row.period_start,
             period_end: row.period_end,
         })
+    }
+
+    pub async fn get_account_balance_history(
+        &self,
+        account_id: &Uuid,
+        start_date: NaiveDate,
+        end_date: NaiveDate,
+        user_id: &Uuid,
+    ) -> Result<Vec<AccountBalanceHistoryPoint>, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct HistoryRow {
+            date: String,
+            balance: i64,
+        }
+
+        let rows = sqlx::query_as::<_, HistoryRow>(
+            r#"
+WITH days AS (
+    SELECT d::date AS day
+    FROM generate_series($2::date, $3::date, '1 day') AS d
+),
+base_balance AS (
+    SELECT
+        a.balance + COALESCE(SUM(
+            CASE
+                WHEN c.category_type = 'Incoming'                              THEN  t.amount::bigint
+                WHEN c.category_type = 'Outgoing'                              THEN -t.amount::bigint
+                WHEN c.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
+                WHEN c.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
+                ELSE 0
+            END
+        ), 0) AS base_bal
+    FROM account a
+    LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id)
+                            AND t.occurred_at < $2
+                            AND t.user_id = $4
+    LEFT JOIN category c ON t.category_id = c.id
+    WHERE a.id = $1 AND a.user_id = $4
+    GROUP BY a.id, a.balance
+),
+daily_totals AS (
+    SELECT
+        t.occurred_at::date AS day,
+        SUM(
+            CASE
+                WHEN c.category_type = 'Incoming'                              THEN  t.amount::bigint
+                WHEN c.category_type = 'Outgoing'                              THEN -t.amount::bigint
+                WHEN c.category_type = 'Transfer' AND t.from_account_id = $1  THEN -t.amount::bigint
+                WHEN c.category_type = 'Transfer' AND t.to_account_id   = $1  THEN  t.amount::bigint
+                ELSE 0
+            END
+        ) AS daily_amount
+    FROM transaction t
+    JOIN category c ON c.id = t.category_id
+    WHERE (t.from_account_id = $1 OR t.to_account_id = $1)
+      AND t.user_id = $4
+      AND t.occurred_at >= $2
+      AND t.occurred_at <= $3
+    GROUP BY t.occurred_at::date
+)
+SELECT
+    to_char(d.day, 'YYYY-MM-DD') AS date,
+    (bb.base_bal + SUM(COALESCE(dt.daily_amount, 0)) OVER (
+        ORDER BY d.day
+        ROWS UNBOUNDED PRECEDING
+    ))::bigint AS balance
+FROM days d
+CROSS JOIN base_balance bb
+LEFT JOIN daily_totals dt ON dt.day = d.day
+ORDER BY d.day
+            "#,
+        )
+        .bind(account_id)
+        .bind(start_date)
+        .bind(end_date)
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|r| AccountBalanceHistoryPoint { date: r.date, balance: r.balance }).collect())
     }
 }
 
