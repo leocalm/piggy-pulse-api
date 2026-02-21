@@ -182,3 +182,15 @@ pub struct AccountBalanceHistoryPoint {
     pub date: String, // "YYYY-MM-DD"
     pub balance: i64, // integer cents
 }
+
+#[derive(Serialize, Debug, JsonSchema)]
+pub struct AccountTransactionResponse {
+    pub id: Uuid,
+    pub amount: i64,
+    pub description: String,
+    pub occurred_at: NaiveDate,
+    pub category_name: String,
+    pub category_color: String,
+    pub flow: String,         // "in" | "out"
+    pub running_balance: i64, // cents, server-computed
+}

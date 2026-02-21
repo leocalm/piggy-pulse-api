@@ -4,7 +4,7 @@ use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::RateLimit;
 use crate::models::account::{
     AccountBalanceHistoryPoint, AccountDetailResponse, AccountListResponse, AccountManagementResponse, AccountOptionResponse, AccountRequest, AccountResponse,
-    AccountUpdateRequest, AccountsSummaryResponse, AdjustStartingBalanceRequest,
+    AccountTransactionResponse, AccountUpdateRequest, AccountsSummaryResponse, AdjustStartingBalanceRequest,
 };
 use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
 use crate::service::account::AccountService;
@@ -222,6 +222,32 @@ pub async fn get_account_balance_history(
     Ok(Json(points))
 }
 
+/// List transactions for a specific account within a budget period
+#[openapi(tag = "Accounts")]
+#[get("/<id>/transactions?<period_id>&<tx_type>&<cursor>&<limit>")]
+#[allow(clippy::too_many_arguments)]
+pub async fn list_account_transactions(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    id: &str,
+    period_id: String,
+    tx_type: Option<String>,
+    cursor: Option<String>,
+    limit: Option<i64>,
+) -> Result<Json<CursorPaginatedResponse<AccountTransactionResponse>>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let account_uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
+    let period_uuid = Uuid::parse_str(&period_id).map_err(|e| AppError::uuid("Invalid period id", e))?;
+    let params = CursorParams::from_query(cursor, limit)?;
+
+    let flow_filter = tx_type.as_deref();
+    let txs = repo
+        .get_account_transactions(&account_uuid, &period_uuid, flow_filter, &params, &current_user.id)
+        .await?;
+    Ok(Json(CursorPaginatedResponse::from_rows(txs, params.effective_limit(), |r| r.id)))
+}
+
 pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
     rocket_okapi::openapi_get_routes_spec![
         create_account,
@@ -236,7 +262,8 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
         get_accounts_summary,
         get_account_options,
         get_account_detail,
-        get_account_balance_history
+        get_account_balance_history,
+        list_account_transactions
     ]
 }
 
@@ -818,5 +845,35 @@ mod tests {
             .dispatch()
             .await;
         assert_eq!(response.status(), Status::BadRequest);
+    }
+
+    #[rocket::async_test]
+    #[ignore = "requires database"]
+    async fn test_list_account_transactions() {
+        let mut config = Config::default();
+        config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
+        config.rate_limit.require_client_ip = false;
+        config.session.cookie_secure = false;
+
+        let client = Client::tracked(build_rocket(config)).await.expect("valid rocket instance");
+        create_user_and_auth(&client).await;
+
+        let category_id = create_category(&client, "Salary", "Incoming").await;
+        let account_id = create_account(&client, "Test Checking", 100_000).await;
+        let today = Utc::now().date_naive();
+        let start = today.checked_sub_signed(Duration::days(5)).unwrap_or(today);
+        let period_id = create_budget_period(&client, start, today).await;
+        create_transaction(&client, &category_id, &account_id, start, 50_000).await;
+
+        let response = client
+            .get(format!("/api/v1/accounts/{}/transactions?period_id={}", account_id, period_id))
+            .dispatch()
+            .await;
+        assert_eq!(response.status(), Status::Ok);
+        let json: Value = serde_json::from_str(&response.into_string().await.unwrap()).unwrap();
+        let data = json["data"].as_array().unwrap();
+        assert!(!data.is_empty());
+        assert!(data[0]["running_balance"].as_i64().is_some());
+        assert!(data[0]["flow"].as_str().is_some());
     }
 }

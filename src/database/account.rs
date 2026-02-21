@@ -1,6 +1,9 @@
 use crate::database::postgres_repository::{PostgresRepository, is_unique_violation};
 use crate::error::app_error::AppError;
-use crate::models::account::{Account, AccountBalanceHistoryPoint, AccountBalancePerDay, AccountDetailResponse, AccountManagementResponse, AccountRequest, AccountType, AccountUpdateRequest, AccountWithMetrics};
+use crate::models::account::{
+    Account, AccountBalanceHistoryPoint, AccountBalancePerDay, AccountDetailResponse, AccountManagementResponse, AccountRequest, AccountTransactionResponse,
+    AccountType, AccountUpdateRequest, AccountWithMetrics,
+};
 use crate::models::currency::{Currency, CurrencyResponse, SymbolPosition};
 use crate::models::pagination::CursorParams;
 use chrono::NaiveDate;
@@ -897,12 +900,7 @@ ORDER BY a.id, d.day
         })
     }
 
-    pub async fn get_account_detail(
-        &self,
-        account_id: &Uuid,
-        period_id: &Uuid,
-        user_id: &Uuid,
-    ) -> Result<AccountDetailResponse, AppError> {
+    pub async fn get_account_detail(&self, account_id: &Uuid, period_id: &Uuid, user_id: &Uuid) -> Result<AccountDetailResponse, AppError> {
         #[derive(sqlx::FromRow)]
         struct DetailRow {
             balance: i64,
@@ -1056,7 +1054,144 @@ ORDER BY d.day
         .fetch_all(&self.pool)
         .await?;
 
-        Ok(rows.into_iter().map(|r| AccountBalanceHistoryPoint { date: r.date, balance: r.balance }).collect())
+        Ok(rows
+            .into_iter()
+            .map(|r| AccountBalanceHistoryPoint {
+                date: r.date,
+                balance: r.balance,
+            })
+            .collect())
+    }
+
+    pub async fn get_account_transactions(
+        &self,
+        account_id: &Uuid,
+        period_id: &Uuid,
+        flow_filter: Option<&str>,
+        params: &CursorParams,
+        user_id: &Uuid,
+    ) -> Result<Vec<AccountTransactionResponse>, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct TxRow {
+            id: Uuid,
+            amount: i64,
+            description: String,
+            occurred_at: NaiveDate,
+            category_name: String,
+            category_color: String,
+            flow: String,
+            running_balance: i64,
+        }
+
+        let flow_clause = match flow_filter {
+            Some("in") => "AND flow = 'in'",
+            Some("out") => "AND flow = 'out'",
+            _ => "",
+        };
+
+        // Build cursor clause using the same subquery pattern as list_transactions
+        let (cursor_clause, has_cursor) = if params.cursor.is_some() {
+            ("AND (occurred_at, id) < (SELECT occurred_at, id FROM transaction WHERE id = $5)", true)
+        } else {
+            ("", false)
+        };
+
+        let sql = format!(
+            r#"
+WITH period AS (
+    SELECT start_date, end_date FROM budget_period WHERE id = $2 AND user_id = $4
+),
+base_balance AS (
+    SELECT
+        a.balance + COALESCE(SUM(
+            CASE
+                WHEN c.category_type = 'Incoming'                              THEN  t.amount::bigint
+                WHEN c.category_type = 'Outgoing'                              THEN -t.amount::bigint
+                WHEN c.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
+                WHEN c.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
+                ELSE 0
+            END
+        ), 0) AS base_bal
+    FROM account a
+    LEFT JOIN transaction t  ON (t.from_account_id = a.id OR t.to_account_id = a.id)
+                             AND t.occurred_at < (SELECT start_date FROM period)
+                             AND t.user_id = $4
+    LEFT JOIN category c ON t.category_id = c.id
+    WHERE a.id = $1 AND a.user_id = $4
+    GROUP BY a.id, a.balance
+),
+period_txs AS (
+    SELECT
+        t.id,
+        t.amount::bigint AS amount,
+        t.description,
+        t.occurred_at,
+        cat.name  AS category_name,
+        cat.color AS category_color,
+        CASE
+            WHEN cat.category_type = 'Incoming'                              THEN 'in'
+            WHEN cat.category_type = 'Transfer' AND t.to_account_id = $1    THEN 'in'
+            ELSE 'out'
+        END AS flow
+    FROM transaction t
+    JOIN category cat ON cat.id = t.category_id
+    CROSS JOIN period
+    WHERE (t.from_account_id = $1 OR t.to_account_id = $1)
+      AND t.user_id = $4
+      AND t.occurred_at >= period.start_date
+      AND t.occurred_at <= period.end_date
+),
+with_running AS (
+    SELECT
+        pt.*,
+        (bb.base_bal + SUM(
+            CASE WHEN flow = 'in' THEN amount ELSE -amount END
+        ) OVER (ORDER BY occurred_at ASC, id ASC ROWS UNBOUNDED PRECEDING))::bigint AS running_balance
+    FROM period_txs pt
+    CROSS JOIN base_balance bb
+)
+SELECT * FROM with_running
+WHERE 1=1 {flow_clause} {cursor_clause}
+ORDER BY occurred_at DESC, id DESC
+LIMIT $3
+            "#,
+            flow_clause = flow_clause,
+            cursor_clause = cursor_clause,
+        );
+
+        let rows = if has_cursor {
+            let cursor_id = params.cursor.unwrap();
+            sqlx::query_as::<_, TxRow>(&sql)
+                .bind(account_id)
+                .bind(period_id)
+                .bind(params.fetch_limit())
+                .bind(user_id)
+                .bind(cursor_id)
+                .fetch_all(&self.pool)
+                .await?
+        } else {
+            sqlx::query_as::<_, TxRow>(&sql)
+                .bind(account_id)
+                .bind(period_id)
+                .bind(params.fetch_limit())
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await?
+        };
+
+        Ok(rows
+            .into_iter()
+            .map(|r| AccountTransactionResponse {
+                id: r.id,
+                amount: r.amount,
+                description: r.description,
+                occurred_at: r.occurred_at,
+                category_name: r.category_name,
+                category_color: r.category_color,
+                flow: r.flow,
+                running_balance: r.running_balance,
+            })
+            .collect())
     }
 }
 
