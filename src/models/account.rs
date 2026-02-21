@@ -1,5 +1,6 @@
 use crate::models::currency::{Currency, CurrencyResponse};
 use crate::models::dashboard::BudgetPerDayResponse;
+use chrono::NaiveDate;
 use rocket::serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
 use uuid::Uuid;
@@ -163,4 +164,33 @@ pub struct AccountManagementResponse {
     pub transaction_count: i64,
     pub can_delete: bool,
     pub can_adjust_balance: bool,
+}
+
+#[derive(Serialize, Debug, JsonSchema)]
+pub struct AccountDetailResponse {
+    pub balance: i64,
+    pub balance_change: i64,
+    pub inflows: i64,
+    pub outflows: i64,
+    pub net: i64,
+    pub period_start: NaiveDate,
+    pub period_end: NaiveDate,
+}
+
+#[derive(Serialize, Debug, JsonSchema)]
+pub struct AccountBalanceHistoryPoint {
+    pub date: String, // "YYYY-MM-DD"
+    pub balance: i64, // integer cents
+}
+
+#[derive(Serialize, Debug, JsonSchema)]
+pub struct AccountTransactionResponse {
+    pub id: Uuid,
+    pub amount: i64,
+    pub description: String,
+    pub occurred_at: NaiveDate,
+    pub category_name: String,
+    pub category_color: String,
+    pub flow: String,         // "in" | "out"
+    pub running_balance: i64, // cents, server-computed
 }
