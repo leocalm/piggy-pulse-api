@@ -10,6 +10,7 @@ use base64::{Engine as _, engine::general_purpose};
 use data_encoding::BASE32_NOPAD;
 use password_hash::{PasswordHasher, PasswordVerifier, SaltString};
 use qrcode::QrCode;
+use rand::Rng;
 use sha2::{Digest, Sha256};
 use std::time::SystemTime;
 use totp_rs::{Algorithm, Secret, TOTP};
@@ -27,7 +28,7 @@ impl PostgresRepository {
     pub fn generate_totp_secret() -> String {
         let mut rng = rand::rng();
         let mut secret_bytes = [0u8; 20];
-        rand::RngCore::fill_bytes(&mut rng, &mut secret_bytes);
+        rng.fill_bytes(&mut secret_bytes);
         // Use standard RFC4648 base32 without padding
         BASE32_NOPAD.encode(&secret_bytes)
     }
@@ -38,7 +39,7 @@ impl PostgresRepository {
         let cipher = Aes256Gcm::new(key.into());
         let mut rng = rand::rng();
         let mut nonce_bytes = [0u8; 12];
-        rand::RngCore::fill_bytes(&mut rng, &mut nonce_bytes);
+        rng.fill_bytes(&mut nonce_bytes);
         let nonce = Nonce::from_slice(&nonce_bytes);
 
         let ciphertext = cipher
@@ -403,7 +404,7 @@ impl PostgresRepository {
         let token = {
             let mut rng = rand::rng();
             let mut token_bytes = [0u8; 32];
-            rand::RngCore::fill_bytes(&mut rng, &mut token_bytes);
+            rng.fill_bytes(&mut token_bytes);
             hex::encode(token_bytes)
         };
 

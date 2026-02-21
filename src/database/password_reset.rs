@@ -2,7 +2,7 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::password_reset::PasswordReset;
 use chrono::{DateTime, Utc};
-use rand::Rng;
+use rand::RngExt;
 use serde_json::Value as JsonValue;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
