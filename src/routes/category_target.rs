@@ -46,12 +46,7 @@ pub async fn save_category_targets(
 /// Exclude a category from target tracking
 #[openapi(tag = "Category Targets")]
 #[post("/<id>/exclude")]
-pub async fn exclude_category(
-    pool: &State<PgPool>,
-    _rate_limit: RateLimit,
-    current_user: CurrentUser,
-    id: &str,
-) -> Result<Status, AppError> {
+pub async fn exclude_category(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
 
     let repo = PostgresRepository { pool: pool.inner().clone() };
@@ -62,12 +57,7 @@ pub async fn exclude_category(
 /// Re-include a category in target tracking
 #[openapi(tag = "Category Targets")]
 #[post("/<id>/include")]
-pub async fn include_category(
-    pool: &State<PgPool>,
-    _rate_limit: RateLimit,
-    current_user: CurrentUser,
-    id: &str,
-) -> Result<Status, AppError> {
+pub async fn include_category(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser, id: &str) -> Result<Status, AppError> {
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
 
     let repo = PostgresRepository { pool: pool.inner().clone() };
@@ -76,10 +66,5 @@ pub async fn include_category(
 }
 
 pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
-    rocket_okapi::openapi_get_routes_spec![
-        get_category_targets,
-        save_category_targets,
-        exclude_category,
-        include_category
-    ]
+    rocket_okapi::openapi_get_routes_spec![get_category_targets, save_category_targets, exclude_category, include_category]
 }

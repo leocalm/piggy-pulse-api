@@ -289,25 +289,25 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
         if config.api.expose_docs {
             let settings = rocket_okapi::settings::OpenApiSettings::default();
             rocket_okapi::mount_endpoints_and_merged_docs! {
-                rocket, base_path.clone(), settings,
-                "/accounts" => app_routes::account::routes(),
-                "/users" => app_routes::user::routes(),
-                "" => app_routes::password_reset::routes(),
-                "/settings" => app_routes::settings::routes(),
-                "/currency" => app_routes::currency::routes(),
-                "/categories" => app_routes::category::routes(),
-            "/budget-categories" => app_routes::budget_category::routes(),
-            "/category-targets" => app_routes::category_target::routes(),
-            "/transactions" => app_routes::transaction::routes(),
-            "/vendors" => app_routes::vendor::routes(),
-            "/health" => app_routes::health::routes(),
-            "/dashboard" => app_routes::dashboard::routes(),
-            "/budget_period" => app_routes::budget_period::routes(),
-            "/overlays" => app_routes::overlay::routes(),
-            "/two-factor" => app_routes::two_factor::routes(),
-        }
-        if config.api.expose_swagger_ui {
-            let docs_path = join_base_path(base_path, "docs");
+                    rocket, base_path.clone(), settings,
+                    "/accounts" => app_routes::account::routes(),
+                    "/users" => app_routes::user::routes(),
+                    "" => app_routes::password_reset::routes(),
+                    "/settings" => app_routes::settings::routes(),
+                    "/currency" => app_routes::currency::routes(),
+                    "/categories" => app_routes::category::routes(),
+                "/budget-categories" => app_routes::budget_category::routes(),
+                "/category-targets" => app_routes::category_target::routes(),
+                "/transactions" => app_routes::transaction::routes(),
+                "/vendors" => app_routes::vendor::routes(),
+                "/health" => app_routes::health::routes(),
+                "/dashboard" => app_routes::dashboard::routes(),
+                "/budget_period" => app_routes::budget_period::routes(),
+                "/overlays" => app_routes::overlay::routes(),
+                "/two-factor" => app_routes::two_factor::routes(),
+            }
+            if config.api.expose_swagger_ui {
+                let docs_path = join_base_path(base_path, "docs");
                 let docs_openapi_url = join_base_path(base_path, "openapi.json");
                 rocket = rocket.mount(docs_path, make_swagger_ui(&get_swagger_config(&docs_openapi_url)));
             }

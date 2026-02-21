@@ -57,11 +57,7 @@ impl PostgresRepository {
     /// - current_target: the budgeted_value from budget_category (if it exists and is_excluded=false)
     /// - previous_target: budgeted_value from the immediately preceding period
     /// - projected_variance: basis points showing how much the actual spend deviates from target
-    pub async fn get_category_targets(
-        &self,
-        period_id: &Uuid,
-        user_id: &Uuid,
-    ) -> Result<CategoryTargetsResponse, AppError> {
+    pub async fn get_category_targets(&self, period_id: &Uuid, user_id: &Uuid) -> Result<CategoryTargetsResponse, AppError> {
         // 1. Get period info
         #[derive(sqlx::FromRow)]
         struct PeriodInfo {
@@ -209,11 +205,7 @@ impl PostgresRepository {
     }
 
     /// Batch upsert category targets: for each target entry, create or update the budget_category row
-    pub async fn batch_upsert_targets(
-        &self,
-        targets: &[TargetEntry],
-        user_id: &Uuid,
-    ) -> Result<(), AppError> {
+    pub async fn batch_upsert_targets(&self, targets: &[TargetEntry], user_id: &Uuid) -> Result<(), AppError> {
         let mut tx = self.pool.begin().await?;
 
         for entry in targets {
@@ -237,11 +229,7 @@ impl PostgresRepository {
     }
 
     /// Mark a category as excluded from target tracking
-    pub async fn exclude_category_from_targets(
-        &self,
-        category_id: &Uuid,
-        user_id: &Uuid,
-    ) -> Result<(), AppError> {
+    pub async fn exclude_category_from_targets(&self, category_id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
         sqlx::query(
             r#"
             INSERT INTO budget_category (user_id, category_id, budgeted_value, is_excluded)
@@ -259,11 +247,7 @@ impl PostgresRepository {
     }
 
     /// Re-include a previously excluded category in target tracking
-    pub async fn include_category_in_targets(
-        &self,
-        category_id: &Uuid,
-        user_id: &Uuid,
-    ) -> Result<(), AppError> {
+    pub async fn include_category_in_targets(&self, category_id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
         sqlx::query(
             r#"
             UPDATE budget_category
