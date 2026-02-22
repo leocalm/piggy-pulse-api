@@ -4,6 +4,8 @@ use rocket::fairing::{Fairing, Info, Kind};
 use rocket::http::Header;
 use rocket::request::{FromRequest, Outcome, Request};
 use rocket::{Data, Response};
+use rocket_okapi::r#gen::OpenApiGenerator;
+use rocket_okapi::request::{OpenApiFromRequest, RequestHeaderInput};
 use tracing::{info, warn};
 use uuid::Uuid;
 
@@ -103,6 +105,48 @@ impl Fairing for RequestLogger {
                 "request completed"
             );
         }
+    }
+}
+
+// ── UserAgent guard ───────────────────────────────────────────────────────────
+
+/// Extracts the `User-Agent` header value from the incoming request.
+pub struct UserAgent(pub Option<String>);
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for UserAgent {
+    type Error = ();
+
+    async fn from_request(req: &'r Request<'_>) -> Outcome<Self, ()> {
+        let ua = req.headers().get_one("User-Agent").map(|s| s.to_string());
+        Outcome::Success(UserAgent(ua))
+    }
+}
+
+impl<'a> OpenApiFromRequest<'a> for UserAgent {
+    fn from_request_input(_gen: &mut OpenApiGenerator, _name: String, _required: bool) -> rocket_okapi::Result<RequestHeaderInput> {
+        Ok(RequestHeaderInput::None)
+    }
+}
+
+// ── ClientIp guard ────────────────────────────────────────────────────────────
+
+/// Extracts the client IP address from the incoming request.
+pub struct ClientIp(pub Option<String>);
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for ClientIp {
+    type Error = ();
+
+    async fn from_request(req: &'r Request<'_>) -> Outcome<Self, ()> {
+        let ip = req.client_ip().map(|ip| ip.to_string());
+        Outcome::Success(ClientIp(ip))
+    }
+}
+
+impl<'a> OpenApiFromRequest<'a> for ClientIp {
+    fn from_request_input(_gen: &mut OpenApiGenerator, _name: String, _required: bool) -> rocket_okapi::Result<RequestHeaderInput> {
+        Ok(RequestHeaderInput::None)
     }
 }
 

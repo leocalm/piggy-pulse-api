@@ -3,6 +3,7 @@ use crate::auth::{CurrentUser, parse_session_cookie_value};
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::{AuthRateLimit, RateLimit};
+use crate::middleware::{ClientIp, UserAgent};
 use crate::models::user::{LoginRequest, UserRequest, UserResponse};
 use rocket::http::{Cookie, CookieJar, SameSite, Status};
 use rocket::serde::json::Json;
@@ -21,6 +22,8 @@ pub async fn post_user(
     config: &State<Config>,
     _rate_limit: AuthRateLimit,
     cookies: &CookieJar<'_>,
+    user_agent: UserAgent,
+    client_ip: ClientIp,
     payload: Json<UserRequest>,
 ) -> Result<(Status, Json<UserResponse>), AppError> {
     payload.validate()?;
@@ -39,7 +42,9 @@ pub async fn post_user(
 
             let ttl_seconds = config.session.ttl_seconds.max(60);
             let expires_at = chrono::Utc::now() + chrono::Duration::seconds(ttl_seconds);
-            let session = repo.create_session(&user.id, expires_at).await?;
+            let session = repo
+                .create_session(&user.id, expires_at, user_agent.0.as_deref(), client_ip.0.as_deref())
+                .await?;
             let value = format!("{}:{}", session.id, user.id);
             cookies.add_private(
                 Cookie::build(("user", value))
@@ -98,6 +103,8 @@ pub async fn post_user_login(
     config: &State<Config>,
     _rate_limit: AuthRateLimit,
     cookies: &CookieJar<'_>,
+    user_agent: UserAgent,
+    client_ip: ClientIp,
     payload: Json<LoginRequest>,
 ) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
@@ -163,7 +170,9 @@ pub async fn post_user_login(
             // Create session (either no 2FA or 2FA passed)
             let ttl_seconds = config.session.ttl_seconds.max(60);
             let expires_at = chrono::Utc::now() + chrono::Duration::seconds(ttl_seconds);
-            let session = repo.create_session(&user.id, expires_at).await?;
+            let session = repo
+                .create_session(&user.id, expires_at, user_agent.0.as_deref(), client_ip.0.as_deref())
+                .await?;
             let value = format!("{}:{}", session.id, user.id);
             cookies.add_private(
                 Cookie::build(("user", value))

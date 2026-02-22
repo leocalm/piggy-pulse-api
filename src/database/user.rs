@@ -114,6 +114,24 @@ impl PostgresRepository {
 
         Ok(())
     }
+
+    /// Verifies the current password and updates it to the new one.
+    pub async fn change_password(&self, user_id: &Uuid, current_password: &str, new_password: &str) -> Result<(), AppError> {
+        let user = self.get_user_by_id(user_id).await?.ok_or(AppError::UserNotFound)?;
+        self.verify_password(&user, current_password)
+            .await
+            .map_err(|_| AppError::BadRequest("Current password is incorrect".to_string()))?;
+
+        let (salt, new_hash) = password_hash(new_password);
+        sqlx::query("UPDATE users SET salt = $1, password_hash = $2 WHERE id = $3")
+            .bind(&salt)
+            .bind(&new_hash)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
 }
 
 pub(crate) fn password_hash(password: &str) -> (String, String) {
