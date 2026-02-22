@@ -4,7 +4,7 @@ use crate::error::app_error::AppError;
 use crate::models::account::Account;
 use crate::models::category::{Category, CategoryType};
 use crate::models::currency::{Currency, SymbolPosition};
-use crate::models::pagination::CursorParams;
+use crate::models::pagination::{CursorParams, TransactionFilters};
 use crate::models::transaction::{Transaction, TransactionRequest};
 use crate::models::transaction_summary::TransactionSummary;
 use crate::models::vendor::Vendor;
@@ -195,13 +195,19 @@ const TRANSACTION_JOINS: &str = r#"
     LEFT JOIN vendor v ON t.vendor_id = v.id
 "#;
 
-/// Builds a complete SELECT query for transactions with the specified table/CTE name and WHERE clause
-fn build_transaction_query(from_clause: &str, where_clause: &str, order_by: &str) -> String {
+/// Builds a complete SELECT query for transactions with the specified table/CTE name and WHERE clauses
+fn build_transaction_query(from_clause: &str, base_where: &str, extra_where: &str, order_by: &str) -> String {
     let mut query = format!("SELECT {} FROM {} {}", TRANSACTION_SELECT_FIELDS, from_clause, TRANSACTION_JOINS);
 
-    if !where_clause.is_empty() {
+    let clauses: Vec<&str> = [base_where, extra_where]
+        .iter()
+        .filter(|s| !s.is_empty())
+        .copied()
+        .collect();
+
+    if !clauses.is_empty() {
         query.push_str("WHERE ");
-        query.push_str(where_clause);
+        query.push_str(&clauses.join(" AND "));
     }
 
     if !order_by.is_empty() {
@@ -210,6 +216,68 @@ fn build_transaction_query(from_clause: &str, where_clause: &str, order_by: &str
     }
 
     query
+}
+
+/// Enum for filter bind values to enable dynamic binding
+#[derive(Debug)]
+enum FilterBindValue {
+    UuidArray(Vec<Uuid>),
+    Text(String),
+    Date(NaiveDate),
+}
+
+/// Builds additional WHERE fragments and collects bind values for TransactionFilters.
+/// Returns (sql_fragment, bind_values) where bind values should be bound in order.
+fn build_filter_clause(filters: &TransactionFilters, start_offset: usize) -> (String, Vec<FilterBindValue>) {
+    let mut parts = Vec::new();
+    let mut binds: Vec<FilterBindValue> = Vec::new();
+    let mut n = start_offset;
+
+    if !filters.account_ids.is_empty() {
+        parts.push(format!("t.from_account_id = ANY(${})", n));
+        binds.push(FilterBindValue::UuidArray(filters.account_ids.clone()));
+        n += 1;
+    }
+    if !filters.category_ids.is_empty() {
+        parts.push(format!("t.category_id = ANY(${})", n));
+        binds.push(FilterBindValue::UuidArray(filters.category_ids.clone()));
+        n += 1;
+    }
+    if let Some(ref dir) = filters.direction {
+        parts.push(format!("c.category_type::text = ${}", n));
+        binds.push(FilterBindValue::Text(dir.clone()));
+        n += 1;
+    }
+    if !filters.vendor_ids.is_empty() {
+        parts.push(format!("t.vendor_id = ANY(${})", n));
+        binds.push(FilterBindValue::UuidArray(filters.vendor_ids.clone()));
+        n += 1;
+    }
+    if let Some(date_from) = filters.date_from {
+        parts.push(format!("t.occurred_at >= ${}", n));
+        binds.push(FilterBindValue::Date(date_from));
+        n += 1;
+    }
+    if let Some(date_to) = filters.date_to {
+        parts.push(format!("t.occurred_at <= ${}", n));
+        binds.push(FilterBindValue::Date(date_to));
+        n += 1;
+    }
+    let _ = n; // suppress unused warning
+
+    (parts.join(" AND "), binds)
+}
+
+/// Binds a filter value to a query
+fn bind_filter_value<'q>(
+    q: sqlx::query::QueryAs<'q, sqlx::Postgres, TransactionRow, sqlx::postgres::PgArguments>,
+    bind: &'q FilterBindValue,
+) -> sqlx::query::QueryAs<'q, sqlx::Postgres, TransactionRow, sqlx::postgres::PgArguments> {
+    match bind {
+        FilterBindValue::UuidArray(ids) => q.bind(ids),
+        FilterBindValue::Text(s) => q.bind(s),
+        FilterBindValue::Date(d) => q.bind(d),
+    }
 }
 
 impl PostgresRepository {
@@ -263,7 +331,7 @@ impl PostgresRepository {
         let to_account_id = if let Some(acc_id) = &transaction.to_account_id { Some(acc_id) } else { None };
         let vendor_id = if let Some(v_id) = &transaction.vendor_id { Some(v_id) } else { None };
 
-        let select_query = build_transaction_query("inserted t", "", "");
+        let select_query = build_transaction_query("inserted t", "", "", "");
         let query = format!(
             r#"
             WITH inserted AS (
@@ -301,7 +369,7 @@ impl PostgresRepository {
     }
 
     pub async fn get_transaction_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Transaction>, AppError> {
-        let query = build_transaction_query("transaction t", "t.id = $1 AND t.user_id = $2", "");
+        let query = build_transaction_query("transaction t", "t.id = $1 AND t.user_id = $2", "", "");
         let row = sqlx::query_as::<_, TransactionRow>(&query)
             .bind(id)
             .bind(user_id)
@@ -311,70 +379,99 @@ impl PostgresRepository {
         Ok(row.map(Transaction::from))
     }
 
-    pub async fn list_transactions(&self, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Transaction>, AppError> {
+    pub async fn list_transactions(&self, params: &CursorParams, filters: &TransactionFilters, user_id: &Uuid) -> Result<Vec<Transaction>, AppError> {
         let rows = if let Some(cursor) = params.cursor {
+            let (filter_sql, filter_binds) = build_filter_clause(filters, 3); // $1=user_id, $2=cursor
             let base = build_transaction_query(
                 "transaction t",
                 "t.user_id = $1 AND (t.occurred_at, t.created_at, t.id) < (SELECT occurred_at, created_at, id FROM transaction WHERE id = $2)",
+                &filter_sql,
                 "t.occurred_at DESC, t.created_at DESC, t.id DESC",
             );
-            sqlx::query_as::<_, TransactionRow>(&format!("{} LIMIT $3", base))
+            let limit_n = 3 + filter_binds.len();
+            let full_query = format!("{} LIMIT ${}", base, limit_n);
+            let mut q = sqlx::query_as::<_, TransactionRow>(&full_query)
                 .bind(user_id)
-                .bind(cursor)
-                .bind(params.fetch_limit())
-                .fetch_all(&self.pool)
-                .await?
+                .bind(cursor);
+            for bind in &filter_binds {
+                q = bind_filter_value(q, bind);
+            }
+            q.bind(params.fetch_limit()).fetch_all(&self.pool).await?
         } else {
-            let base = build_transaction_query("transaction t", "t.user_id = $1", "t.occurred_at DESC, t.created_at DESC, t.id DESC");
-            sqlx::query_as::<_, TransactionRow>(&format!("{} LIMIT $2", base))
-                .bind(user_id)
-                .bind(params.fetch_limit())
-                .fetch_all(&self.pool)
-                .await?
+            let (filter_sql, filter_binds) = build_filter_clause(filters, 2); // $1=user_id
+            let base = build_transaction_query(
+                "transaction t",
+                "t.user_id = $1",
+                &filter_sql,
+                "t.occurred_at DESC, t.created_at DESC, t.id DESC"
+            );
+            let limit_n = 2 + filter_binds.len();
+            let full_query = format!("{} LIMIT ${}", base, limit_n);
+            let mut q = sqlx::query_as::<_, TransactionRow>(&full_query).bind(user_id);
+            for bind in &filter_binds {
+                q = bind_filter_value(q, bind);
+            }
+            q.bind(params.fetch_limit()).fetch_all(&self.pool).await?
         };
 
         Ok(rows.into_iter().map(Transaction::from).collect())
     }
 
-    pub async fn get_transactions_for_period(&self, period_id: &Uuid, params: &CursorParams, user_id: &Uuid) -> Result<Vec<Transaction>, AppError> {
+    pub async fn get_transactions_for_period(&self, period_id: &Uuid, params: &CursorParams, filters: &TransactionFilters, user_id: &Uuid) -> Result<Vec<Transaction>, AppError> {
         let rows = if let Some(cursor) = params.cursor {
-            let query = format!(
-                "SELECT {} FROM transaction t CROSS JOIN budget_period bp {} \
-                 WHERE bp.id = $1 \
+            let (filter_sql, filter_binds) = build_filter_clause(filters, 4); // $1=period_id, $2=user_id, $3=cursor
+            let base_where = "bp.id = $1 \
                    AND bp.user_id = $2 \
                    AND t.user_id = $2 \
                    AND t.occurred_at >= bp.start_date \
                    AND t.occurred_at <= bp.end_date \
-                   AND (t.occurred_at, t.created_at, t.id) < (SELECT occurred_at, created_at, id FROM transaction WHERE id = $3) \
+                   AND (t.occurred_at, t.created_at, t.id) < (SELECT occurred_at, created_at, id FROM transaction WHERE id = $3)";
+            let combined_where = if filter_sql.is_empty() {
+                base_where.to_string()
+            } else {
+                format!("{} AND {}", base_where, filter_sql)
+            };
+            let query = format!(
+                "SELECT {} FROM transaction t CROSS JOIN budget_period bp {} \
+                 WHERE {} \
                  ORDER BY t.occurred_at DESC, t.created_at DESC, t.id DESC \
-                 LIMIT $4",
-                TRANSACTION_SELECT_FIELDS, TRANSACTION_JOINS
+                 LIMIT ${}",
+                TRANSACTION_SELECT_FIELDS, TRANSACTION_JOINS, combined_where, 4 + filter_binds.len()
             );
-            sqlx::query_as::<_, TransactionRow>(&query)
+            let mut q = sqlx::query_as::<_, TransactionRow>(&query)
                 .bind(period_id)
                 .bind(user_id)
-                .bind(cursor)
-                .bind(params.fetch_limit())
-                .fetch_all(&self.pool)
-                .await?
+                .bind(cursor);
+            for bind in &filter_binds {
+                q = bind_filter_value(q, bind);
+            }
+            q.bind(params.fetch_limit()).fetch_all(&self.pool).await?
         } else {
-            let query = format!(
-                "SELECT {} FROM transaction t CROSS JOIN budget_period bp {} \
-                 WHERE bp.id = $1 \
+            let (filter_sql, filter_binds) = build_filter_clause(filters, 3); // $1=period_id, $2=user_id
+            let base_where = "bp.id = $1 \
                    AND bp.user_id = $2 \
                    AND t.user_id = $2 \
                    AND t.occurred_at >= bp.start_date \
-                   AND t.occurred_at <= bp.end_date \
+                   AND t.occurred_at <= bp.end_date";
+            let combined_where = if filter_sql.is_empty() {
+                base_where.to_string()
+            } else {
+                format!("{} AND {}", base_where, filter_sql)
+            };
+            let query = format!(
+                "SELECT {} FROM transaction t CROSS JOIN budget_period bp {} \
+                 WHERE {} \
                  ORDER BY t.occurred_at DESC, t.created_at DESC, t.id DESC \
-                 LIMIT $3",
-                TRANSACTION_SELECT_FIELDS, TRANSACTION_JOINS
+                 LIMIT ${}",
+                TRANSACTION_SELECT_FIELDS, TRANSACTION_JOINS, combined_where, 3 + filter_binds.len()
             );
-            sqlx::query_as::<_, TransactionRow>(&query)
+            let mut q = sqlx::query_as::<_, TransactionRow>(&query)
                 .bind(period_id)
-                .bind(user_id)
-                .bind(params.fetch_limit())
-                .fetch_all(&self.pool)
-                .await?
+                .bind(user_id);
+            for bind in &filter_binds {
+                q = bind_filter_value(q, bind);
+            }
+            q.bind(params.fetch_limit()).fetch_all(&self.pool).await?
         };
 
         Ok(rows.into_iter().map(Transaction::from).collect())
@@ -393,7 +490,7 @@ impl PostgresRepository {
     pub async fn update_transaction(&self, id: &Uuid, transaction: &TransactionRequest, user_id: &Uuid) -> Result<Transaction, AppError> {
         self.validate_transaction_ownership(transaction, user_id).await?;
 
-        let select_query = build_transaction_query("updated t", "", "");
+        let select_query = build_transaction_query("updated t", "", "", "");
         let query = format!(
             r#"
             WITH updated AS (

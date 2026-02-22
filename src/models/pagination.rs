@@ -1,4 +1,5 @@
 use crate::error::app_error::AppError;
+use chrono::NaiveDate;
 use rocket::serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
 use uuid::Uuid;
@@ -67,6 +68,30 @@ impl<T> CursorPaginatedResponse<T> {
     }
 }
 
+/// Optional filter parameters for transaction queries.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(crate = "rocket::serde")]
+pub struct TransactionFilters {
+    pub account_ids: Vec<Uuid>,
+    pub category_ids: Vec<Uuid>,
+    pub direction: Option<String>,   // "Incoming" | "Outgoing" | "Transfer"
+    pub vendor_ids: Vec<Uuid>,
+    pub date_from: Option<NaiveDate>,
+    pub date_to: Option<NaiveDate>,
+}
+
+impl TransactionFilters {
+    #[allow(dead_code)]
+    pub fn is_empty(&self) -> bool {
+        self.account_ids.is_empty()
+            && self.category_ids.is_empty()
+            && self.direction.is_none()
+            && self.vendor_ids.is_empty()
+            && self.date_from.is_none()
+            && self.date_to.is_none()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,5 +143,20 @@ mod tests {
         let resp = CursorPaginatedResponse::from_rows(ids.clone(), 5, |id| *id);
         assert_eq!(resp.data.len(), 5);
         assert!(resp.next_cursor.is_none());
+    }
+
+    #[test]
+    fn test_transaction_filters_is_empty_default() {
+        let f = TransactionFilters::default();
+        assert!(f.is_empty());
+    }
+
+    #[test]
+    fn test_transaction_filters_is_empty_with_direction() {
+        let f = TransactionFilters {
+            direction: Some("Incoming".to_string()),
+            ..Default::default()
+        };
+        assert!(!f.is_empty());
     }
 }

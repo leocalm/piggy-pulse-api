@@ -3,9 +3,10 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::error::json::JsonBody;
 use crate::middleware::rate_limit::RateLimit;
-use crate::models::pagination::{CursorPaginatedResponse, CursorParams};
+use crate::models::pagination::{CursorPaginatedResponse, CursorParams, TransactionFilters};
 use crate::models::transaction::{TransactionRequest, TransactionResponse};
 use crate::models::transaction_summary::TransactionSummaryResponse;
+use chrono::NaiveDate;
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{State, delete, get, post, put};
@@ -33,7 +34,8 @@ pub async fn create_transaction(
 
 /// List all transactions with cursor-based pagination, optionally filtered by budget period
 #[openapi(tag = "Transactions")]
-#[get("/?<period_id>&<cursor>&<limit>")]
+#[get("/?<period_id>&<cursor>&<limit>&<account_id>&<category_id>&<direction>&<vendor_id>&<date_from>&<date_to>")]
+#[allow(clippy::too_many_arguments)]
 pub async fn list_all_transactions(
     pool: &State<PgPool>,
     _rate_limit: RateLimit,
@@ -41,15 +43,50 @@ pub async fn list_all_transactions(
     period_id: Option<String>,
     cursor: Option<String>,
     limit: Option<i64>,
+    account_id: Vec<String>,
+    category_id: Vec<String>,
+    direction: Option<String>,
+    vendor_id: Vec<String>,
+    date_from: Option<String>,
+    date_to: Option<String>,
 ) -> Result<Json<CursorPaginatedResponse<TransactionResponse>>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let params = CursorParams::from_query(cursor, limit)?;
 
+    // Parse filter query params
+    let filters = {
+        let account_ids = account_id.iter()
+            .map(|s| Uuid::parse_str(s).map_err(|e| AppError::uuid("Invalid account_id", e)))
+            .collect::<Result<Vec<_>, _>>()?;
+        let category_ids = category_id.iter()
+            .map(|s| Uuid::parse_str(s).map_err(|e| AppError::uuid("Invalid category_id", e)))
+            .collect::<Result<Vec<_>, _>>()?;
+        let vendor_ids = vendor_id.iter()
+            .map(|s| Uuid::parse_str(s).map_err(|e| AppError::uuid("Invalid vendor_id", e)))
+            .collect::<Result<Vec<_>, _>>()?;
+        let date_from = date_from.as_deref()
+            .map(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d")
+                .map_err(|_| AppError::BadRequest("Invalid date_from format, expected YYYY-MM-DD".to_string())))
+            .transpose()?;
+        let date_to = date_to.as_deref()
+            .map(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d")
+                .map_err(|_| AppError::BadRequest("Invalid date_to format, expected YYYY-MM-DD".to_string())))
+            .transpose()?;
+        TransactionFilters {
+            account_ids,
+            category_ids,
+            direction,
+            vendor_ids,
+            date_from,
+            date_to,
+        }
+    };
+
     let txs = if let Some(period_id) = period_id {
         let uuid = Uuid::parse_str(&period_id).map_err(|e| AppError::uuid("Invalid period id", e))?;
-        repo.get_transactions_for_period(&uuid, &params, &current_user.id).await?
+        repo.get_transactions_for_period(&uuid, &params, &filters, &current_user.id).await?
     } else {
-        repo.list_transactions(&params, &current_user.id).await?
+        repo.list_transactions(&params, &filters, &current_user.id).await?
     };
 
     let responses: Vec<TransactionResponse> = txs.iter().map(TransactionResponse::from).collect();
