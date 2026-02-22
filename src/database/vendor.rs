@@ -40,13 +40,14 @@ impl PostgresRepository {
 
         let vendor = sqlx::query_as::<_, Vendor>(
             r#"
-            INSERT INTO vendor (user_id, name)
-            VALUES ($1, $2)
-            RETURNING id, name
+            INSERT INTO vendor (user_id, name, description)
+            VALUES ($1, $2, $3)
+            RETURNING id, name, description, archived
             "#,
         )
         .bind(user_id)
         .bind(&request.name)
+        .bind(&request.description)
         .fetch_one(&self.pool)
         .await;
 
@@ -64,7 +65,7 @@ impl PostgresRepository {
     pub async fn get_vendor_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Vendor>, AppError> {
         let vendor = sqlx::query_as::<_, Vendor>(
             r#"
-            SELECT id, name
+            SELECT id, name, description, archived
             FROM vendor
             WHERE id = $1 AND user_id = $2
             "#,
@@ -82,6 +83,8 @@ impl PostgresRepository {
         struct VendorWithPeriodStatsRow {
             id: Uuid,
             name: String,
+            description: Option<String>,
+            archived: bool,
             transaction_count: i64,
             last_used_at: Option<NaiveDate>,
         }
@@ -94,6 +97,8 @@ WITH selected_period AS (
 )
 SELECT v.id,
        v.name,
+       v.description,
+       v.archived,
        COUNT(t.id) FILTER (
             WHERE t.occurred_at >= sp.start_date
               AND t.occurred_at <= sp.end_date
@@ -103,8 +108,9 @@ FROM vendor v
 CROSS JOIN selected_period sp
 LEFT JOIN transaction t ON v.id = t.vendor_id AND t.user_id = $1
 WHERE v.user_id = $1
+  AND v.archived = FALSE
   AND (v.created_at, v.id) < (SELECT created_at, id FROM vendor WHERE id = $4)
-GROUP BY v.id, v.user_id, v.name, v.created_at
+GROUP BY v.id, v.user_id, v.name, v.description, v.archived, v.created_at
 ORDER BY v.created_at DESC, v.id DESC
 LIMIT $5
                 "#,
@@ -124,6 +130,8 @@ WITH selected_period AS (
 )
 SELECT v.id,
        v.name,
+       v.description,
+       v.archived,
        COUNT(t.id) FILTER (
             WHERE t.occurred_at >= sp.start_date
               AND t.occurred_at <= sp.end_date
@@ -133,7 +141,8 @@ FROM vendor v
 CROSS JOIN selected_period sp
 LEFT JOIN transaction t ON v.id = t.vendor_id AND t.user_id = $1
 WHERE v.user_id = $1
-GROUP BY v.id, v.user_id, v.name, v.created_at
+  AND v.archived = FALSE
+GROUP BY v.id, v.user_id, v.name, v.description, v.archived, v.created_at
 ORDER BY v.created_at DESC, v.id DESC
 LIMIT $4
                 "#,
@@ -149,7 +158,12 @@ LIMIT $4
         Ok(rows
             .into_iter()
             .map(|row| VendorWithPeriodStats {
-                vendor: Vendor { id: row.id, name: row.name },
+                vendor: Vendor {
+                    id: row.id,
+                    name: row.name,
+                    description: row.description,
+                    archived: row.archived,
+                },
                 stats: VendorPeriodStats {
                     transaction_count: row.transaction_count,
                     last_used_at: row.last_used_at,
@@ -158,7 +172,7 @@ LIMIT $4
             .collect())
     }
 
-    pub async fn list_vendors_with_status(&self, order_by: VendorOrderBy, user_id: &Uuid) -> Result<Vec<VendorWithStats>, AppError> {
+    pub async fn list_vendors_with_status(&self, order_by: VendorOrderBy, archived: bool, user_id: &Uuid) -> Result<Vec<VendorWithStats>, AppError> {
         // Safe from SQL injection: order_by_clause is derived from a controlled enum
         let order_by_clause = match order_by {
             VendorOrderBy::Name => "v.name",
@@ -170,6 +184,8 @@ LIMIT $4
         struct VendorWithStatsRow {
             id: Uuid,
             name: String,
+            description: Option<String>,
+            archived: bool,
             transaction_count: i64,
             last_used_at: Option<NaiveDate>,
         }
@@ -178,23 +194,26 @@ LIMIT $4
             r#"
             SELECT v.id,
                    v.name,
+                   v.description,
+                   v.archived,
                    COUNT(t.id) AS transaction_count,
                    MAX(t.occurred_at) AS last_used_at
             FROM vendor v
             LEFT JOIN transaction t ON v.id = t.vendor_id
             WHERE v.user_id = $1
-            GROUP BY v.id, v.user_id, v.name, v.created_at
+              AND v.archived = $2
+            GROUP BY v.id, v.user_id, v.name, v.description, v.archived, v.created_at
             ORDER BY {} ASC NULLS LAST
             "#,
             order_by_clause
         );
 
-        let rows = sqlx::query_as::<_, VendorWithStatsRow>(&query).bind(user_id).fetch_all(&self.pool).await?;
+        let rows = sqlx::query_as::<_, VendorWithStatsRow>(&query).bind(user_id).bind(archived).fetch_all(&self.pool).await?;
 
         Ok(rows
             .into_iter()
             .map(|r| VendorWithStats {
-                vendor: Vendor { id: r.id, name: r.name },
+                vendor: Vendor { id: r.id, name: r.name, description: r.description, archived: r.archived },
                 stats: VendorStats {
                     transaction_count: r.transaction_count,
                     last_used_at: r.last_used_at,
@@ -235,12 +254,13 @@ LIMIT $4
         let vendor = sqlx::query_as::<_, Vendor>(
             r#"
             UPDATE vendor
-            SET name = $1
-            WHERE id = $2 AND user_id = $3
-            RETURNING id, name
+            SET name = $1, description = $2
+            WHERE id = $3 AND user_id = $4
+            RETURNING id, name, description, archived
             "#,
         )
         .bind(&request.name)
+        .bind(&request.description)
         .bind(id)
         .bind(user_id)
         .fetch_one(&self.pool)
@@ -260,9 +280,9 @@ LIMIT $4
     pub async fn list_all_vendors(&self, user_id: &Uuid) -> Result<Vec<Vendor>, AppError> {
         let vendors = sqlx::query_as::<_, Vendor>(
             r#"
-            SELECT id, name
+            SELECT id, name, description, archived
             FROM vendor
-            WHERE user_id = $1
+            WHERE user_id = $1 AND archived = FALSE
             ORDER BY name ASC
             "#,
         )
@@ -271,5 +291,39 @@ LIMIT $4
         .await?;
 
         Ok(vendors)
+    }
+
+    pub async fn archive_vendor(&self, id: &Uuid, user_id: &Uuid) -> Result<Vendor, AppError> {
+        let vendor = sqlx::query_as::<_, Vendor>(
+            r#"
+            UPDATE vendor
+            SET archived = TRUE
+            WHERE id = $1 AND user_id = $2
+            RETURNING id, name, description, archived
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        vendor.ok_or_else(|| AppError::NotFound("Vendor not found".to_string()))
+    }
+
+    pub async fn restore_vendor(&self, id: &Uuid, user_id: &Uuid) -> Result<Vendor, AppError> {
+        let vendor = sqlx::query_as::<_, Vendor>(
+            r#"
+            UPDATE vendor
+            SET archived = FALSE
+            WHERE id = $1 AND user_id = $2
+            RETURNING id, name, description, archived
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        vendor.ok_or_else(|| AppError::NotFound("Vendor not found".to_string()))
     }
 }

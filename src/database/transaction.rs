@@ -58,6 +58,8 @@ struct TransactionRow {
     // Vendor fields (optional)
     vendor_id: Option<Uuid>,
     vendor_name: Option<String>,
+    vendor_description: Option<String>,
+    vendor_archived: Option<bool>,
 }
 
 impl From<TransactionRow> for Transaction {
@@ -90,6 +92,8 @@ impl From<TransactionRow> for Transaction {
             Some(Vendor {
                 id: vendor_id,
                 name: row.vendor_name.unwrap(),
+                description: row.vendor_description,
+                archived: row.vendor_archived.unwrap_or(false),
             })
         } else {
             None
