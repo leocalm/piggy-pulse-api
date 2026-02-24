@@ -182,7 +182,9 @@ const TRANSACTION_SELECT_FIELDS: &str = r#"
     cta.decimal_places as to_account_currency_decimal_places,
     cta.symbol_position as to_account_currency_symbol_position,
     v.id as vendor_id,
-    v.name as vendor_name
+    v.name as vendor_name,
+    v.description as vendor_description,
+    v.archived as vendor_archived
 "#;
 
 // Common JOIN clauses for transaction queries
