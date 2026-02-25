@@ -247,7 +247,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
         .attach(stage_rate_limiter(config.rate_limit.clone()))
         .attach(cors)
         .attach(RequestLogger) // Attach request/response logging middleware
-        .attach(stage_db(config.database));
+        .attach(stage_db(config.database, config.logging.slow_query_ms));
 
     let (primary_base_path, additional_base_paths) = base_paths.split_first().expect("API base paths must include at least one entry");
 
