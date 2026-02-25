@@ -4,8 +4,10 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::{AuthRateLimit, RateLimit};
 use crate::middleware::{ClientIp, UserAgent};
+use crate::models::audit::audit_events;
 use crate::models::user::{LoginRequest, UserRequest, UserResponse};
 use rocket::http::{Cookie, CookieJar, SameSite, Status};
+use serde_json::json;
 use rocket::serde::json::Json;
 use rocket::time::Duration;
 use rocket::{State, delete, get, post, put};
@@ -113,12 +115,24 @@ pub async fn post_user_login(
         Some(user) => {
             // Verify password first
             if repo.verify_password(&user, &payload.password).await.is_err() {
+                let _ = repo
+                    .create_security_audit_log(
+                        Some(&user.id),
+                        audit_events::LOGIN_FAILED,
+                        false,
+                        client_ip.0.clone(),
+                        user_agent.0.clone(),
+                        Some(serde_json::json!({"email": &payload.email, "reason": "invalid_password"})),
+                    )
+                    .await;
                 return Err(AppError::InvalidCredentials);
             }
 
             // Check if user has 2FA enabled
             let two_factor = repo.get_two_factor_by_user(&user.id).await?;
             let has_2fa = two_factor.as_ref().map(|tf| tf.is_enabled).unwrap_or(false);
+
+            let mut backup_code_used = false;
 
             if has_2fa {
                 // 2FA is enabled - check if code was provided
@@ -158,13 +172,38 @@ pub async fn post_user_login(
                 let backup_valid = if !totp_valid { repo.verify_backup_code(&user.id, code).await? } else { false };
 
                 if !totp_valid && !backup_valid {
-                    // Record failed attempt
                     repo.record_failed_attempt(&user.id).await?;
+                    let _ = repo
+                        .create_security_audit_log(
+                            Some(&user.id),
+                            audit_events::LOGIN_FAILED,
+                            false,
+                            client_ip.0.clone(),
+                            user_agent.0.clone(),
+                            Some(serde_json::json!({"email": &payload.email, "reason": "invalid_2fa_code"})),
+                        )
+                        .await;
                     return Err(AppError::BadRequest("Invalid two-factor authentication code.".to_string()));
                 }
 
+                backup_code_used = backup_valid;
+
                 // Success - reset rate limit
                 repo.reset_rate_limit(&user.id).await?;
+            }
+
+            // Log backup code usage if applicable
+            if backup_code_used {
+                let _ = repo
+                    .create_security_audit_log(
+                        Some(&user.id),
+                        audit_events::TWO_FACTOR_BACKUP_USED,
+                        true,
+                        client_ip.0.clone(),
+                        user_agent.0.clone(),
+                        None,
+                    )
+                    .await;
             }
 
             // Create session (either no 2FA or 2FA passed)
@@ -184,12 +223,36 @@ pub async fn post_user_login(
                     .build(),
             );
 
+            let _ = repo
+                .create_security_audit_log(
+                    Some(&user.id),
+                    audit_events::LOGIN_SUCCESS,
+                    true,
+                    client_ip.0.clone(),
+                    user_agent.0.clone(),
+                    Some(serde_json::json!({
+                        "email": &payload.email,
+                        "2fa_used": has_2fa,
+                    })),
+                )
+                .await;
+
             Ok(Status::Ok)
         }
         None => {
             // Equalize response timing so attackers cannot distinguish
             // existing from non-existing accounts by measuring latency.
             PostgresRepository::dummy_verify(&payload.password);
+            let _ = repo
+                .create_security_audit_log(
+                    None,
+                    audit_events::LOGIN_FAILED,
+                    false,
+                    client_ip.0.clone(),
+                    user_agent.0.clone(),
+                    Some(serde_json::json!({"email": &payload.email, "reason": "user_not_found"})),
+                )
+                .await;
             Err(AppError::InvalidCredentials)
         }
     }
@@ -198,12 +261,28 @@ pub async fn post_user_login(
 /// Log out the current user
 #[openapi(tag = "Users")]
 #[post("/logout")]
-pub async fn post_user_logout(pool: &State<PgPool>, _rate_limit: RateLimit, cookies: &CookieJar<'_>) -> Status {
+pub async fn post_user_logout(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    cookies: &CookieJar<'_>,
+    user_agent: UserAgent,
+    client_ip: ClientIp,
+) -> Status {
     if let Some(cookie) = cookies.get_private("user")
-        && let Some((session_id, _)) = parse_session_cookie_value(cookie.value())
+        && let Some((session_id, user_id)) = parse_session_cookie_value(cookie.value())
     {
         let repo = PostgresRepository { pool: pool.inner().clone() };
         let _ = repo.delete_session(&session_id).await;
+        let _ = repo
+            .create_security_audit_log(
+                Some(&user_id),
+                audit_events::LOGOUT,
+                true,
+                client_ip.0.clone(),
+                user_agent.0.clone(),
+                None,
+            )
+            .await;
     }
     cookies.remove_private(Cookie::build("user").build());
     Status::Ok
