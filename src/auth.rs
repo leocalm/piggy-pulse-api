@@ -52,6 +52,20 @@ impl<'r> FromRequest<'r> for CurrentUser {
                 }
                 Ok(None) => {
                     let _ = repo.delete_session_if_expired(&session_id).await;
+
+                    let ip = req.client_ip().map(|ip| ip.to_string());
+                    let ua = req.headers().get_one("User-Agent").map(|s| s.to_string());
+                    let _ = repo
+                        .create_security_audit_log(
+                            Some(&user_id),
+                            crate::models::audit::audit_events::SESSION_EXPIRED,
+                            false,
+                            ip,
+                            ua,
+                            Some(serde_json::json!({"session_id": session_id.to_string()})),
+                        )
+                        .await;
+
                     return Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials));
                 }
                 Err(err) => return Outcome::Error((Status::InternalServerError, err)),
