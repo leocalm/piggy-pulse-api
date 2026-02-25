@@ -71,6 +71,8 @@ pub async fn put_user(
     pool: &State<PgPool>,
     _rate_limit: RateLimit,
     current_user: CurrentUser,
+    client_ip: ClientIp,
+    user_agent: UserAgent,
     id: &str,
     payload: Json<UserRequest>,
 ) -> Result<Json<UserResponse>, AppError> {
@@ -81,6 +83,16 @@ pub async fn put_user(
     }
     payload.validate()?;
     let user = repo.update_user(&uuid, &payload.name, &payload.email, &payload.password).await?;
+    let _ = repo
+        .create_security_audit_log(
+            Some(&current_user.id),
+            audit_events::ACCOUNT_UPDATED,
+            true,
+            client_ip.0.clone(),
+            user_agent.0.clone(),
+            Some(json!({"changed_fields": ["name", "email", "password"]})),
+        )
+        .await;
     Ok(Json(UserResponse::from(&user)))
 }
 
