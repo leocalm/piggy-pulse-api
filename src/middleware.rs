@@ -116,6 +116,8 @@ impl Fairing for RequestLogger {
         response.set_header(Header::new("X-Content-Type-Options", "nosniff"));
         response.set_header(Header::new("X-Frame-Options", "DENY"));
         response.set_header(Header::new("Cache-Control", "no-store"));
+        response.set_header(Header::new("Referrer-Policy", "strict-origin-when-cross-origin"));
+        response.set_header(Header::new("Strict-Transport-Security", "max-age=31536000; includeSubDomains"));
 
         // Get slow_request_ms threshold from managed state
         let slow_request_ms = request

@@ -80,6 +80,20 @@ fn ensure_two_factor_encryption_key(two_factor_config: &config::TwoFactorConfig)
     }
 }
 
+fn ensure_cookie_secure(session_config: &config::SessionConfig) {
+    let profile = std::env::var("ROCKET_PROFILE").unwrap_or_else(|_| "debug".to_string());
+    if profile == "debug" {
+        return;
+    }
+
+    if !session_config.cookie_secure {
+        panic!(
+            "PIGGY_PULSE_SESSION__COOKIE_SECURE must be true for profile '{}'. Insecure cookies are only allowed in debug mode.",
+            profile
+        );
+    }
+}
+
 fn build_cors(cors_config: &config::CorsConfig) -> CorsOptions {
     if cors_config.allowed_origins.is_empty() {
         if cors_config.allow_credentials {
@@ -242,6 +256,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
     init_tracing(&config.logging.level, config.logging.json_format);
     ensure_rocket_secret_key();
     ensure_two_factor_encryption_key(&config.two_factor);
+    ensure_cookie_secure(&config.session);
 
     let cors = build_cors(&config.cors).to_cors().expect("Failed to create CORS fairing");
 

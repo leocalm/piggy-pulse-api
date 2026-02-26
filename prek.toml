@@ -1,0 +1,50 @@
+[[repos]]
+repo = "https://github.com/pre-commit/pre-commit-hooks"
+rev = "v6.0.0"
+hooks = [
+    { id = "end-of-file-fixer" },
+    { id = "detect-private-key"},
+    { id = "no-commit-to-branch"},
+    { id = "check-merge-conflict", args = ["--assume-in-merge"]}
+]
+
+[[repos]]
+repo = "https://github.com/Yelp/detect-secrets"
+rev = "v1.5.0"
+hooks = [
+    { id = "detect-secrets", args = ["--baseline", ".secrets.baseline"]}
+]
+
+
+[[repos]]
+repo = "local"
+hooks = [
+    {
+        id = "cargo fmt",
+        name = "cargo fmt",
+        language = "system",
+        entry = "cargo fmt --check",
+        pass_filenames = false,
+    },
+    {
+        id = "cargo clippy",
+        name = "cargo clippy",
+        language = "system",
+        entry = "cargo clippy -- -D warnings",
+        pass_filenames = false,
+    },
+    {
+    id = "cargo test",
+    name = "cargo test",
+    language = "system",
+    entry = "cargo test",
+    pass_filenames = false,
+    },
+    {
+    id = "cargo audit",
+    name = "cargo audit",
+    language = "system",
+    entry = "cargo audit",
+    pass_filenames = false,
+    },
+]
