@@ -2,6 +2,7 @@ use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::RateLimit;
+use crate::middleware::{ClientIp, UserAgent};
 use crate::models::settings::{
     DeleteAccountRequest, PasswordChangeRequest, PeriodModelRequest, PeriodModelResponse, PreferencesRequest, PreferencesResponse, ProfileRequest,
     ProfileResponse, ResetStructureRequest, SessionInfoResponse, SettingsRequest, SettingsResponse,
@@ -112,6 +113,8 @@ pub async fn post_change_password(
     pool: &State<PgPool>,
     _rate_limit: RateLimit,
     current_user: CurrentUser,
+    client_ip: ClientIp,
+    user_agent: UserAgent,
     payload: Json<PasswordChangeRequest>,
 ) -> Result<Status, AppError> {
     payload.validate()?;
@@ -120,6 +123,16 @@ pub async fn post_change_password(
     repo.change_password(&current_user.id, &payload.current_password, &payload.new_password).await?;
     // Invalidate all other sessions so stolen session tokens are no longer usable
     repo.delete_other_sessions_for_user(&current_user.id, &current_user.session_id).await?;
+    let _ = repo
+        .create_security_audit_log(
+            Some(&current_user.id),
+            crate::models::audit::audit_events::PASSWORD_CHANGED,
+            true,
+            client_ip.0.clone(),
+            user_agent.0.clone(),
+            None,
+        )
+        .await;
     Ok(Status::Ok)
 }
 

@@ -30,6 +30,32 @@ pub struct UserRequest {
     pub password: String,
 }
 
+/// Request payload for updating an existing user account.
+/// Password is optional — omit to leave the current password unchanged.
+#[derive(Deserialize, Debug, Validate, JsonSchema)]
+pub struct UserUpdateRequest {
+    #[validate(length(min = 8))]
+    pub name: String,
+    #[validate(email)]
+    pub email: String,
+    #[validate(length(min = 8))]
+    #[validate(custom(function = "validate_password_strength"))]
+    pub password: Option<String>,
+}
+
+impl UserUpdateRequest {
+    /// Returns the subset of top-level fields that are being changed.
+    /// `name` and `email` are always included; `password` is included only
+    /// when the caller explicitly provided a new value.
+    pub fn changed_fields(&self) -> Vec<&'static str> {
+        let mut fields = vec!["name", "email"];
+        if self.password.is_some() {
+            fields.push("password");
+        }
+        fields
+    }
+}
+
 #[derive(Deserialize, Debug, JsonSchema)]
 pub struct LoginRequest {
     pub email: String,
@@ -56,4 +82,29 @@ pub fn validate_password_strength(password: &str) -> Result<(), ValidationError>
         return Err(error);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn changed_fields_without_password() {
+        let req = UserUpdateRequest {
+            name: "Alice".to_string(),
+            email: "alice@example.com".to_string(),
+            password: None,
+        };
+        assert_eq!(req.changed_fields(), vec!["name", "email"]);
+    }
+
+    #[test]
+    fn changed_fields_with_password() {
+        let req = UserUpdateRequest {
+            name: "Alice".to_string(),
+            email: "alice@example.com".to_string(),
+            password: Some("NewStrongPass!99".to_string()),
+        };
+        assert_eq!(req.changed_fields(), vec!["name", "email", "password"]);
+    }
 }

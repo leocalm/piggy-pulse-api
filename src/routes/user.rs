@@ -5,7 +5,7 @@ use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::{AuthRateLimit, RateLimit};
 use crate::middleware::{ClientIp, UserAgent};
 use crate::models::audit::audit_events;
-use crate::models::user::{LoginRequest, UserRequest, UserResponse};
+use crate::models::user::{LoginRequest, UserRequest, UserResponse, UserUpdateRequest};
 use rocket::http::{Cookie, CookieJar, SameSite, Status};
 use rocket::serde::json::Json;
 use rocket::time::Duration;
@@ -74,7 +74,7 @@ pub async fn put_user(
     client_ip: ClientIp,
     user_agent: UserAgent,
     id: &str,
-    payload: Json<UserRequest>,
+    payload: Json<UserUpdateRequest>,
 ) -> Result<Json<UserResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid user id", e))?;
@@ -82,7 +82,8 @@ pub async fn put_user(
         return Err(AppError::Forbidden);
     }
     payload.validate()?;
-    let user = repo.update_user(&uuid, &payload.name, &payload.email, &payload.password).await?;
+    let user = repo.update_user(&uuid, &payload.name, &payload.email, payload.password.as_deref()).await?;
+    let changed_fields = payload.changed_fields();
     let _ = repo
         .create_security_audit_log(
             Some(&current_user.id),
@@ -90,7 +91,7 @@ pub async fn put_user(
             true,
             client_ip.0.clone(),
             user_agent.0.clone(),
-            Some(json!({"changed_fields": ["name", "email", "password"]})),
+            Some(json!({"changed_fields": changed_fields})),
         )
         .await;
     Ok(Json(UserResponse::from(&user)))
@@ -134,7 +135,7 @@ pub async fn post_user_login(
                         false,
                         client_ip.0.clone(),
                         user_agent.0.clone(),
-                        Some(serde_json::json!({"email": &payload.email, "reason": "invalid_password"})),
+                        Some(serde_json::json!({"reason": "invalid_password"})),
                     )
                     .await;
                 return Err(AppError::InvalidCredentials);
@@ -192,7 +193,7 @@ pub async fn post_user_login(
                             false,
                             client_ip.0.clone(),
                             user_agent.0.clone(),
-                            Some(serde_json::json!({"email": &payload.email, "reason": "invalid_2fa_code"})),
+                            Some(serde_json::json!({"reason": "invalid_2fa_code"})),
                         )
                         .await;
                     return Err(AppError::BadRequest("Invalid two-factor authentication code.".to_string()));
@@ -262,7 +263,7 @@ pub async fn post_user_login(
                     false,
                     client_ip.0.clone(),
                     user_agent.0.clone(),
-                    Some(serde_json::json!({"email": &payload.email, "reason": "user_not_found"})),
+                    Some(serde_json::json!({"reason": "user_not_found"})),
                 )
                 .await;
             Err(AppError::InvalidCredentials)

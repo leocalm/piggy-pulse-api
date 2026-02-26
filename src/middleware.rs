@@ -124,7 +124,9 @@ impl Fairing for RequestLogger {
             .map(|c| c.logging.slow_request_ms)
             .unwrap_or(500);
 
-        let is_error = status.class().is_server_error() || status.class().is_client_error();
+        // Only escalate 5xx to WARN; 4xx responses (401, 403, 422, etc.) are
+        // routine for a REST API and log at INFO to avoid WARN noise.
+        let is_error = status.class().is_server_error();
         let is_slow = duration_ms > slow_request_ms;
 
         if is_error || is_slow {
@@ -224,5 +226,23 @@ mod tests {
         let id1 = RequestId::new();
         let id2 = RequestId::new();
         assert_ne!(id1.0, id2.0);
+    }
+
+    #[test]
+    fn test_server_errors_are_warn() {
+        use rocket::http::Status;
+        let cases = [Status::InternalServerError, Status::BadGateway, Status::ServiceUnavailable];
+        for status in cases {
+            assert!(status.class().is_server_error(), "{} should be server error", status.code);
+        }
+    }
+
+    #[test]
+    fn test_client_errors_are_not_warn() {
+        use rocket::http::Status;
+        let cases = [Status::Unauthorized, Status::Forbidden, Status::UnprocessableEntity, Status::NotFound];
+        for status in cases {
+            assert!(!status.class().is_server_error(), "{} should not trigger WARN", status.code);
+        }
     }
 }

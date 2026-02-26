@@ -15,13 +15,15 @@ impl PostgresRepository {
         metadata: Option<JsonValue>,
     ) -> Result<(), AppError> {
         // Log to tracing (stdout) as well for operational visibility
+        let uid_str = user_id.map(|u| u.to_string());
         if success {
             tracing::info!(
                 category = "audit",
                 event_type = event_type,
                 success = success,
-                user_id = user_id.map(|u| u.to_string()).as_deref().unwrap_or("-"),
+                user_id = uid_str.as_deref().unwrap_or("-"),
                 ip = ip_address.as_deref().unwrap_or("-"),
+                user_agent = user_agent.as_deref().unwrap_or("-"),
                 "security audit event"
             );
         } else {
@@ -29,8 +31,9 @@ impl PostgresRepository {
                 category = "audit",
                 event_type = event_type,
                 success = success,
-                user_id = user_id.map(|u| u.to_string()).as_deref().unwrap_or("-"),
+                user_id = uid_str.as_deref().unwrap_or("-"),
                 ip = ip_address.as_deref().unwrap_or("-"),
+                user_agent = user_agent.as_deref().unwrap_or("-"),
                 "security audit event (failure)"
             );
         }

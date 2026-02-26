@@ -51,20 +51,31 @@ impl<'r> FromRequest<'r> for CurrentUser {
                     return Outcome::Success(current_user);
                 }
                 Ok(None) => {
+                    // `Ok(None)` covers two cases that are indistinguishable
+                    // without an extra DB round-trip: (a) the session row exists
+                    // but has expired, or (b) the session was never created /
+                    // already deleted. We record "expired_or_not_found" as the
+                    // reason so forensic readers are not misled.
                     let _ = repo.delete_session_if_expired(&session_id).await;
 
                     let ip = req.client_ip().map(|ip| ip.to_string());
                     let ua = req.headers().get_one("User-Agent").map(|s| s.to_string());
-                    let _ = repo
+                    if let Err(e) = repo
                         .create_security_audit_log(
                             Some(&user_id),
                             crate::models::audit::audit_events::SESSION_EXPIRED,
                             false,
                             ip,
                             ua,
-                            Some(serde_json::json!({"session_id": session_id.to_string()})),
+                            Some(serde_json::json!({
+                                "session_id": session_id.to_string(),
+                                "reason": "expired_or_not_found"
+                            })),
                         )
-                        .await;
+                        .await
+                    {
+                        tracing::warn!(error = %e, "Failed to persist session_expired audit event");
+                    }
 
                     return Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials));
                 }
