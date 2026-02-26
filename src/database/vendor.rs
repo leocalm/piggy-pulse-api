@@ -78,7 +78,13 @@ impl PostgresRepository {
         Ok(vendor)
     }
 
-    pub async fn list_vendors(&self, params: &CursorParams, user_id: &Uuid, period: &BudgetPeriod) -> Result<Vec<VendorWithPeriodStats>, AppError> {
+    pub async fn list_vendors(
+        &self,
+        params: &CursorParams,
+        user_id: &Uuid,
+        period: &BudgetPeriod,
+        include_archived: bool,
+    ) -> Result<Vec<VendorWithPeriodStats>, AppError> {
         #[derive(sqlx::FromRow)]
         struct VendorWithPeriodStatsRow {
             id: Uuid,
@@ -108,17 +114,18 @@ FROM vendor v
 CROSS JOIN selected_period sp
 LEFT JOIN transaction t ON v.id = t.vendor_id AND t.user_id = $1
 WHERE v.user_id = $1
-  AND v.archived = FALSE
+  AND (v.archived = FALSE OR $5)
   AND (v.created_at, v.id) < (SELECT created_at, id FROM vendor WHERE id = $4)
 GROUP BY v.id, v.user_id, v.name, v.description, v.archived, v.created_at
 ORDER BY v.created_at DESC, v.id DESC
-LIMIT $5
+LIMIT $6
                 "#,
             )
             .bind(user_id)
             .bind(period.start_date)
             .bind(period.end_date)
             .bind(cursor)
+            .bind(include_archived)
             .bind(params.fetch_limit())
             .fetch_all(&self.pool)
             .await?
@@ -141,15 +148,16 @@ FROM vendor v
 CROSS JOIN selected_period sp
 LEFT JOIN transaction t ON v.id = t.vendor_id AND t.user_id = $1
 WHERE v.user_id = $1
-  AND v.archived = FALSE
+  AND (v.archived = FALSE OR $4)
 GROUP BY v.id, v.user_id, v.name, v.description, v.archived, v.created_at
 ORDER BY v.created_at DESC, v.id DESC
-LIMIT $4
+LIMIT $5
                 "#,
             )
             .bind(user_id)
             .bind(period.start_date)
             .bind(period.end_date)
+            .bind(include_archived)
             .bind(params.fetch_limit())
             .fetch_all(&self.pool)
             .await?
@@ -286,6 +294,12 @@ LIMIT $4
         Ok(vendor)
     }
 
+    /// Returns all **non-archived** vendors for the user, ordered by name.
+    ///
+    /// This intentionally excludes archived vendors because the result is used
+    /// to populate transaction-creation dropdowns. Archived vendors should not
+    /// be assignable to new transactions. Use [`list_vendors_with_status`] with
+    /// `archived = true` if you need to enumerate archived vendors.
     pub async fn list_all_vendors(&self, user_id: &Uuid) -> Result<Vec<Vendor>, AppError> {
         let vendors = sqlx::query_as::<_, Vendor>(
             r#"

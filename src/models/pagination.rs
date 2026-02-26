@@ -4,6 +4,25 @@ use rocket::serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
 use uuid::Uuid;
 
+/// Allowed values for the transaction direction filter.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(crate = "rocket::serde")]
+pub enum TransactionDirection {
+    Incoming,
+    Outgoing,
+    Transfer,
+}
+
+impl TransactionDirection {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            TransactionDirection::Incoming => "Incoming",
+            TransactionDirection::Outgoing => "Outgoing",
+            TransactionDirection::Transfer => "Transfer",
+        }
+    }
+}
+
 /// Cursor-based pagination parameters.
 /// `cursor` is the `id` of the last item seen on the previous page.
 /// When `None`, the query starts from the beginning of the result set.
@@ -74,7 +93,7 @@ impl<T> CursorPaginatedResponse<T> {
 pub struct TransactionFilters {
     pub account_ids: Vec<Uuid>,
     pub category_ids: Vec<Uuid>,
-    pub direction: Option<String>, // "Incoming" | "Outgoing" | "Transfer"
+    pub direction: Option<TransactionDirection>,
     pub vendor_ids: Vec<Uuid>,
     pub date_from: Option<NaiveDate>,
     pub date_to: Option<NaiveDate>,
@@ -154,7 +173,7 @@ mod tests {
     #[test]
     fn test_transaction_filters_is_empty_with_direction() {
         let f = TransactionFilters {
-            direction: Some("Incoming".to_string()),
+            direction: Some(TransactionDirection::Incoming),
             ..Default::default()
         };
         assert!(!f.is_empty());

@@ -80,7 +80,7 @@ impl PostgresRepository {
     pub async fn list_sessions_for_user(&self, user_id: &Uuid) -> Result<Vec<SessionInfoFull>, AppError> {
         let sessions = sqlx::query_as::<_, SessionInfoFull>(
             r#"
-            SELECT id, created_at, expires_at, user_agent
+            SELECT id, created_at, expires_at, user_agent, ip_address
             FROM user_session
             WHERE user_id = $1 AND expires_at > now()
             ORDER BY created_at DESC
@@ -91,6 +91,18 @@ impl PostgresRepository {
         .await?;
 
         Ok(sessions)
+    }
+
+    /// Deletes all sessions for a user except the one specified by `keep_session_id`.
+    /// Used after a password change to invalidate all other active sessions.
+    pub async fn delete_other_sessions_for_user(&self, user_id: &Uuid, keep_session_id: &Uuid) -> Result<(), AppError> {
+        sqlx::query("DELETE FROM user_session WHERE user_id = $1 AND id != $2")
+            .bind(user_id)
+            .bind(keep_session_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
     }
 
     /// Deletes a session only if it belongs to the given user.

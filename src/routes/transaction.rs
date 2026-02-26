@@ -3,7 +3,7 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::error::json::JsonBody;
 use crate::middleware::rate_limit::RateLimit;
-use crate::models::pagination::{CursorPaginatedResponse, CursorParams, TransactionFilters};
+use crate::models::pagination::{CursorPaginatedResponse, CursorParams, TransactionDirection, TransactionFilters};
 use crate::models::transaction::{TransactionRequest, TransactionResponse};
 use crate::models::transaction_summary::TransactionSummaryResponse;
 use chrono::NaiveDate;
@@ -45,7 +45,7 @@ pub async fn list_all_transactions(
     limit: Option<i64>,
     account_id: Vec<String>,
     category_id: Vec<String>,
-    direction: Option<String>,
+    direction: Option<String>, // parsed below into TransactionDirection
     vendor_id: Vec<String>,
     date_from: Option<String>,
     date_to: Option<String>,
@@ -74,6 +74,17 @@ pub async fn list_all_transactions(
         let date_to = date_to
             .as_deref()
             .map(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| AppError::BadRequest("Invalid date_to format, expected YYYY-MM-DD".to_string())))
+            .transpose()?;
+        let direction = direction
+            .as_deref()
+            .map(|s| match s {
+                "Incoming" => Ok(TransactionDirection::Incoming),
+                "Outgoing" => Ok(TransactionDirection::Outgoing),
+                "Transfer" => Ok(TransactionDirection::Transfer),
+                _ => Err(AppError::BadRequest(
+                    "Invalid direction, must be one of: Incoming, Outgoing, Transfer".to_string(),
+                )),
+            })
             .transpose()?;
         TransactionFilters {
             account_ids,

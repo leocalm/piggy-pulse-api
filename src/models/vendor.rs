@@ -36,6 +36,7 @@ pub struct VendorPeriodStats {
 pub struct VendorRequest {
     #[validate(length(min = 3))]
     pub name: String,
+    #[validate(length(max = 500))]
     pub description: Option<String>,
 }
 

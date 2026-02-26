@@ -14,6 +14,7 @@ use uuid::Uuid;
 pub struct CurrentUser {
     pub id: Uuid,
     pub username: String,
+    pub session_id: Uuid,
 }
 
 pub(crate) fn parse_session_cookie_value(value: &str) -> Option<(Uuid, Uuid)> {
@@ -44,6 +45,7 @@ impl<'r> FromRequest<'r> for CurrentUser {
                     let current_user = CurrentUser {
                         id: user.id,
                         username: user.email,
+                        session_id,
                     };
                     req.local_cache(|| Some(current_user.clone()));
                     return Outcome::Success(current_user);

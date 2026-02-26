@@ -91,7 +91,7 @@ impl From<&ProfileData> for ProfileResponse {
 pub struct ProfileRequest {
     #[validate(length(min = 1))]
     pub name: String,
-    #[validate(length(min = 1))]
+    #[validate(custom(function = "validate_timezone"))]
     pub timezone: String,
     pub default_currency_id: Option<Uuid>,
 }
@@ -137,11 +137,11 @@ impl From<&UserPreferences> for PreferencesResponse {
 
 #[derive(Deserialize, Debug, Validate, JsonSchema)]
 pub struct PreferencesRequest {
-    #[validate(length(min = 1))]
+    #[validate(custom(function = "validate_theme"))]
     pub theme: String,
-    #[validate(length(min = 1))]
+    #[validate(custom(function = "validate_date_format"))]
     pub date_format: String,
-    #[validate(length(min = 1))]
+    #[validate(custom(function = "validate_number_format"))]
     pub number_format: String,
     pub compact_mode: bool,
 }
@@ -165,6 +165,7 @@ pub struct SessionInfoResponse {
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
     pub user_agent: Option<String>,
+    pub ip_address: Option<String>,
 }
 
 // ── Period model ──────────────────────────────────────────────────────────────
@@ -209,6 +210,38 @@ impl From<&PeriodSchedule> for ScheduleConfigResponse {
 pub struct PeriodModelResponse {
     pub mode: String,
     pub schedule: Option<ScheduleConfigResponse>,
+}
+
+fn validate_timezone(tz: &str) -> Result<(), ValidationError> {
+    if tz.parse::<chrono_tz::Tz>().is_ok() {
+        Ok(())
+    } else {
+        Err(ValidationError::new("invalid_timezone"))
+    }
+}
+
+fn validate_theme(theme: &str) -> Result<(), ValidationError> {
+    if matches!(theme, "light" | "dark" | "auto") {
+        Ok(())
+    } else {
+        Err(ValidationError::new("invalid_theme"))
+    }
+}
+
+fn validate_date_format(fmt: &str) -> Result<(), ValidationError> {
+    if matches!(fmt, "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD" | "DD-MM-YYYY" | "DD.MM.YYYY") {
+        Ok(())
+    } else {
+        Err(ValidationError::new("invalid_date_format"))
+    }
+}
+
+fn validate_number_format(fmt: &str) -> Result<(), ValidationError> {
+    if matches!(fmt, "1,234.56" | "1.234,56" | "1 234,56" | "1 234.56") {
+        Ok(())
+    } else {
+        Err(ValidationError::new("invalid_number_format"))
+    }
 }
 
 fn validate_period_mode(mode: &str) -> Result<(), ValidationError> {
@@ -263,14 +296,32 @@ pub struct PeriodModelRequest {
 
 // ── Danger zone ───────────────────────────────────────────────────────────────
 
-#[derive(Deserialize, Debug, JsonSchema)]
+fn validate_delete_confirmation(s: &str) -> Result<(), ValidationError> {
+    if s == "DELETE" {
+        Ok(())
+    } else {
+        Err(ValidationError::new("confirmation must equal 'DELETE'"))
+    }
+}
+
+fn validate_reset_confirmation(s: &str) -> Result<(), ValidationError> {
+    if s == "RESET" {
+        Ok(())
+    } else {
+        Err(ValidationError::new("confirmation must equal 'RESET'"))
+    }
+}
+
+#[derive(Deserialize, Debug, Validate, JsonSchema)]
 pub struct DeleteAccountRequest {
     /// Must equal "DELETE" to confirm destructive action.
+    #[validate(custom(function = "validate_delete_confirmation"))]
     pub confirmation: String,
 }
 
-#[derive(Deserialize, Debug, JsonSchema)]
+#[derive(Deserialize, Debug, Validate, JsonSchema)]
 pub struct ResetStructureRequest {
     /// Must equal "RESET" to confirm destructive action.
+    #[validate(custom(function = "validate_reset_confirmation"))]
     pub confirmation: String,
 }

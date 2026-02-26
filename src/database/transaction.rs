@@ -197,15 +197,16 @@ const TRANSACTION_JOINS: &str = r#"
     LEFT JOIN vendor v ON t.vendor_id = v.id
 "#;
 
-/// Builds a complete SELECT query for transactions with the specified table/CTE name and WHERE clauses
-fn build_transaction_query(from_clause: &str, base_where: &str, extra_where: &str, order_by: &str) -> String {
+/// Builds a complete SELECT query for transactions with the specified table/CTE name and WHERE clauses.
+/// `where_clauses` is a slice of non-empty SQL fragments joined with AND.
+fn build_transaction_query(from_clause: &str, where_clauses: &[&str], order_by: &str) -> String {
     let mut query = format!("SELECT {} FROM {} {}", TRANSACTION_SELECT_FIELDS, from_clause, TRANSACTION_JOINS);
 
-    let clauses: Vec<&str> = [base_where, extra_where].iter().filter(|s| !s.is_empty()).copied().collect();
+    let active: Vec<&str> = where_clauses.iter().filter(|s| !s.is_empty()).copied().collect();
 
-    if !clauses.is_empty() {
+    if !active.is_empty() {
         query.push_str("WHERE ");
-        query.push_str(&clauses.join(" AND "));
+        query.push_str(&active.join(" AND "));
     }
 
     if !order_by.is_empty() {
@@ -243,7 +244,7 @@ fn build_filter_clause(filters: &TransactionFilters, start_offset: usize) -> (St
     }
     if let Some(ref dir) = filters.direction {
         parts.push(format!("c.category_type::text = ${}", n));
-        binds.push(FilterBindValue::Text(dir.clone()));
+        binds.push(FilterBindValue::Text(dir.as_str().to_string()));
         n += 1;
     }
     if !filters.vendor_ids.is_empty() {
@@ -329,7 +330,7 @@ impl PostgresRepository {
         let to_account_id = if let Some(acc_id) = &transaction.to_account_id { Some(acc_id) } else { None };
         let vendor_id = if let Some(v_id) = &transaction.vendor_id { Some(v_id) } else { None };
 
-        let select_query = build_transaction_query("inserted t", "", "", "");
+        let select_query = build_transaction_query("inserted t", &[], "");
         let query = format!(
             r#"
             WITH inserted AS (
@@ -367,7 +368,7 @@ impl PostgresRepository {
     }
 
     pub async fn get_transaction_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Transaction>, AppError> {
-        let query = build_transaction_query("transaction t", "t.id = $1 AND t.user_id = $2", "", "");
+        let query = build_transaction_query("transaction t", &["t.id = $1 AND t.user_id = $2"], "");
         let row = sqlx::query_as::<_, TransactionRow>(&query)
             .bind(id)
             .bind(user_id)
@@ -382,8 +383,10 @@ impl PostgresRepository {
             let (filter_sql, filter_binds) = build_filter_clause(filters, 3); // $1=user_id, $2=cursor
             let base = build_transaction_query(
                 "transaction t",
-                "t.user_id = $1 AND (t.occurred_at, t.created_at, t.id) < (SELECT occurred_at, created_at, id FROM transaction WHERE id = $2)",
-                &filter_sql,
+                &[
+                    "t.user_id = $1 AND (t.occurred_at, t.created_at, t.id) < (SELECT occurred_at, created_at, id FROM transaction WHERE id = $2)",
+                    &filter_sql,
+                ],
                 "t.occurred_at DESC, t.created_at DESC, t.id DESC",
             );
             let limit_n = 3 + filter_binds.len();
@@ -397,8 +400,7 @@ impl PostgresRepository {
             let (filter_sql, filter_binds) = build_filter_clause(filters, 2); // $1=user_id
             let base = build_transaction_query(
                 "transaction t",
-                "t.user_id = $1",
-                &filter_sql,
+                &["t.user_id = $1", &filter_sql],
                 "t.occurred_at DESC, t.created_at DESC, t.id DESC",
             );
             let limit_n = 2 + filter_binds.len();
@@ -493,7 +495,7 @@ impl PostgresRepository {
     pub async fn update_transaction(&self, id: &Uuid, transaction: &TransactionRequest, user_id: &Uuid) -> Result<Transaction, AppError> {
         self.validate_transaction_ownership(transaction, user_id).await?;
 
-        let select_query = build_transaction_query("updated t", "", "", "");
+        let select_query = build_transaction_query("updated t", &[], "");
         let query = format!(
             r#"
             WITH updated AS (

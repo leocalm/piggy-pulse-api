@@ -30,9 +30,9 @@ pub async fn create_vendor(
 }
 
 /// List all vendors with cursor-based pagination and stats for a selected budget period.
-/// Requires `period_id` query parameter.
+/// Requires `period_id` query parameter. Pass `include_archived=true` to include archived vendors.
 #[openapi(tag = "Vendors")]
-#[get("/?<period_id>&<cursor>&<limit>")]
+#[get("/?<period_id>&<cursor>&<limit>&<include_archived>")]
 pub async fn list_all_vendors(
     pool: &State<PgPool>,
     _rate_limit: RateLimit,
@@ -40,6 +40,7 @@ pub async fn list_all_vendors(
     period_id: Option<String>,
     cursor: Option<String>,
     limit: Option<i64>,
+    include_archived: Option<bool>,
 ) -> Result<Json<CursorPaginatedResponse<VendorWithPeriodStatsResponse>>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let params = CursorParams::from_query(cursor, limit)?;
@@ -50,7 +51,7 @@ pub async fn list_all_vendors(
     let period_uuid = Uuid::parse_str(&period_id).map_err(|e| AppError::uuid("Invalid period id", e))?;
     let period = repo.get_budget_period(&period_uuid, &current_user.id).await?;
 
-    let vendors = repo.list_vendors(&params, &current_user.id, &period).await?;
+    let vendors = repo.list_vendors(&params, &current_user.id, &period, include_archived.unwrap_or(false)).await?;
     let responses: Vec<VendorWithPeriodStatsResponse> = vendors.iter().map(VendorWithPeriodStatsResponse::from).collect();
     Ok(Json(CursorPaginatedResponse::from_rows(responses, params.effective_limit(), |r| r.vendor.id)))
 }
