@@ -64,6 +64,8 @@ pub struct Config {
     pub email: EmailConfig,
     pub password_reset: PasswordResetConfig,
     pub two_factor: TwoFactorConfig,
+    #[serde(default)]
+    pub login_rate_limit: LoginRateLimitConfig,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -148,6 +150,60 @@ pub struct PasswordResetConfig {
     pub max_attempts_per_hour: u32,
     pub frontend_reset_url: String,
 }
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct LoginRateLimitConfig {
+    #[serde(default = "default_free_attempts")]
+    pub free_attempts: i32,
+
+    #[serde(default = "default_delay_seconds")]
+    pub delay_seconds: Vec<i64>,
+
+    #[serde(default = "default_lockout_attempts")]
+    pub lockout_attempts: i32,
+
+    #[serde(default = "default_lockout_duration_minutes")]
+    pub lockout_duration_minutes: i64,
+
+    #[serde(default = "default_enable_email_unlock")]
+    pub enable_email_unlock: bool,
+
+    #[serde(default = "default_notify_user_on_lock")]
+    pub notify_user_on_lock: bool,
+
+    #[serde(default = "default_notify_admin_on_lock")]
+    pub notify_admin_on_lock: bool,
+
+    pub admin_email: Option<String>,
+
+    #[serde(default = "default_high_failure_threshold")]
+    pub high_failure_threshold: i32,
+}
+
+impl Default for LoginRateLimitConfig {
+    fn default() -> Self {
+        Self {
+            free_attempts: default_free_attempts(),
+            delay_seconds: default_delay_seconds(),
+            lockout_attempts: default_lockout_attempts(),
+            lockout_duration_minutes: default_lockout_duration_minutes(),
+            enable_email_unlock: default_enable_email_unlock(),
+            notify_user_on_lock: default_notify_user_on_lock(),
+            notify_admin_on_lock: default_notify_admin_on_lock(),
+            admin_email: None,
+            high_failure_threshold: default_high_failure_threshold(),
+        }
+    }
+}
+
+fn default_free_attempts() -> i32 { 3 }
+fn default_delay_seconds() -> Vec<i64> { vec![5, 30, 60] }
+fn default_lockout_attempts() -> i32 { 7 }
+fn default_lockout_duration_minutes() -> i64 { 60 }
+fn default_enable_email_unlock() -> bool { true }
+fn default_notify_user_on_lock() -> bool { true }
+fn default_notify_admin_on_lock() -> bool { true }
+fn default_high_failure_threshold() -> i32 { 20 }
 
 pub const DEFAULT_API_BASE_PATH: &str = "/api/v1";
 
@@ -309,5 +365,19 @@ mod tests {
         };
 
         assert!(config.encryption_key_is_default());
+    }
+}
+
+#[cfg(test)]
+mod rate_limit_tests {
+    use super::*;
+
+    #[test]
+    fn test_rate_limit_config_defaults() {
+        let config = LoginRateLimitConfig::default();
+        assert_eq!(config.free_attempts, 3);
+        assert_eq!(config.delay_seconds, vec![5, 30, 60]);
+        assert_eq!(config.lockout_attempts, 7);
+        assert_eq!(config.lockout_duration_minutes, 60);
     }
 }
