@@ -85,6 +85,8 @@ pub struct ServerConfig {
 pub struct LoggingConfig {
     pub level: String,
     pub json_format: bool,
+    pub slow_request_ms: u64,
+    pub slow_query_ms: u64,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -175,6 +177,8 @@ impl Default for LoggingConfig {
         Self {
             level: "info".to_string(),
             json_format: false,
+            slow_request_ms: 500,
+            slow_query_ms: 100,
         }
     }
 }

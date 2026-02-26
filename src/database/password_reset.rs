@@ -3,7 +3,6 @@ use crate::error::app_error::AppError;
 use crate::models::password_reset::PasswordReset;
 use chrono::{DateTime, Utc};
 use rand::RngExt;
-use serde_json::Value as JsonValue;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
@@ -129,34 +128,6 @@ impl PostgresRepository {
         .await?;
 
         Ok(count.0)
-    }
-
-    /// Create a security audit log entry
-    pub async fn create_security_audit_log(
-        &self,
-        user_id: Option<&Uuid>,
-        event_type: &str,
-        success: bool,
-        ip_address: Option<String>,
-        user_agent: Option<String>,
-        metadata: Option<JsonValue>,
-    ) -> Result<(), AppError> {
-        sqlx::query(
-            r#"
-            INSERT INTO security_audit_log (user_id, event_type, success, ip_address, user_agent, metadata)
-            VALUES ($1, $2, $3, $4::inet, $5, $6)
-            "#,
-        )
-        .bind(user_id)
-        .bind(event_type)
-        .bind(success)
-        .bind(ip_address)
-        .bind(user_agent)
-        .bind(metadata)
-        .execute(&self.pool)
-        .await?;
-
-        Ok(())
     }
 
     /// Update user password (used during password reset)

@@ -27,6 +27,8 @@ allow_credentials = true
 [logging]
 level = "info"  # trace, debug, info, warn, error
 json_format = false
+slow_request_ms = 500   # warn threshold for slow requests (ms)
+slow_query_ms = 100     # warn threshold for slow DB queries (ms)
 
 [rate_limit]
 read_limit = 300

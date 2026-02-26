@@ -3,6 +3,8 @@ use crate::config::Config;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::RateLimit;
+use crate::middleware::{ClientIp, UserAgent};
+use crate::models::audit::audit_events;
 use crate::models::two_factor::{
     EmergencyDisableConfirm, EmergencyDisableRequest, TwoFactorDisableRequest, TwoFactorRegenerateRequest, TwoFactorSetupResponse, TwoFactorStatus,
     TwoFactorVerifyRequest,
@@ -71,6 +73,8 @@ pub async fn verify_two_factor(
     config: &State<Config>,
     _rate_limit: RateLimit,
     current_user: CurrentUser,
+    client_ip: ClientIp,
+    user_agent: UserAgent,
     payload: Json<TwoFactorVerifyRequest>,
 ) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
@@ -101,6 +105,17 @@ pub async fn verify_two_factor(
     // Enable 2FA
     repo.verify_and_enable_two_factor(&current_user.id).await?;
 
+    let _ = repo
+        .create_security_audit_log(
+            Some(&current_user.id),
+            audit_events::TWO_FACTOR_ENABLED,
+            true,
+            client_ip.0.clone(),
+            user_agent.0.clone(),
+            None,
+        )
+        .await;
+
     Ok(Status::Ok)
 }
 
@@ -112,6 +127,8 @@ pub async fn disable_two_factor(
     config: &State<Config>,
     _rate_limit: RateLimit,
     current_user: CurrentUser,
+    client_ip: ClientIp,
+    user_agent: UserAgent,
     payload: Json<TwoFactorDisableRequest>,
 ) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
@@ -152,6 +169,17 @@ pub async fn disable_two_factor(
 
     // Disable 2FA (deletes all 2FA data)
     repo.disable_two_factor(&current_user.id).await?;
+
+    let _ = repo
+        .create_security_audit_log(
+            Some(&current_user.id),
+            audit_events::TWO_FACTOR_DISABLED,
+            true,
+            client_ip.0.clone(),
+            user_agent.0.clone(),
+            Some(serde_json::json!({"method": "normal"})),
+        )
+        .await;
 
     Ok(Status::Ok)
 }
@@ -282,7 +310,13 @@ pub async fn emergency_disable_request(
 /// Confirm emergency 2FA disable with token from email
 #[openapi(tag = "Two-Factor Authentication")]
 #[post("/emergency-disable-confirm", data = "<payload>")]
-pub async fn emergency_disable_confirm(pool: &State<PgPool>, _rate_limit: RateLimit, payload: Json<EmergencyDisableConfirm>) -> Result<Status, AppError> {
+pub async fn emergency_disable_confirm(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    client_ip: ClientIp,
+    user_agent: UserAgent,
+    payload: Json<EmergencyDisableConfirm>,
+) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
 
     // Verify the token and get user_id
@@ -293,6 +327,17 @@ pub async fn emergency_disable_confirm(pool: &State<PgPool>, _rate_limit: RateLi
 
     // Disable 2FA
     repo.disable_two_factor(&user_id).await?;
+
+    let _ = repo
+        .create_security_audit_log(
+            Some(&user_id),
+            audit_events::TWO_FACTOR_DISABLED,
+            true,
+            client_ip.0.clone(),
+            user_agent.0.clone(),
+            Some(serde_json::json!({"method": "emergency"})),
+        )
+        .await;
 
     // TODO: Invalidate all sessions for this user (force re-login)
     // This will be implemented when we modify the session management

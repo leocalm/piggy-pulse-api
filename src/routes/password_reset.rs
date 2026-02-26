@@ -2,8 +2,9 @@ use crate::config::Config;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::AuthRateLimit;
+use crate::models::audit::audit_events;
 use crate::models::password_reset::{
-    PasswordResetConfirmRequest, PasswordResetRequest, PasswordResetResponse, PasswordResetValidateRequest, PasswordResetValidateResponse, audit_events,
+    PasswordResetConfirmRequest, PasswordResetRequest, PasswordResetResponse, PasswordResetValidateRequest, PasswordResetValidateResponse,
 };
 use crate::service::email::EmailService;
 use chrono::Utc;

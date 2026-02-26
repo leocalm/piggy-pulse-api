@@ -1,4 +1,5 @@
 pub mod account;
+pub mod audit;
 pub mod budget_category;
 pub mod budget_period;
 pub mod category;

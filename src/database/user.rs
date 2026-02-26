@@ -87,24 +87,39 @@ impl PostgresRepository {
         let _ = Argon2::default().verify_password(password.as_bytes(), &hash);
     }
 
-    pub async fn update_user(&self, id: &Uuid, name: &str, email: &str, password: &str) -> Result<User, AppError> {
-        let (salt, password_hash) = password_hash(password);
-
-        let user = sqlx::query_as::<_, User>(
-            r#"
-            UPDATE users
-            SET name = $1, email = $2, salt = $3, password_hash = $4
-            WHERE id = $5
-            RETURNING id, name, email, password_hash
-            "#,
-        )
-        .bind(name)
-        .bind(email)
-        .bind(&salt)
-        .bind(&password_hash)
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await?;
+    pub async fn update_user(&self, id: &Uuid, name: &str, email: &str, new_password: Option<&str>) -> Result<User, AppError> {
+        let user = if let Some(password) = new_password {
+            let (salt, hash) = password_hash(password);
+            sqlx::query_as::<_, User>(
+                r#"
+                UPDATE users
+                SET name = $1, email = $2, salt = $3, password_hash = $4
+                WHERE id = $5
+                RETURNING id, name, email, password_hash
+                "#,
+            )
+            .bind(name)
+            .bind(email)
+            .bind(&salt)
+            .bind(&hash)
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, User>(
+                r#"
+                UPDATE users
+                SET name = $1, email = $2
+                WHERE id = $3
+                RETURNING id, name, email, password_hash
+                "#,
+            )
+            .bind(name)
+            .bind(email)
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await?
+        };
 
         Ok(user)
     }

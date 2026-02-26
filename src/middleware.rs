@@ -6,6 +6,7 @@ use rocket::request::{FromRequest, Outcome, Request};
 use rocket::{Data, Response};
 use rocket_okapi::r#gen::OpenApiGenerator;
 use rocket_okapi::request::{OpenApiFromRequest, RequestHeaderInput};
+use std::time::Instant;
 use tracing::{info, warn};
 use uuid::Uuid;
 
@@ -40,6 +41,10 @@ impl<'r> FromRequest<'r> for RequestId {
     }
 }
 
+/// Stores the request start time for duration calculation
+#[derive(Debug, Clone, Copy)]
+struct RequestStartTime(Instant);
+
 /// Fairing that adds request ID to all requests and logs request/response information
 pub struct RequestLogger;
 
@@ -54,16 +59,27 @@ impl Fairing for RequestLogger {
 
     async fn on_request(&self, request: &mut Request<'_>, _: &mut Data<'_>) {
         let request_id = RequestId::new();
-        let method = request.method();
-        let uri = request.uri();
+        let method = request.method().to_string();
+        let uri = request.uri().to_string();
+        let request_bytes = request.headers().get_one("Content-Length").and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
 
-        // Store request_id in local_cache for later retrieval
+        // Extract user_id from cookie without DB hit
+        let user_id = request.cookies().get_private("user").and_then(|c| {
+            let value = c.value().to_string();
+            crate::auth::parse_session_cookie_value(&value).map(|(_, uid)| uid.to_string())
+        });
+
+        // Store start time, request_id, and request_bytes in local cache
+        request.local_cache(|| RequestStartTime(Instant::now()));
         request.local_cache(|| Some(request_id.clone()));
+        request.local_cache(|| request_bytes);
 
         info!(
             request_id = %request_id.0,
             method = %method,
             uri = %uri,
+            user_id = user_id.as_deref().unwrap_or("-"),
+            request_bytes = request_bytes,
             "incoming request"
         );
     }
@@ -75,9 +91,23 @@ impl Fairing for RequestLogger {
             .map(|r| r.0.clone())
             .unwrap_or_else(|| "unknown".to_string());
 
+        let duration_ms = request.local_cache(|| RequestStartTime(Instant::now())).0.elapsed().as_millis() as u64;
+
+        let request_bytes = *request.local_cache(|| 0u64);
+
         let status = response.status();
         let method = request.method();
         let uri = request.uri();
+
+        let response_bytes = response
+            .headers()
+            .get_one("Content-Length")
+            .and_then(|v| v.parse::<u64>().ok())
+            .or_else(|| response.body().preset_size().map(|s| s as u64))
+            .unwrap_or(0);
+
+        // Get user_id from CurrentUser cached by auth guard
+        let user_id = request.local_cache(|| None::<crate::auth::CurrentUser>).as_ref().map(|u| u.id.to_string());
 
         // Add request_id to response headers for client tracking
         response.set_header(Header::new("X-Request-Id", request_id.clone()));
@@ -87,21 +117,43 @@ impl Fairing for RequestLogger {
         response.set_header(Header::new("X-Frame-Options", "DENY"));
         response.set_header(Header::new("Cache-Control", "no-store"));
 
-        // Log response with appropriate level based on status
-        if status.class().is_server_error() || status.class().is_client_error() {
+        // Get slow_request_ms threshold from managed state
+        let slow_request_ms = request
+            .rocket()
+            .state::<crate::config::Config>()
+            .map(|c| c.logging.slow_request_ms)
+            .unwrap_or(500);
+
+        // Only escalate 5xx to WARN; 4xx responses (401, 403, 422, etc.) are
+        // routine for a REST API and log at INFO to avoid WARN noise.
+        let is_error = status.class().is_server_error();
+        let is_slow = duration_ms > slow_request_ms;
+
+        if is_error || is_slow {
             warn!(
                 request_id = %request_id,
                 method = %method,
                 uri = %uri,
-                status = %status.code,
-                "request completed with error"
+                status = status.code,
+                duration_ms = duration_ms,
+                request_bytes = request_bytes,
+                response_bytes = response_bytes,
+                user_id = user_id.as_deref().unwrap_or("-"),
+                slow = if is_slow { Some(true) } else { None },
+                "request completed{}{}",
+                if is_error { " with error" } else { "" },
+                if is_slow { " (slow)" } else { "" },
             );
         } else {
             info!(
                 request_id = %request_id,
                 method = %method,
                 uri = %uri,
-                status = %status.code,
+                status = status.code,
+                duration_ms = duration_ms,
+                request_bytes = request_bytes,
+                response_bytes = response_bytes,
+                user_id = user_id.as_deref().unwrap_or("-"),
                 "request completed"
             );
         }
@@ -174,5 +226,23 @@ mod tests {
         let id1 = RequestId::new();
         let id2 = RequestId::new();
         assert_ne!(id1.0, id2.0);
+    }
+
+    #[test]
+    fn test_server_errors_are_warn() {
+        use rocket::http::Status;
+        let cases = [Status::InternalServerError, Status::BadGateway, Status::ServiceUnavailable];
+        for status in cases {
+            assert!(status.class().is_server_error(), "{} should be server error", status.code);
+        }
+    }
+
+    #[test]
+    fn test_client_errors_are_not_warn() {
+        use rocket::http::Status;
+        let cases = [Status::Unauthorized, Status::Forbidden, Status::UnprocessableEntity, Status::NotFound];
+        for status in cases {
+            assert!(!status.class().is_server_error(), "{} should not trigger WARN", status.code);
+        }
     }
 }

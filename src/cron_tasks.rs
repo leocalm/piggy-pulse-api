@@ -9,7 +9,7 @@ pub struct GeneratePeriodsResult {
 }
 
 pub async fn generate_periods(config: &Config) -> Result<GeneratePeriodsResult, String> {
-    let pool = init_pool(&config.database)
+    let pool = init_pool(&config.database, config.logging.slow_query_ms)
         .await
         .map_err(|err| format!("Failed to initialize database pool: {err}"))?;
 

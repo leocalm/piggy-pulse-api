@@ -66,13 +66,3 @@ impl PasswordReset {
         !self.is_expired() && !self.is_used()
     }
 }
-
-/// Event types for security audit log
-pub mod audit_events {
-    pub const PASSWORD_RESET_REQUESTED: &str = "password_reset_requested";
-    pub const PASSWORD_RESET_TOKEN_VALIDATED: &str = "password_reset_token_validated";
-    pub const PASSWORD_RESET_COMPLETED: &str = "password_reset_completed";
-    pub const PASSWORD_RESET_FAILED: &str = "password_reset_failed";
-    pub const PASSWORD_RESET_TOKEN_EXPIRED: &str = "password_reset_token_expired";
-    pub const PASSWORD_RESET_TOKEN_INVALID: &str = "password_reset_token_invalid";
-}
