@@ -14,17 +14,15 @@ impl PostgresRepository {
         user_agent: Option<String>,
         metadata: Option<JsonValue>,
     ) -> Result<(), AppError> {
-        // Log to tracing (stdout) for operational visibility.
-        // ip_address and user_agent are PII — they are persisted in the DB
-        // (the authoritative audit record) but omitted from stdout to avoid
-        // leaking sensitive data into log aggregation systems.
-        let uid_str = user_id.map(|u| u.to_string());
+        // Log to tracing (stdout) for operational visibility (e.g. alerting
+        // on login_failed spikes). PII — user_id, ip_address, user_agent —
+        // is intentionally omitted here; it is persisted in the DB, which is
+        // the authoritative audit record and access-controlled separately.
         if success {
             tracing::info!(
                 category = "audit",
                 event_type = event_type,
                 success = success,
-                user_id = uid_str.as_deref().unwrap_or("-"),
                 "security audit event"
             );
         } else {
@@ -32,7 +30,6 @@ impl PostgresRepository {
                 category = "audit",
                 event_type = event_type,
                 success = success,
-                user_id = uid_str.as_deref().unwrap_or("-"),
                 "security audit event (failure)"
             );
         }
