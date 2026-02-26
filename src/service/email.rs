@@ -28,6 +28,109 @@ impl EmailService {
         self.send_email(to_email, subject, &html_body, &text_body).await
     }
 
+    /// Send an account-locked email with the unlock token link
+    pub async fn send_account_locked_email(
+        &self,
+        to_email: &str,
+        to_name: &str,
+        user_id: &str,
+        unlock_token: &str,
+        unlock_base_url: &str,
+    ) -> Result<(), AppError> {
+        if !self.config.enabled {
+            tracing::warn!("Email service is disabled, skipping account locked email to {}", to_email);
+            return Ok(());
+        }
+
+        let unlock_link = format!("{}?token={}&user={}", unlock_base_url, unlock_token, user_id);
+
+        let subject = "Your PiggyPulse account has been locked";
+        let html_body = self.generate_account_locked_html(to_name, &unlock_link);
+        let text_body = self.generate_account_locked_text(to_name, &unlock_link);
+
+        self.send_email(to_email, subject, &html_body, &text_body).await
+    }
+
+    /// Generate HTML version of account locked email
+    fn generate_account_locked_html(&self, to_name: &str, unlock_link: &str) -> String {
+        format!(
+            r##"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Locked</title>
+    <style>
+        body {{ font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; padding: 0; background-color: #FAFBFC; color: #141517; line-height: 1.6; }}
+        .wrapper {{ width: 100%; background-color: #FAFBFC; padding: 28px 12px; }}
+        .card {{ width: 100%; max-width: 640px; margin: 0 auto; background-color: #FFFFFF; border: 1px solid rgba(0,0,0,0.08); border-radius: 16px; overflow: hidden; box-shadow: 0 8px 24px rgba(20,21,23,0.08); }}
+        .brand-header {{ background-color: #FFFFFF; border-bottom: 1px solid rgba(0,0,0,0.08); padding: 24px; }}
+        .brand-title {{ margin: 0; font-size: 26px; font-weight: 700; color: #4FD1FF; }}
+        .content {{ padding: 28px 24px 16px; }}
+        .eyebrow {{ margin: 0 0 8px; color: #5C5F66; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }}
+        .title {{ margin: 0 0 14px; color: #141517; font-size: 28px; font-weight: 700; }}
+        .body-text {{ margin: 0 0 14px; color: #2E3035; font-size: 15px; }}
+        .cta-wrap {{ margin: 24px 0 20px; }}
+        .button {{ display: inline-block; background-image: linear-gradient(135deg, #00D4FF 0%, #B47AFF 100%); color: #FFFFFF; text-decoration: none; font-size: 15px; font-weight: 700; border-radius: 12px; padding: 14px 22px; }}
+        .meta {{ margin: 0 0 20px; color: #5C5F66; font-size: 13px; font-weight: 600; }}
+        .link-box {{ margin: 0 0 18px; padding: 12px 14px; background-color: #F1F3F5; border: 1px solid rgba(0,0,0,0.08); border-radius: 12px; color: #5C5F66; font-size: 12px; word-break: break-all; }}
+        .footer {{ border-top: 1px solid rgba(0,0,0,0.08); padding: 18px 24px 24px; background-color: #FAFBFC; }}
+        .footer-text {{ margin: 0 0 10px; color: #5C5F66; font-size: 12px; }}
+        .footer-signoff {{ margin: 0; color: #2E3035; font-size: 12px; font-weight: 600; }}
+    </style>
+</head>
+<body>
+    <table role="presentation" class="wrapper" width="100%" cellspacing="0" cellpadding="0" border="0">
+      <tr><td align="center">
+        <table role="presentation" class="card" width="640" cellspacing="0" cellpadding="0" border="0">
+          <tr><td class="brand-header"><p class="brand-title">PiggyPulse</p></td></tr>
+          <tr><td class="content">
+            <p class="eyebrow">Security Alert</p>
+            <h1 class="title">Your account has been locked</h1>
+            <p class="body-text">Hi {},</p>
+            <p class="body-text">Your PiggyPulse account has been temporarily locked due to too many failed login attempts. Click the button below to unlock it.</p>
+            <div class="cta-wrap">
+              <a href="{}" class="button">Unlock My Account</a>
+            </div>
+            <p class="meta">This secure link expires in 1 hour.</p>
+            <p class="body-text">If the button does not open, copy and paste this URL into your browser:</p>
+            <p class="link-box">{}</p>
+          </td></tr>
+          <tr><td class="footer">
+            <p class="footer-text">If you did not attempt to log in, your password may be compromised. We recommend resetting it immediately.</p>
+            <p class="footer-signoff">PiggyPulse Security</p>
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+</body>
+</html>"##,
+            to_name, unlock_link, unlock_link
+        )
+    }
+
+    /// Generate plain text version of account locked email
+    fn generate_account_locked_text(&self, to_name: &str, unlock_link: &str) -> String {
+        format!(
+            r#"PiggyPulse | Account Locked
+
+Hi {},
+
+Your PiggyPulse account has been temporarily locked due to too many failed login attempts.
+
+Unlock your account using the secure link below:
+{}
+
+This secure link expires in 1 hour.
+
+If you did not attempt to log in, your password may be compromised. We recommend resetting it immediately.
+
+PiggyPulse Security
+"#,
+            to_name, unlock_link
+        )
+    }
+
     /// Send an emergency 2FA disable email with the disable token
     pub async fn send_emergency_2fa_disable_email(&self, to_email: &str, to_name: &str, disable_token: &str, disable_url: &str) -> Result<(), AppError> {
         if !self.config.enabled {

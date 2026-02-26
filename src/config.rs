@@ -178,6 +178,9 @@ pub struct LoginRateLimitConfig {
 
     #[serde(default = "default_high_failure_threshold")]
     pub high_failure_threshold: i32,
+
+    #[serde(default = "default_frontend_unlock_url")]
+    pub frontend_unlock_url: String,
 }
 
 impl Default for LoginRateLimitConfig {
@@ -192,6 +195,7 @@ impl Default for LoginRateLimitConfig {
             notify_admin_on_lock: default_notify_admin_on_lock(),
             admin_email: None,
             high_failure_threshold: default_high_failure_threshold(),
+            frontend_unlock_url: default_frontend_unlock_url(),
         }
     }
 }
@@ -219,6 +223,9 @@ fn default_notify_admin_on_lock() -> bool {
 }
 fn default_high_failure_threshold() -> i32 {
     20
+}
+fn default_frontend_unlock_url() -> String {
+    "http://localhost:3000/auth/unlock".to_string()
 }
 
 pub const DEFAULT_API_BASE_PATH: &str = "/api/v1";

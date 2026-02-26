@@ -70,8 +70,18 @@ impl PostgresRepository {
     }
 
     /// Record a failed login attempt and apply progressive delays or lockout.
-    pub async fn record_failed_login_attempt(&self, user_id: Option<&Uuid>, ip_address: &str, config: &LoginRateLimitConfig) -> Result<(), AppError> {
+    ///
+    /// Returns the new `RateLimitStatus` so the caller can immediately return a
+    /// rate-limit error when a delay or lock was just imposed by this attempt,
+    /// rather than waiting for the *next* attempt to hit the check.
+    pub async fn record_failed_login_attempt(
+        &self,
+        user_id: Option<&Uuid>,
+        ip_address: &str,
+        config: &LoginRateLimitConfig,
+    ) -> Result<RateLimitStatus, AppError> {
         let now = Utc::now();
+        let mut new_status = RateLimitStatus::Allowed;
 
         // Update or insert for user if provided
         if let Some(uid) = user_id {
@@ -124,6 +134,12 @@ impl PostgresRepository {
                     )
                     .await;
             }
+
+            new_status = match (next_attempt_at, locked_until) {
+                (_, Some(lu)) => RateLimitStatus::Locked { until: lu, can_unlock: true },
+                (Some(na), _) => RateLimitStatus::Delayed { until: na },
+                _ => RateLimitStatus::Allowed,
+            };
         }
 
         // Always update IP-based tracking
@@ -159,7 +175,16 @@ impl PostgresRepository {
         .execute(&self.pool)
         .await?;
 
-        Ok(())
+        // If the user status is already restricted, keep it; otherwise use the IP status.
+        if matches!(new_status, RateLimitStatus::Allowed) {
+            new_status = match (ip_next_attempt_at, ip_locked_until) {
+                (_, Some(lu)) => RateLimitStatus::Locked { until: lu, can_unlock: false },
+                (Some(na), _) => RateLimitStatus::Delayed { until: na },
+                _ => RateLimitStatus::Allowed,
+            };
+        }
+
+        Ok(new_status)
     }
 
     /// Reset rate limits after a successful login.
@@ -202,7 +227,10 @@ impl PostgresRepository {
     }
 
     /// Verify an unlock token and clear the rate limit if valid.
-    pub async fn verify_and_apply_unlock_token(&self, user_id: &Uuid, token: &str) -> Result<bool, AppError> {
+    ///
+    /// Clears both the user-based and the requesting IP's rate limit records so
+    /// the user is not immediately re-blocked by the IP lock after unlocking.
+    pub async fn verify_and_apply_unlock_token(&self, user_id: &Uuid, token: &str, ip_address: &str) -> Result<bool, AppError> {
         let is_valid = sqlx::query_scalar::<_, bool>(
             "SELECT EXISTS(
                 SELECT 1 FROM login_rate_limits
@@ -221,9 +249,11 @@ impl PostgresRepository {
         if is_valid {
             sqlx::query(
                 "DELETE FROM login_rate_limits
-                 WHERE identifier_type = 'user_id' AND identifier_value = $1",
+                 WHERE (identifier_type = 'user_id' AND identifier_value = $1)
+                    OR (identifier_type = 'ip_address' AND identifier_value = $2)",
             )
             .bind(user_id.to_string())
+            .bind(ip_address)
             .execute(&self.pool)
             .await?;
 
