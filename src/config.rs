@@ -196,14 +196,30 @@ impl Default for LoginRateLimitConfig {
     }
 }
 
-fn default_free_attempts() -> i32 { 3 }
-fn default_delay_seconds() -> Vec<i64> { vec![5, 30, 60] }
-fn default_lockout_attempts() -> i32 { 7 }
-fn default_lockout_duration_minutes() -> i64 { 60 }
-fn default_enable_email_unlock() -> bool { true }
-fn default_notify_user_on_lock() -> bool { true }
-fn default_notify_admin_on_lock() -> bool { true }
-fn default_high_failure_threshold() -> i32 { 20 }
+fn default_free_attempts() -> i32 {
+    3
+}
+fn default_delay_seconds() -> Vec<i64> {
+    vec![5, 30, 60]
+}
+fn default_lockout_attempts() -> i32 {
+    7
+}
+fn default_lockout_duration_minutes() -> i64 {
+    60
+}
+fn default_enable_email_unlock() -> bool {
+    true
+}
+fn default_notify_user_on_lock() -> bool {
+    true
+}
+fn default_notify_admin_on_lock() -> bool {
+    true
+}
+fn default_high_failure_threshold() -> i32 {
+    20
+}
 
 pub const DEFAULT_API_BASE_PATH: &str = "/api/v1";
 

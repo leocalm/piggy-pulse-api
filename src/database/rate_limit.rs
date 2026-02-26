@@ -11,11 +11,7 @@ impl PostgresRepository {
     ///
     /// Checks both user-based (if user_id provided) and IP-based rate limits.
     /// Returns the most restrictive status.
-    pub async fn check_login_rate_limit(
-        &self,
-        user_id: Option<&Uuid>,
-        ip_address: &str,
-    ) -> Result<RateLimitStatus, AppError> {
+    pub async fn check_login_rate_limit(&self, user_id: Option<&Uuid>, ip_address: &str) -> Result<RateLimitStatus, AppError> {
         // Check user-based limit if user_id provided
         if let Some(uid) = user_id {
             let user_limit = sqlx::query_as::<_, LoginRateLimit>(
@@ -27,20 +23,18 @@ impl PostgresRepository {
             .await?;
 
             if let Some(limit) = user_limit {
-                if let Some(locked_until) = limit.locked_until {
-                    if locked_until > Utc::now() {
+                if let Some(locked_until) = limit.locked_until
+                    && locked_until > Utc::now() {
                         return Ok(RateLimitStatus::Locked {
                             until: locked_until,
                             can_unlock: true,
                         });
                     }
-                }
 
-                if let Some(next_attempt) = limit.next_attempt_at {
-                    if next_attempt > Utc::now() {
+                if let Some(next_attempt) = limit.next_attempt_at
+                    && next_attempt > Utc::now() {
                         return Ok(RateLimitStatus::Delayed { until: next_attempt });
                     }
-                }
             }
         }
 
@@ -54,32 +48,25 @@ impl PostgresRepository {
         .await?;
 
         if let Some(limit) = ip_limit {
-            if let Some(locked_until) = limit.locked_until {
-                if locked_until > Utc::now() {
+            if let Some(locked_until) = limit.locked_until
+                && locked_until > Utc::now() {
                     return Ok(RateLimitStatus::Locked {
                         until: locked_until,
                         can_unlock: false, // IP locks require manual clearing
                     });
                 }
-            }
 
-            if let Some(next_attempt) = limit.next_attempt_at {
-                if next_attempt > Utc::now() {
+            if let Some(next_attempt) = limit.next_attempt_at
+                && next_attempt > Utc::now() {
                     return Ok(RateLimitStatus::Delayed { until: next_attempt });
                 }
-            }
         }
 
         Ok(RateLimitStatus::Allowed)
     }
 
     /// Record a failed login attempt and apply progressive delays or lockout.
-    pub async fn record_failed_login_attempt(
-        &self,
-        user_id: Option<&Uuid>,
-        ip_address: &str,
-        config: &LoginRateLimitConfig,
-    ) -> Result<(), AppError> {
+    pub async fn record_failed_login_attempt(&self, user_id: Option<&Uuid>, ip_address: &str, config: &LoginRateLimitConfig) -> Result<(), AppError> {
         let now = Utc::now();
 
         // Update or insert for user if provided
@@ -172,11 +159,7 @@ impl PostgresRepository {
     }
 
     /// Reset rate limits after a successful login.
-    pub async fn reset_login_rate_limit(
-        &self,
-        user_id: &Uuid,
-        ip_address: &str,
-    ) -> Result<(), AppError> {
+    pub async fn reset_login_rate_limit(&self, user_id: &Uuid, ip_address: &str) -> Result<(), AppError> {
         sqlx::query(
             "DELETE FROM login_rate_limits
              WHERE (identifier_type = 'user_id' AND identifier_value = $1)
@@ -215,11 +198,7 @@ impl PostgresRepository {
     }
 
     /// Verify an unlock token and clear the rate limit if valid.
-    pub async fn verify_and_apply_unlock_token(
-        &self,
-        user_id: &Uuid,
-        token: &str,
-    ) -> Result<bool, AppError> {
+    pub async fn verify_and_apply_unlock_token(&self, user_id: &Uuid, token: &str) -> Result<bool, AppError> {
         let is_valid = sqlx::query_scalar::<_, bool>(
             "SELECT EXISTS(
                 SELECT 1 FROM login_rate_limits

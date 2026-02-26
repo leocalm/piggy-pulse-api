@@ -142,11 +142,10 @@ pub async fn post_user_login(
         }
         RateLimitStatus::Locked { until, can_unlock } => {
             // Trigger email unlock if enabled and we have a user
-            if can_unlock && config.login_rate_limit.enable_email_unlock {
-                if let Some(uid) = user_id.as_ref() {
+            if can_unlock && config.login_rate_limit.enable_email_unlock
+                && let Some(uid) = user_id.as_ref() {
                     let _ = repo.create_unlock_token(uid).await;
                 }
-            }
             return Err(AppError::AccountLocked {
                 locked_until: until,
                 message: "Account temporarily locked due to too many failed attempts. Check your email for unlock instructions.".to_string(),
@@ -160,9 +159,7 @@ pub async fn post_user_login(
             // Verify password first
             if repo.verify_password(&user, &payload.password).await.is_err() {
                 // Record failed attempt for both user and IP
-                let _ = repo
-                    .record_failed_login_attempt(Some(&user.id), ip, &config.login_rate_limit)
-                    .await;
+                let _ = repo.record_failed_login_attempt(Some(&user.id), ip, &config.login_rate_limit).await;
                 let _ = repo
                     .create_security_audit_log(
                         Some(&user.id),
@@ -295,9 +292,7 @@ pub async fn post_user_login(
             // existing from non-existing accounts by measuring latency.
             PostgresRepository::dummy_verify(&payload.password);
             // Record IP-only failed attempt (no user_id to avoid account enumeration)
-            let _ = repo
-                .record_failed_login_attempt(None, ip, &config.login_rate_limit)
-                .await;
+            let _ = repo.record_failed_login_attempt(None, ip, &config.login_rate_limit).await;
             let _ = repo
                 .create_security_audit_log(
                     None,

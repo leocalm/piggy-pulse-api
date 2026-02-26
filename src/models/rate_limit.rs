@@ -2,13 +2,8 @@
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum RateLimitStatus {
     Allowed,
-    Delayed {
-        until: DateTime<Utc>,
-    },
-    Locked {
-        until: DateTime<Utc>,
-        can_unlock: bool,
-    },
+    Delayed { until: DateTime<Utc> },
+    Locked { until: DateTime<Utc>, can_unlock: bool },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -39,14 +34,12 @@ mod tests {
         let allowed = RateLimitStatus::Allowed;
         assert!(matches!(allowed, RateLimitStatus::Allowed));
 
-        let delayed = RateLimitStatus::Delayed {
-            until: Utc::now()
-        };
+        let delayed = RateLimitStatus::Delayed { until: Utc::now() };
         assert!(matches!(delayed, RateLimitStatus::Delayed { .. }));
 
         let locked = RateLimitStatus::Locked {
             until: Utc::now(),
-            can_unlock: true
+            can_unlock: true,
         };
         assert!(matches!(locked, RateLimitStatus::Locked { .. }));
     }

@@ -1,11 +1,10 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
-use crate::models::audit::audit_events;
 use rocket::serde::json::Json;
 use rocket::{State, get};
 use rocket_okapi::openapi;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -20,11 +19,7 @@ pub struct UnlockResponse {
 /// Validates the token and clears the rate limit record if valid.
 #[openapi(tag = "Authentication")]
 #[get("/unlock?<token>&<user>")]
-pub async fn get_unlock(
-    pool: &State<PgPool>,
-    token: String,
-    user: String,
-) -> Result<Json<UnlockResponse>, AppError> {
+pub async fn get_unlock(pool: &State<PgPool>, token: String, user: String) -> Result<Json<UnlockResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
 
     let user_id = Uuid::parse_str(&user).map_err(|e| AppError::uuid("Invalid user ID", e))?;
@@ -47,7 +42,6 @@ mod tests {
     #[test]
     fn test_unlock_module_exists() {
         // Endpoint exists and compiles
-        assert!(true);
     }
 
     #[tokio::test]

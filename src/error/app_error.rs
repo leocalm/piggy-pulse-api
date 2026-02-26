@@ -65,10 +65,7 @@ pub enum AppError {
     TwoFactorRequired,
 
     #[error("Too many attempts: {message}")]
-    TooManyAttempts {
-        retry_after_seconds: i64,
-        message: String,
-    },
+    TooManyAttempts { retry_after_seconds: i64, message: String },
 
     #[error("Account locked: {message}")]
     AccountLocked {

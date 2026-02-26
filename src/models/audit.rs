@@ -24,8 +24,6 @@ pub mod audit_events {
     pub const PASSWORD_RESET_TOKEN_INVALID: &str = "password_reset_token_invalid";
 
     // Login rate limiting events
-    pub const LOGIN_RATE_LIMITED: &str = "login_rate_limited";
     pub const ACCOUNT_LOCKED: &str = "account_locked";
     pub const ACCOUNT_UNLOCKED: &str = "account_unlocked";
-    pub const HIGH_FAILURE_RATE: &str = "high_failure_rate";
 }
