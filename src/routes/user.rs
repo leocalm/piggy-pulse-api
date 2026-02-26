@@ -5,6 +5,7 @@ use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::{AuthRateLimit, RateLimit};
 use crate::middleware::{ClientIp, UserAgent};
 use crate::models::audit::audit_events;
+use crate::models::rate_limit::RateLimitStatus;
 use crate::models::user::{LoginRequest, UserRequest, UserResponse, UserUpdateRequest};
 use rocket::http::{Cookie, CookieJar, SameSite, Status};
 use rocket::serde::json::Json;
@@ -123,11 +124,45 @@ pub async fn post_user_login(
     payload: Json<LoginRequest>,
 ) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
+    let ip = client_ip.0.as_deref().unwrap_or("unknown");
 
-    match repo.get_user_by_email(&payload.email).await? {
+    // Look up user first so we can do user-based rate limit checks
+    let user_opt = repo.get_user_by_email(&payload.email).await?;
+    let user_id = user_opt.as_ref().map(|u| u.id);
+
+    // Check rate limits BEFORE password verification to prevent timing attacks
+    let rate_limit_status = repo.check_login_rate_limit(user_id.as_ref(), ip).await?;
+    match rate_limit_status {
+        RateLimitStatus::Delayed { until } => {
+            let seconds_remaining = (until - chrono::Utc::now()).num_seconds().max(0);
+            return Err(AppError::TooManyAttempts {
+                retry_after_seconds: seconds_remaining,
+                message: "Too many failed attempts. Please wait before trying again.".to_string(),
+            });
+        }
+        RateLimitStatus::Locked { until, can_unlock } => {
+            // Trigger email unlock if enabled and we have a user
+            if can_unlock && config.login_rate_limit.enable_email_unlock {
+                if let Some(uid) = user_id.as_ref() {
+                    let _ = repo.create_unlock_token(uid).await;
+                }
+            }
+            return Err(AppError::AccountLocked {
+                locked_until: until,
+                message: "Account temporarily locked due to too many failed attempts. Check your email for unlock instructions.".to_string(),
+            });
+        }
+        RateLimitStatus::Allowed => {}
+    }
+
+    match user_opt {
         Some(user) => {
             // Verify password first
             if repo.verify_password(&user, &payload.password).await.is_err() {
+                // Record failed attempt for both user and IP
+                let _ = repo
+                    .record_failed_login_attempt(Some(&user.id), ip, &config.login_rate_limit)
+                    .await;
                 let _ = repo
                     .create_security_audit_log(
                         Some(&user.id),
@@ -140,6 +175,9 @@ pub async fn post_user_login(
                     .await;
                 return Err(AppError::InvalidCredentials);
             }
+
+            // Password valid — reset login rate limits for this user + IP
+            let _ = repo.reset_login_rate_limit(&user.id, ip).await;
 
             // Check if user has 2FA enabled
             let two_factor = repo.get_two_factor_by_user(&user.id).await?;
@@ -256,6 +294,10 @@ pub async fn post_user_login(
             // Equalize response timing so attackers cannot distinguish
             // existing from non-existing accounts by measuring latency.
             PostgresRepository::dummy_verify(&payload.password);
+            // Record IP-only failed attempt (no user_id to avoid account enumeration)
+            let _ = repo
+                .record_failed_login_attempt(None, ip, &config.login_rate_limit)
+                .await;
             let _ = repo
                 .create_security_audit_log(
                     None,
