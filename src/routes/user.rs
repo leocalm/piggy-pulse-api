@@ -145,8 +145,13 @@ pub async fn post_user_login(
             if can_unlock
                 && config.login_rate_limit.enable_email_unlock
                 && let Some(uid) = user_id.as_ref()
+                && let Ok(token) = repo.create_unlock_token(uid).await
+                && let Some(ref user) = user_opt
             {
-                let _ = repo.create_unlock_token(uid).await;
+                let email_service = crate::service::email::EmailService::new(config.email.clone());
+                let _ = email_service
+                    .send_account_locked_email(&user.email, &user.name, &uid.to_string(), &token, &config.login_rate_limit.frontend_unlock_url)
+                    .await;
             }
             return Err(AppError::AccountLocked {
                 locked_until: until,
@@ -160,8 +165,9 @@ pub async fn post_user_login(
         Some(user) => {
             // Verify password first
             if repo.verify_password(&user, &payload.password).await.is_err() {
-                // Record failed attempt for both user and IP
-                let _ = repo.record_failed_login_attempt(Some(&user.id), ip, &config.login_rate_limit).await;
+                // Record failed attempt for both user and IP; capture the new status so we
+                // can immediately return a rate-limit error if a delay/lock was just imposed.
+                let new_rate_limit_status = repo.record_failed_login_attempt(Some(&user.id), ip, &config.login_rate_limit).await;
                 let _ = repo
                     .create_security_audit_log(
                         Some(&user.id),
@@ -172,6 +178,36 @@ pub async fn post_user_login(
                         Some(serde_json::json!({"reason": "invalid_password"})),
                     )
                     .await;
+                match new_rate_limit_status {
+                    Ok(RateLimitStatus::Delayed { until }) => {
+                        let seconds_remaining = (until - chrono::Utc::now()).num_seconds().max(0);
+                        return Err(AppError::TooManyAttempts {
+                            retry_after_seconds: seconds_remaining,
+                            message: "Too many failed attempts. Please wait before trying again.".to_string(),
+                        });
+                    }
+                    Ok(RateLimitStatus::Locked { until, .. }) => {
+                        if config.login_rate_limit.enable_email_unlock
+                            && let Ok(token) = repo.create_unlock_token(&user.id).await
+                        {
+                            let email_service = crate::service::email::EmailService::new(config.email.clone());
+                            let _ = email_service
+                                .send_account_locked_email(
+                                    &user.email,
+                                    &user.name,
+                                    &user.id.to_string(),
+                                    &token,
+                                    &config.login_rate_limit.frontend_unlock_url,
+                                )
+                                .await;
+                        }
+                        return Err(AppError::AccountLocked {
+                            locked_until: until,
+                            message: "Account temporarily locked due to too many failed attempts. Check your email for unlock instructions.".to_string(),
+                        });
+                    }
+                    _ => {}
+                }
                 return Err(AppError::InvalidCredentials);
             }
 
@@ -580,7 +616,9 @@ mod tests {
         let mut config = Config::default();
         config.database.url = "postgres://postgres:example@127.0.0.1:5432/piggy_pulse_db".to_string();
         config.session.cookie_secure = false;
-        config.login_rate_limit.free_attempts = 1;
+        // free_attempts=2 < lockout_attempts=3: attempt 3 locks directly, no delay step.
+        // This ensures we can reach lockout without having to wait out a delay period.
+        config.login_rate_limit.free_attempts = 2;
         config.login_rate_limit.delay_seconds = vec![5];
         config.login_rate_limit.lockout_attempts = 3;
         config.login_rate_limit.lockout_duration_minutes = 1;
