@@ -19,19 +19,9 @@ impl PostgresRepository {
         // is intentionally omitted here; it is persisted in the DB, which is
         // the authoritative audit record and access-controlled separately.
         if success {
-            tracing::info!(
-                category = "audit",
-                event_type = event_type,
-                success = success,
-                "security audit event"
-            );
+            tracing::info!(category = "audit", event_type = event_type, success = success, "security audit event");
         } else {
-            tracing::warn!(
-                category = "audit",
-                event_type = event_type,
-                success = success,
-                "security audit event (failure)"
-            );
+            tracing::warn!(category = "audit", event_type = event_type, success = success, "security audit event (failure)");
         }
 
         sqlx::query(
