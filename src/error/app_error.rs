@@ -63,6 +63,18 @@ pub enum AppError {
     EmailError(String),
     #[error("Two-factor authentication required")]
     TwoFactorRequired,
+
+    #[error("Too many attempts: {message}")]
+    TooManyAttempts {
+        retry_after_seconds: i64,
+        message: String,
+    },
+
+    #[error("Account locked: {message}")]
+    AccountLocked {
+        locked_until: chrono::DateTime<chrono::Utc>,
+        message: String,
+    },
 }
 
 impl AppError {
@@ -121,6 +133,8 @@ impl From<&AppError> for Status {
             AppError::ConfigurationError { .. } => Status::InternalServerError,
             AppError::EmailError(_) => Status::InternalServerError,
             AppError::TwoFactorRequired => Status::PreconditionRequired,
+            AppError::TooManyAttempts { .. } => Status::TooManyRequests,
+            AppError::AccountLocked { .. } => Status { code: 423 },
         }
     }
 }
@@ -159,6 +173,36 @@ impl<'r> Responder<'r, 'static> for AppError {
             AppError::TwoFactorRequired => {
                 // Special case for 2FA required - return custom JSON
                 serde_json::json!({"two_factor_required": true}).to_string()
+            }
+            AppError::TooManyAttempts { retry_after_seconds, message } => {
+                let json = serde_json::json!({
+                    "error": "too_many_attempts",
+                    "message": message,
+                    "retry_after_seconds": retry_after_seconds,
+                    "request_id": request_id,
+                });
+                let retry_after = retry_after_seconds.to_string();
+                let body = json.to_string();
+                return Response::build()
+                    .status(status)
+                    .header(rocket::http::ContentType::JSON)
+                    .header(rocket::http::Header::new("Retry-After", retry_after))
+                    .sized_body(body.len(), Cursor::new(body))
+                    .ok();
+            }
+            AppError::AccountLocked { locked_until, message } => {
+                let json = serde_json::json!({
+                    "error": "account_locked",
+                    "message": message,
+                    "locked_until": locked_until,
+                    "request_id": request_id,
+                });
+                let body = json.to_string();
+                return Response::build()
+                    .status(status)
+                    .header(rocket::http::ContentType::JSON)
+                    .sized_body(body.len(), Cursor::new(body))
+                    .ok();
             }
             _ => {
                 let error_message = match &self {
@@ -246,6 +290,29 @@ impl From<sqlx::Error> for AppError {
             sqlx::Error::RowNotFound => AppError::NotFound("Resource not found".to_string()),
             _ => AppError::db("Database error", e),
         }
+    }
+}
+
+#[cfg(test)]
+mod rate_limit_error_tests {
+    use super::*;
+
+    #[test]
+    fn test_too_many_attempts_error() {
+        let error = AppError::TooManyAttempts {
+            retry_after_seconds: 30,
+            message: "Too many attempts".to_string(),
+        };
+        assert_eq!(Status::from(&error), Status::TooManyRequests);
+    }
+
+    #[test]
+    fn test_account_locked_error() {
+        let error = AppError::AccountLocked {
+            locked_until: chrono::Utc::now(),
+            message: "Account locked".to_string(),
+        };
+        assert_eq!(Status::from(&error), Status { code: 423 });
     }
 }
 
