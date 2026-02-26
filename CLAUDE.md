@@ -16,6 +16,18 @@ cargo audit
 
 Always use **Serena MCP tools** (`find_symbol`, `replace_symbol_body`, `search_for_pattern`, `get_symbols_overview`, etc.) for reading and editing source files. Prefer symbolic operations over raw file reads/writes.
 
+## Critical: Branching and Pull Requests
+
+**Direct commits to `main` are not allowed.** All changes must go through a pull request.
+
+- Always create a feature branch for new work: `git checkout -b <type>/<short-description>`
+- Push the branch and open a PR against `main`
+- Never attempt to push directly to `main`
+
+## Critical: No Assumptions
+
+**Never assume anything.** If requirements, intent, or context are unclear, ask before proceeding. It is always better to ask a clarifying question than to make a wrong assumption and do work that needs to be undone.
+
 ---
 
 ## Project Overview
