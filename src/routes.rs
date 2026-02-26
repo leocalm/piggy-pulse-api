@@ -12,5 +12,6 @@ pub mod password_reset;
 pub mod settings;
 pub mod transaction;
 pub mod two_factor;
+pub mod unlock;
 pub mod user;
 pub mod vendor;
