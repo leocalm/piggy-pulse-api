@@ -187,9 +187,11 @@ impl PostgresRepository {
     // ── Period model ──────────────────────────────────────────────────────────
 
     pub async fn get_period_model(&self, user_id: &Uuid) -> Result<PeriodModelResponse, AppError> {
+        let mut tx = self.pool.begin().await?;
+
         let mode = sqlx::query_scalar::<_, String>("SELECT period_mode FROM settings WHERE user_id = $1")
             .bind(user_id)
-            .fetch_one(&self.pool)
+            .fetch_one(&mut *tx)
             .await?;
 
         let schedule = sqlx::query_as::<_, PeriodSchedule>(
@@ -201,8 +203,10 @@ impl PostgresRepository {
             "#,
         )
         .bind(user_id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *tx)
         .await?;
+
+        tx.commit().await?;
 
         Ok(PeriodModelResponse {
             mode,
