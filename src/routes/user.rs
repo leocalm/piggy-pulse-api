@@ -6,6 +6,7 @@ use crate::middleware::rate_limit::{AuthRateLimit, RateLimit};
 use crate::middleware::{ClientIp, UserAgent};
 use crate::models::audit::audit_events;
 use crate::models::user::{LoginRequest, UserRequest, UserResponse, UserUpdateRequest};
+use crate::service::auth::{AuthService, LoginOutcome};
 use rocket::http::{Cookie, CookieJar, SameSite, Status};
 use rocket::serde::json::Json;
 use rocket::time::Duration;
@@ -122,16 +123,11 @@ pub async fn post_user_login(
     client_ip: ClientIp,
     payload: Json<LoginRequest>,
 ) -> Result<Status, AppError> {
-    use crate::service::auth::{AuthService, LoginOutcome};
-
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let ip = client_ip.0.as_deref().unwrap_or("unknown");
     let auth = AuthService::new(&repo, config);
 
-    match auth
-        .login(&payload, ip, client_ip.0.clone(), user_agent.0.clone())
-        .await?
-    {
+    match auth.login(&payload, ip, client_ip.0.clone(), user_agent.0.clone()).await? {
         LoginOutcome::TwoFactorRequired => Err(AppError::TwoFactorRequired),
         LoginOutcome::Success { session_id, user_id } => {
             let ttl_seconds = config.session.ttl_seconds.max(60);

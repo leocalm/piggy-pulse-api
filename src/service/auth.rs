@@ -1,15 +1,14 @@
 // src/service/auth.rs
 
-use chrono::Utc;
 use crate::Config;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::audit::audit_events;
 use crate::models::rate_limit::RateLimitStatus;
+use chrono::Utc;
 use uuid::Uuid;
 
 /// What happened during a login attempt.
-#[allow(dead_code)]
 pub enum LoginOutcome {
     /// Credentials valid and session created successfully.
     Success { session_id: Uuid, user_id: Uuid },
@@ -17,7 +16,6 @@ pub enum LoginOutcome {
     TwoFactorRequired,
 }
 
-#[allow(dead_code)]
 pub struct AuthService<'a> {
     pub repo: &'a PostgresRepository,
     pub config: &'a Config,
@@ -52,10 +50,7 @@ impl<'a> AuthService<'a> {
             Some(u) => u,
             None => {
                 PostgresRepository::dummy_verify(&payload.password);
-                let _ = self
-                    .repo
-                    .record_failed_login_attempt(None, ip, &self.config.login_rate_limit)
-                    .await;
+                let _ = self.repo.record_failed_login_attempt(None, ip, &self.config.login_rate_limit).await;
                 let _ = self
                     .repo
                     .create_security_audit_log(
@@ -73,16 +68,7 @@ impl<'a> AuthService<'a> {
 
         // Password verification
         if self.repo.verify_password(&user, &payload.password).await.is_err() {
-            return Err(self
-                .handle_failed_password(
-                    &user.id,
-                    &user.email,
-                    &user.name,
-                    ip,
-                    client_ip,
-                    user_agent,
-                )
-                .await);
+            return Err(self.handle_failed_password(&user.id, &user.email, &user.name, ip, client_ip, user_agent).await);
         }
 
         // Reset login rate limits on success
@@ -121,10 +107,7 @@ impl<'a> AuthService<'a> {
         // Create session
         let ttl_seconds = self.config.session.ttl_seconds.max(60);
         let expires_at = chrono::Utc::now() + chrono::Duration::seconds(ttl_seconds);
-        let session = self
-            .repo
-            .create_session(&user.id, expires_at, user_agent.as_deref(), Some(ip))
-            .await?;
+        let session = self.repo.create_session(&user.id, expires_at, user_agent.as_deref(), Some(ip)).await?;
 
         let _ = self
             .repo
@@ -150,21 +133,14 @@ impl<'a> AuthService<'a> {
     /// Checks the pre-login rate limit for a user (by id) and IP.
     /// Returns `Ok(())` if the request is allowed, or an `Err(AppError)` if
     /// it should be rejected (Delayed or Locked).
-    pub async fn check_login_rate_limit(
-        &self,
-        user_id: Option<&Uuid>,
-        ip: &str,
-        user_email: Option<&str>,
-        user_name: Option<&str>,
-    ) -> Result<(), AppError> {
+    pub async fn check_login_rate_limit(&self, user_id: Option<&Uuid>, ip: &str, user_email: Option<&str>, user_name: Option<&str>) -> Result<(), AppError> {
         let status = self.repo.check_login_rate_limit(user_id, ip).await?;
         match status {
             RateLimitStatus::Delayed { until } => {
                 let seconds_remaining = (until - Utc::now()).num_seconds().max(0);
                 Err(AppError::TooManyAttempts {
                     retry_after_seconds: seconds_remaining,
-                    message: "Too many failed attempts. Please wait before trying again."
-                        .to_string(),
+                    message: "Too many failed attempts. Please wait before trying again.".to_string(),
                 })
             }
             RateLimitStatus::Locked { until, can_unlock } => {
@@ -175,16 +151,9 @@ impl<'a> AuthService<'a> {
                     && let Some(name) = user_name
                     && let Ok(token) = self.repo.create_unlock_token(uid).await
                 {
-                    let email_service =
-                        crate::service::email::EmailService::new(self.config.email.clone());
+                    let email_service = crate::service::email::EmailService::new(self.config.email.clone());
                     let _ = email_service
-                        .send_account_locked_email(
-                            email,
-                            name,
-                            &uid.to_string(),
-                            &token,
-                            &self.config.login_rate_limit.frontend_unlock_url,
-                        )
+                        .send_account_locked_email(email, name, &uid.to_string(), &token, &self.config.login_rate_limit.frontend_unlock_url)
                         .await;
                 }
                 Err(AppError::AccountLocked {
@@ -207,10 +176,7 @@ impl<'a> AuthService<'a> {
         client_ip: Option<String>,
         user_agent: Option<String>,
     ) -> AppError {
-        let new_status = self
-            .repo
-            .record_failed_login_attempt(Some(user_id), ip, &self.config.login_rate_limit)
-            .await;
+        let new_status = self.repo.record_failed_login_attempt(Some(user_id), ip, &self.config.login_rate_limit).await;
 
         let _ = self
             .repo
@@ -235,8 +201,7 @@ impl<'a> AuthService<'a> {
             Ok(RateLimitStatus::Locked { until, can_unlock }) => {
                 if can_unlock && self.config.login_rate_limit.enable_email_unlock {
                     if let Ok(token) = self.repo.create_unlock_token(user_id).await {
-                        let email_service =
-                            crate::service::email::EmailService::new(self.config.email.clone());
+                        let email_service = crate::service::email::EmailService::new(self.config.email.clone());
                         let _ = email_service
                             .send_account_locked_email(
                                 user_email,
@@ -271,27 +236,17 @@ impl<'a> AuthService<'a> {
     ) -> Result<bool, AppError> {
         // Check 2FA-specific rate limit
         if self.repo.check_rate_limit(user_id).await? {
-            return Err(AppError::BadRequest(
-                "Too many failed attempts. Please try again later.".to_string(),
-            ));
+            return Err(AppError::BadRequest("Too many failed attempts. Please try again later.".to_string()));
         }
 
-        let encryption_key = self
-            .config
-            .two_factor
-            .parse_encryption_key()
-            .map_err(AppError::BadRequest)?;
+        let encryption_key = self.config.two_factor.parse_encryption_key().map_err(AppError::BadRequest)?;
 
         let encrypted_secret = two_factor_data.encrypted_secret.clone();
         let encryption_nonce = two_factor_data.encryption_nonce.clone();
         let code_owned = code.to_string();
 
         let totp_valid = tokio::task::spawn_blocking(move || {
-            let secret = PostgresRepository::decrypt_secret(
-                &encrypted_secret,
-                &encryption_nonce,
-                &encryption_key,
-            )?;
+            let secret = PostgresRepository::decrypt_secret(&encrypted_secret, &encryption_nonce, &encryption_key)?;
             PostgresRepository::verify_totp_code(&secret, &code_owned)
         })
         .await
@@ -316,9 +271,7 @@ impl<'a> AuthService<'a> {
                     Some(serde_json::json!({"reason": "invalid_2fa_code"})),
                 )
                 .await;
-            return Err(AppError::BadRequest(
-                "Invalid two-factor authentication code.".to_string(),
-            ));
+            return Err(AppError::BadRequest("Invalid two-factor authentication code.".to_string()));
         }
 
         self.repo.reset_rate_limit(user_id).await?;
