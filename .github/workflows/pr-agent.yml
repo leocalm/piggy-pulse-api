@@ -16,10 +16,11 @@ jobs:
     name: Run PR Agent
     steps:
       - name: PR Agent
-        uses: qodo-ai/pr-agent@main
+        uses: qodo-ai/pr-agent@v0.32
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CONFIG.MODEL: "anthropic/claude-sonnet-4-6"
-          CONFIG.FALLBACK_MODELS: '["anthropic/claude-sonnet-4-6"]'
-          PR_REVIEWER.REQUIRE_SECURITY_REVIEW: "true"
+          config.model: "anthropic/claude-sonnet-4-6"
+          config.fallback_models: '["anthropic/claude-sonnet-4-6"]'
+          config.enable_large_pr_handling: "true"
+          pr_reviewer.require_security_review: "true"
