@@ -22,5 +22,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           config.model: "anthropic/claude-sonnet-4-6"
           config.fallback_models: '["anthropic/claude-sonnet-4-6"]'
-          config.enable_large_pr_handling: "true"
+          pr_description.enable_large_pr_handling: "true"
           pr_reviewer.require_security_review: "true"
