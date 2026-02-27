@@ -38,13 +38,8 @@ impl<'a> AuthService<'a> {
         let user_id = user_opt.as_ref().map(|u| u.id);
 
         // Pre-login rate limit check
-        self.check_login_rate_limit(
-            user_id.as_ref(),
-            ip,
-            user_opt.as_ref().map(|u| u.email.as_str()),
-            user_opt.as_ref().map(|u| u.name.as_str()),
-        )
-        .await?;
+        self.check_login_rate_limit(user_id.as_ref(), ip, user_opt.as_ref().map(|u| (u.email.as_str(), u.name.as_str())))
+            .await?;
 
         let user = match user_opt {
             Some(u) => u,
@@ -107,7 +102,10 @@ impl<'a> AuthService<'a> {
         // Create session
         let ttl_seconds = self.config.session.ttl_seconds.max(60);
         let expires_at = chrono::Utc::now() + chrono::Duration::seconds(ttl_seconds);
-        let session = self.repo.create_session(&user.id, expires_at, user_agent.as_deref(), Some(ip)).await?;
+        let session = self
+            .repo
+            .create_session(&user.id, expires_at, user_agent.as_deref(), client_ip.as_deref())
+            .await?;
 
         let _ = self
             .repo
@@ -133,7 +131,11 @@ impl<'a> AuthService<'a> {
     /// Checks the pre-login rate limit for a user (by id) and IP.
     /// Returns `Ok(())` if the request is allowed, or an `Err(AppError)` if
     /// it should be rejected (Delayed or Locked).
-    pub async fn check_login_rate_limit(&self, user_id: Option<&Uuid>, ip: &str, user_email: Option<&str>, user_name: Option<&str>) -> Result<(), AppError> {
+    ///
+    /// `user_contact` is `Some((email, name))` when the user record was resolved;
+    /// `None` when the user was not found. The unlock email is only sent when a
+    /// user record is available, preventing email sends for IP-only locks.
+    pub async fn check_login_rate_limit(&self, user_id: Option<&Uuid>, ip: &str, user_contact: Option<(&str, &str)>) -> Result<(), AppError> {
         let status = self.repo.check_login_rate_limit(user_id, ip).await?;
         match status {
             RateLimitStatus::Delayed { until } => {
@@ -147,8 +149,7 @@ impl<'a> AuthService<'a> {
                 if can_unlock
                     && self.config.login_rate_limit.enable_email_unlock
                     && let Some(uid) = user_id
-                    && let Some(email) = user_email
-                    && let Some(name) = user_name
+                    && let Some((email, name)) = user_contact
                     && let Ok(token) = self.repo.create_unlock_token(uid).await
                 {
                     let email_service = crate::service::email::EmailService::new(self.config.email.clone());
