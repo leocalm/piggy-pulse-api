@@ -5,7 +5,6 @@ use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::{AuthRateLimit, RateLimit};
 use crate::middleware::{ClientIp, UserAgent};
 use crate::models::audit::audit_events;
-use crate::models::rate_limit::RateLimitStatus;
 use crate::models::user::{LoginRequest, UserRequest, UserResponse, UserUpdateRequest};
 use rocket::http::{Cookie, CookieJar, SameSite, Status};
 use rocket::serde::json::Json;
@@ -123,182 +122,20 @@ pub async fn post_user_login(
     client_ip: ClientIp,
     payload: Json<LoginRequest>,
 ) -> Result<Status, AppError> {
+    use crate::service::auth::{AuthService, LoginOutcome};
+
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let ip = client_ip.0.as_deref().unwrap_or("unknown");
+    let auth = AuthService::new(&repo, config);
 
-    // Look up user first so we can do user-based rate limit checks
-    let user_opt = repo.get_user_by_email(&payload.email).await?;
-    let user_id = user_opt.as_ref().map(|u| u.id);
-
-    // Check rate limits BEFORE password verification to prevent timing attacks
-    let rate_limit_status = repo.check_login_rate_limit(user_id.as_ref(), ip).await?;
-    match rate_limit_status {
-        RateLimitStatus::Delayed { until } => {
-            let seconds_remaining = (until - chrono::Utc::now()).num_seconds().max(0);
-            return Err(AppError::TooManyAttempts {
-                retry_after_seconds: seconds_remaining,
-                message: "Too many failed attempts. Please wait before trying again.".to_string(),
-            });
-        }
-        RateLimitStatus::Locked { until, can_unlock } => {
-            // Trigger email unlock if enabled and we have a user
-            if can_unlock
-                && config.login_rate_limit.enable_email_unlock
-                && let Some(uid) = user_id.as_ref()
-                && let Ok(token) = repo.create_unlock_token(uid).await
-                && let Some(ref user) = user_opt
-            {
-                let email_service = crate::service::email::EmailService::new(config.email.clone());
-                let _ = email_service
-                    .send_account_locked_email(&user.email, &user.name, &uid.to_string(), &token, &config.login_rate_limit.frontend_unlock_url)
-                    .await;
-            }
-            return Err(AppError::AccountLocked {
-                locked_until: until,
-                message: "Account temporarily locked due to too many failed attempts. Check your email for unlock instructions.".to_string(),
-            });
-        }
-        RateLimitStatus::Allowed => {}
-    }
-
-    match user_opt {
-        Some(user) => {
-            // Verify password first
-            if repo.verify_password(&user, &payload.password).await.is_err() {
-                // Record failed attempt for both user and IP; capture the new status so we
-                // can immediately return a rate-limit error if a delay/lock was just imposed.
-                let new_rate_limit_status = repo.record_failed_login_attempt(Some(&user.id), ip, &config.login_rate_limit).await;
-                let _ = repo
-                    .create_security_audit_log(
-                        Some(&user.id),
-                        audit_events::LOGIN_FAILED,
-                        false,
-                        client_ip.0.clone(),
-                        user_agent.0.clone(),
-                        Some(serde_json::json!({"reason": "invalid_password"})),
-                    )
-                    .await;
-                match new_rate_limit_status {
-                    Ok(RateLimitStatus::Delayed { until }) => {
-                        let seconds_remaining = (until - chrono::Utc::now()).num_seconds().max(0);
-                        return Err(AppError::TooManyAttempts {
-                            retry_after_seconds: seconds_remaining,
-                            message: "Too many failed attempts. Please wait before trying again.".to_string(),
-                        });
-                    }
-                    Ok(RateLimitStatus::Locked { until, .. }) => {
-                        if config.login_rate_limit.enable_email_unlock
-                            && let Ok(token) = repo.create_unlock_token(&user.id).await
-                        {
-                            let email_service = crate::service::email::EmailService::new(config.email.clone());
-                            let _ = email_service
-                                .send_account_locked_email(
-                                    &user.email,
-                                    &user.name,
-                                    &user.id.to_string(),
-                                    &token,
-                                    &config.login_rate_limit.frontend_unlock_url,
-                                )
-                                .await;
-                        }
-                        return Err(AppError::AccountLocked {
-                            locked_until: until,
-                            message: "Account temporarily locked due to too many failed attempts. Check your email for unlock instructions.".to_string(),
-                        });
-                    }
-                    _ => {}
-                }
-                return Err(AppError::InvalidCredentials);
-            }
-
-            // Password valid — reset login rate limits for this user + IP
-            let _ = repo.reset_login_rate_limit(&user.id, ip).await;
-
-            // Check if user has 2FA enabled
-            let two_factor = repo.get_two_factor_by_user(&user.id).await?;
-            let has_2fa = two_factor.as_ref().map(|tf| tf.is_enabled).unwrap_or(false);
-
-            let mut backup_code_used = false;
-
-            if has_2fa {
-                // 2FA is enabled - check if code was provided
-                if payload.two_factor_code.is_none() {
-                    // Return 428 Precondition Required with JSON response
-                    return Err(AppError::TwoFactorRequired);
-                }
-
-                // Code was provided - verify it
-                let code = payload.two_factor_code.as_ref().unwrap();
-
-                // Check rate limit
-                if repo.check_rate_limit(&user.id).await? {
-                    return Err(AppError::BadRequest("Too many failed attempts. Please try again later.".to_string()));
-                }
-
-                // Parse encryption key
-                let encryption_key = config.two_factor.parse_encryption_key().map_err(AppError::BadRequest)?;
-
-                // Decrypt and verify in blocking task
-                let two_factor_data = two_factor.unwrap();
-                let encrypted_secret = two_factor_data.encrypted_secret.clone();
-                let encryption_nonce = two_factor_data.encryption_nonce.clone();
-                let code_clone = code.clone();
-
-                let totp_valid = tokio::task::spawn_blocking(move || {
-                    // Decrypt the secret
-                    let secret = PostgresRepository::decrypt_secret(&encrypted_secret, &encryption_nonce, &encryption_key)?;
-
-                    // Verify TOTP code
-                    PostgresRepository::verify_totp_code(&secret, &code_clone)
-                })
-                .await
-                .map_err(|e| AppError::BadRequest(format!("Task join error: {}", e)))??;
-
-                // If TOTP failed, try backup code
-                let backup_valid = if !totp_valid { repo.verify_backup_code(&user.id, code).await? } else { false };
-
-                if !totp_valid && !backup_valid {
-                    repo.record_failed_attempt(&user.id).await?;
-                    let _ = repo
-                        .create_security_audit_log(
-                            Some(&user.id),
-                            audit_events::LOGIN_FAILED,
-                            false,
-                            client_ip.0.clone(),
-                            user_agent.0.clone(),
-                            Some(serde_json::json!({"reason": "invalid_2fa_code"})),
-                        )
-                        .await;
-                    return Err(AppError::BadRequest("Invalid two-factor authentication code.".to_string()));
-                }
-
-                backup_code_used = backup_valid;
-
-                // Success - reset rate limit
-                repo.reset_rate_limit(&user.id).await?;
-            }
-
-            // Log backup code usage if applicable
-            if backup_code_used {
-                let _ = repo
-                    .create_security_audit_log(
-                        Some(&user.id),
-                        audit_events::TWO_FACTOR_BACKUP_USED,
-                        true,
-                        client_ip.0.clone(),
-                        user_agent.0.clone(),
-                        None,
-                    )
-                    .await;
-            }
-
-            // Create session (either no 2FA or 2FA passed)
+    match auth
+        .login(&payload, ip, client_ip.0.clone(), user_agent.0.clone())
+        .await?
+    {
+        LoginOutcome::TwoFactorRequired => Err(AppError::TwoFactorRequired),
+        LoginOutcome::Success { session_id, user_id } => {
             let ttl_seconds = config.session.ttl_seconds.max(60);
-            let expires_at = chrono::Utc::now() + chrono::Duration::seconds(ttl_seconds);
-            let session = repo
-                .create_session(&user.id, expires_at, user_agent.0.as_deref(), client_ip.0.as_deref())
-                .await?;
-            let value = format!("{}:{}", session.id, user.id);
+            let value = format!("{}:{}", session_id, user_id);
             cookies.add_private(
                 Cookie::build(("user", value))
                     .path("/")
@@ -308,40 +145,7 @@ pub async fn post_user_login(
                     .max_age(Duration::seconds(ttl_seconds))
                     .build(),
             );
-
-            let _ = repo
-                .create_security_audit_log(
-                    Some(&user.id),
-                    audit_events::LOGIN_SUCCESS,
-                    true,
-                    client_ip.0.clone(),
-                    user_agent.0.clone(),
-                    Some(serde_json::json!({
-                        "email": &payload.email,
-                        "2fa_used": has_2fa,
-                    })),
-                )
-                .await;
-
             Ok(Status::Ok)
-        }
-        None => {
-            // Equalize response timing so attackers cannot distinguish
-            // existing from non-existing accounts by measuring latency.
-            PostgresRepository::dummy_verify(&payload.password);
-            // Record IP-only failed attempt (no user_id to avoid account enumeration)
-            let _ = repo.record_failed_login_attempt(None, ip, &config.login_rate_limit).await;
-            let _ = repo
-                .create_security_audit_log(
-                    None,
-                    audit_events::LOGIN_FAILED,
-                    false,
-                    client_ip.0.clone(),
-                    user_agent.0.clone(),
-                    Some(serde_json::json!({"reason": "user_not_found"})),
-                )
-                .await;
-            Err(AppError::InvalidCredentials)
         }
     }
 }
