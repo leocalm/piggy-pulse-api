@@ -16,5 +16,5 @@ FROM (VALUES
     ('Hungarian Forint',  'Ft', 'HUF', 0, 'after')
 ) AS new(name, symbol, currency, decimal_places, symbol_position)
 WHERE NOT EXISTS (
-    SELECT 1 FROM currency c WHERE c.currency = new.currency AND c.user_id IS NULL
+    SELECT 1 FROM currency c WHERE c.currency = new.currency
 );
