@@ -7,6 +7,7 @@ pub mod currency;
 pub mod dashboard;
 pub mod error;
 pub mod health;
+pub mod onboarding;
 pub mod overlay;
 pub mod password_reset;
 pub mod settings;

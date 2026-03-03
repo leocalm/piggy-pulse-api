@@ -6,6 +6,7 @@ pub mod category;
 pub mod category_target;
 pub mod currency;
 pub mod dashboard;
+pub mod onboarding;
 pub mod overlay;
 pub mod pagination;
 pub mod password_reset;

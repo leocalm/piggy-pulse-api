@@ -10,6 +10,7 @@ pub struct User {
     pub name: String,
     pub email: String,
     pub password_hash: String,
+    pub onboarding_status: String,
 }
 
 #[derive(Serialize, Debug, JsonSchema)]
@@ -17,6 +18,7 @@ pub struct UserResponse {
     pub id: Uuid,
     pub name: String,
     pub email: String,
+    pub onboarding_status: String,
 }
 
 #[derive(Deserialize, Debug, Validate, JsonSchema)]
@@ -70,6 +72,7 @@ impl From<&User> for UserResponse {
             id: user.id,
             name: user.name.clone(),
             email: user.email.clone(),
+            onboarding_status: user.onboarding_status.clone(),
         }
     }
 }
