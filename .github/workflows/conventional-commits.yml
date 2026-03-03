@@ -15,9 +15,12 @@ jobs:
           fetch-depth: 0
 
       - name: Lint PR title + commits
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           python3 scripts/lint_conventional.py \
-            --pr-title "${{ github.event.pull_request.title }}" \
-            --base "${{ github.event.pull_request.base.sha }}" \
-            --head "${{ github.event.pull_request.head.sha }}"
-
+            --pr-title "$PR_TITLE" \
+            --base "$BASE_SHA" \
+            --head "$HEAD_SHA"
