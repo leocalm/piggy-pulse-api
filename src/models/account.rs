@@ -14,9 +14,6 @@ pub enum AccountType {
     CreditCard,
     Wallet,
     Allowance,
-    DebitCard,
-    Investment,
-    Cash,
 }
 
 #[derive(Debug, Clone, Default)]

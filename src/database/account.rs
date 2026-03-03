@@ -1364,9 +1364,6 @@ pub fn account_type_from_db<T: AsRef<str>>(value: T) -> AccountType {
         "CreditCard" => AccountType::CreditCard,
         "Wallet" => AccountType::Wallet,
         "Allowance" => AccountType::Allowance,
-        "DebitCard" => AccountType::DebitCard,
-        "Investment" => AccountType::Investment,
-        "Cash" => AccountType::Cash,
         other => panic!("Unknown account type: {}", other),
     }
 }
@@ -1378,9 +1375,6 @@ pub fn account_type_to_db(account_type: &AccountType) -> String {
         AccountType::CreditCard => "CreditCard".to_string(),
         AccountType::Wallet => "Wallet".to_string(),
         AccountType::Allowance => "Allowance".to_string(),
-        AccountType::DebitCard => "DebitCard".to_string(),
-        AccountType::Investment => "Investment".to_string(),
-        AccountType::Cash => "Cash".to_string(),
     }
 }
 
