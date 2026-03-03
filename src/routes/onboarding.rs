@@ -79,19 +79,21 @@ pub async fn get_status(pool: &State<PgPool>, _rate_limit: RateLimit, current_us
         }));
     }
 
-    if onboarding_status == "not_started" {
-        return Ok(Json(OnboardingStatusResponse {
-            status: OnboardingStatus::NotStarted,
-            current_step: None,
-        }));
-    }
-
-    // 2. Derive step for in-progress users
+    // Always derive the current step from data so that refreshing the page
+    // resumes at the correct step, even when onboarding_status is 'not_started'
+    // (the DB column is only written at completion, never for intermediate steps).
     let current_step = derive_current_step(db, &current_user.id).await?;
-    Ok(Json(OnboardingStatusResponse {
-        status: OnboardingStatus::InProgress,
-        current_step,
-    }))
+
+    // If the user has made no progress at all (period not yet configured),
+    // report not_started. Otherwise report in_progress so the frontend
+    // can navigate to the correct step.
+    let status = if matches!(current_step, Some(OnboardingStep::Period)) {
+        OnboardingStatus::NotStarted
+    } else {
+        OnboardingStatus::InProgress
+    };
+
+    Ok(Json(OnboardingStatusResponse { status, current_step }))
 }
 
 /// Mark onboarding as completed for the authenticated user
