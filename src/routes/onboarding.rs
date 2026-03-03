@@ -1,4 +1,5 @@
 use crate::auth::CurrentUser;
+use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::RateLimit;
 use crate::models::onboarding::{OnboardingStatus, OnboardingStatusResponse, OnboardingStep};
@@ -125,6 +126,11 @@ pub async fn post_complete(pool: &State<PgPool>, _rate_limit: RateLimit, current
         .execute(db)
         .await
         .map_err(AppError::from)?;
+
+    // Eagerly generate the first budget periods so the user lands on a
+    // populated dashboard rather than waiting for the next cron run.
+    let repo = PostgresRepository { pool: db.clone() };
+    repo.generate_automatic_budget_periods().await?;
 
     Ok(Status::NoContent)
 }
