@@ -27,6 +27,7 @@ struct TransactionRow {
     category_category_type: String,
     category_is_archived: bool,
     category_description: Option<String>,
+    category_is_system: bool,
     // From account fields
     from_account_id: Uuid,
     from_account_name: String,
@@ -113,6 +114,7 @@ impl From<TransactionRow> for Transaction {
                 category_type: category_type_from_db(&row.category_category_type),
                 is_archived: row.category_is_archived,
                 description: row.category_description,
+                is_system: row.category_is_system,
             },
 
             from_account: Account {
@@ -155,6 +157,7 @@ const TRANSACTION_SELECT_FIELDS: &str = r#"
     c.category_type::text as category_category_type,
     c.is_archived as category_is_archived,
     c.description as category_description,
+    c.is_system as category_is_system,
     fa.id as from_account_id,
     fa.name as from_account_name,
     fa.color as from_account_color,

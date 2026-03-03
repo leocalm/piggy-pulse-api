@@ -94,6 +94,15 @@ pub async fn get_category_options(pool: &State<PgPool>, _rate_limit: RateLimit, 
     Ok(Json(options))
 }
 
+/// Get the system Transfer category for the current user
+#[openapi(tag = "Categories")]
+#[get("/transfer")]
+pub async fn get_transfer_category(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser) -> Result<Json<CategoryResponse>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let category = repo.get_transfer_category(&current_user.id).await?;
+    Ok(Json(CategoryResponse::from(&category)))
+}
+
 /// Get a category by ID
 #[openapi(tag = "Categories")]
 #[get("/<id>")]
@@ -206,6 +215,7 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
         list_all_categories,
         get_categories_diagnostics,
         get_category_options,
+        get_transfer_category,
         get_category,
         delete_category,
         put_category,

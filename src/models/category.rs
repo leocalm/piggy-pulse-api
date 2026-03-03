@@ -23,6 +23,7 @@ pub struct Category {
     pub category_type: CategoryType,
     pub is_archived: bool,
     pub description: Option<String>,
+    pub is_system: bool,
 }
 
 #[derive(Deserialize, Debug, Validate, JsonSchema)]
@@ -47,6 +48,7 @@ pub struct CategoryResponse {
     pub category_type: CategoryType,
     pub is_archived: bool,
     pub description: Option<String>,
+    pub is_system: bool,
 }
 
 #[derive(Serialize, Debug, Clone, JsonSchema)]
@@ -155,6 +157,7 @@ impl From<&Category> for CategoryResponse {
             category_type: category.category_type,
             is_archived: category.is_archived,
             description: category.description.clone(),
+            is_system: category.is_system,
         }
     }
 }

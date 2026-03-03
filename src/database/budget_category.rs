@@ -18,6 +18,7 @@ struct BudgetCategoryRow {
     category_category_type: String,
     category_is_archived: bool,
     category_description: Option<String>,
+    category_is_system: bool,
 }
 
 impl From<BudgetCategoryRow> for BudgetCategory {
@@ -35,6 +36,7 @@ impl From<BudgetCategoryRow> for BudgetCategory {
                 category_type: crate::database::category::category_type_from_db(&row.category_category_type),
                 is_archived: row.category_is_archived,
                 description: row.category_description,
+                is_system: row.category_is_system,
             },
         }
     }
@@ -88,7 +90,8 @@ impl PostgresRepository {
                 c.parent_id as category_parent_id,
                 c.category_type::text as category_category_type,
                 c.is_archived as category_is_archived,
-                c.description as category_description
+                c.description as category_description,
+                c.is_system as category_is_system
             FROM budget_category bc
             JOIN category c
                 ON c.id = bc.category_id
@@ -117,7 +120,8 @@ impl PostgresRepository {
                     c.parent_id as category_parent_id,
                     c.category_type::text as category_category_type,
                     c.is_archived as category_is_archived,
-                    c.description as category_description
+                    c.description as category_description,
+                    c.is_system as category_is_system
                 FROM budget_category bc
                 JOIN category c ON c.id = bc.category_id
                 WHERE bc.user_id = $1
@@ -146,7 +150,8 @@ impl PostgresRepository {
                     c.parent_id as category_parent_id,
                     c.category_type::text as category_category_type,
                     c.is_archived as category_is_archived,
-                    c.description as category_description
+                    c.description as category_description,
+                    c.is_system as category_is_system
                 FROM budget_category bc
                 JOIN category c ON c.id = bc.category_id
                 WHERE bc.user_id = $1

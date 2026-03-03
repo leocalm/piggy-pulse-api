@@ -299,6 +299,17 @@ impl PostgresRepository {
 
         sqlx::query("DELETE FROM category WHERE user_id = $1").bind(user_id).execute(&mut *tx).await?;
 
+        // Re-create the system Transfer category
+        sqlx::query(
+            r#"
+            INSERT INTO category (user_id, name, color, icon, category_type, is_system)
+            VALUES ($1, 'Transfer', '#868E96', '↔', 'Transfer'::category_type, TRUE)
+            "#,
+        )
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await?;
+
         tx.commit().await?;
 
         Ok(())

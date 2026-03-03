@@ -43,6 +43,11 @@ pub async fn post_user(
                 tracing::warn!("Failed to create default settings for user {}: {}", user.id, e);
             }
 
+            // Create system Transfer category (best-effort, non-critical)
+            if let Err(e) = repo.create_system_transfer_category(&user.id).await {
+                tracing::warn!("Failed to create system transfer category for user {}: {}", user.id, e);
+            }
+
             let ttl_seconds = config.session.ttl_seconds.max(60);
             let expires_at = chrono::Utc::now() + chrono::Duration::seconds(ttl_seconds);
             let session = repo

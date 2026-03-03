@@ -23,6 +23,7 @@ struct CategoryRow {
     category_type: String,
     is_archived: bool,
     description: Option<String>,
+    is_system: bool,
 }
 
 impl From<CategoryRow> for Category {
@@ -36,6 +37,7 @@ impl From<CategoryRow> for Category {
             category_type: category_type_from_db(&row.category_type),
             is_archived: row.is_archived,
             description: row.description,
+            is_system: row.is_system,
         }
     }
 }
@@ -50,6 +52,7 @@ struct CategoryWithStatsRow {
     category_type: String,
     is_archived: bool,
     description: Option<String>,
+    is_system: bool,
     used_in_period: i64,
     average_period_usage: i64,
     transaction_count: i64,
@@ -65,6 +68,7 @@ struct BudgetedCategoryDiagnosticsDbRow {
     category_type: String,
     is_archived: bool,
     description: Option<String>,
+    is_system: bool,
     budgeted_value: i32,
     actual_value: i64,
 }
@@ -79,6 +83,7 @@ struct UnbudgetedCategoryDiagnosticsDbRow {
     category_type: String,
     is_archived: bool,
     description: Option<String>,
+    is_system: bool,
     actual_value: i64,
 }
 
@@ -99,6 +104,7 @@ struct CategoryManagementDbRow {
     category_type: String,
     is_archived: bool,
     description: Option<String>,
+    is_system: bool,
     global_transaction_count: i64,
     active_children_count: i64,
 }
@@ -115,6 +121,7 @@ impl From<CategoryManagementDbRow> for CategoryManagementRow {
                 category_type: category_type_from_db(&row.category_type),
                 is_archived: row.is_archived,
                 description: row.description,
+                is_system: row.is_system,
             },
             global_transaction_count: row.global_transaction_count,
             active_children_count: row.active_children_count,
@@ -134,6 +141,7 @@ impl From<CategoryWithStatsRow> for CategoryWithStats {
                 category_type: category_type_from_db(&row.category_type),
                 is_archived: row.is_archived,
                 description: row.description,
+                is_system: row.is_system,
             },
             stats: CategoryStats {
                 used_in_period: row.used_in_period,
@@ -156,6 +164,7 @@ impl From<BudgetedCategoryDiagnosticsDbRow> for CategoryBudgetedDiagnosticsRow {
                 category_type: category_type_from_db(&row.category_type),
                 is_archived: row.is_archived,
                 description: row.description,
+                is_system: row.is_system,
             },
             budgeted_value: row.budgeted_value,
             actual_value: row.actual_value,
@@ -180,7 +189,8 @@ impl PostgresRepository {
                     parent_id,
                     category_type::text as category_type,
                     is_archived,
-                    description
+                    description,
+                    is_system
                 FROM category
                 WHERE id = $1 AND user_id = $2
                 "#,
@@ -236,7 +246,8 @@ impl PostgresRepository {
                 parent_id,
                 category_type::text as category_type,
                 is_archived,
-                description
+                description,
+                is_system
             "#,
         )
         .bind(user_id)
@@ -342,6 +353,7 @@ SELECT
     c.category_type::text as category_type,
     c.is_archived,
     c.description,
+    c.is_system,
     COALESCE(spt.used_this_period, 0) AS used_in_period,
     COALESCE(at.avg_period_amount, 0) AS average_period_usage,
     COALESCE(spc.transaction_count, 0) AS transaction_count
@@ -350,6 +362,7 @@ LEFT JOIN selected_period_totals spt ON c.id = spt.category_id
 LEFT JOIN average_totals at ON c.id = at.category_id
 LEFT JOIN selected_period_counts spc ON c.id = spc.category_id
 WHERE c.user_id = $1
+  AND c.is_system = FALSE
   AND (c.created_at, c.id) < (SELECT created_at, id FROM category WHERE id = $4)
 ORDER BY c.created_at DESC, c.id DESC
 LIMIT $5
@@ -419,6 +432,7 @@ SELECT
     c.category_type::text as category_type,
     c.is_archived,
     c.description,
+    c.is_system,
     COALESCE(spt.used_this_period, 0) AS used_in_period,
     COALESCE(at.avg_period_amount, 0) AS average_period_usage,
     COALESCE(spc.transaction_count, 0) AS transaction_count
@@ -427,6 +441,7 @@ LEFT JOIN selected_period_totals spt ON c.id = spt.category_id
 LEFT JOIN average_totals at ON c.id = at.category_id
 LEFT JOIN selected_period_counts spc ON c.id = spc.category_id
 WHERE c.user_id = $1
+  AND c.is_system = FALSE
 ORDER BY c.created_at DESC, c.id DESC
 LIMIT $4
                 "#,
@@ -468,6 +483,7 @@ SELECT
     c.category_type::text as category_type,
     c.is_archived,
     c.description,
+    c.is_system,
     bc.budgeted_value,
     COALESCE(sps.actual_value, 0) AS actual_value
 FROM budget_category bc
@@ -577,6 +593,7 @@ SELECT
     c.category_type::text as category_type,
     c.is_archived,
     c.description,
+    c.is_system,
     COALESCE(SUM(t.amount), 0)::bigint AS actual_value
 FROM category c
          LEFT JOIN budget_category bc
@@ -590,7 +607,7 @@ FROM category c
 WHERE c.user_id = $1
   AND c.category_type = 'Outgoing'
   AND bc.id IS NULL
-GROUP BY c.id, c.name, c.color, c.icon, c.parent_id, c.category_type, c.is_archived, c.description
+GROUP BY c.id, c.name, c.color, c.icon, c.parent_id, c.category_type, c.is_archived, c.description, c.is_system
 ORDER BY actual_value DESC, c.name
             "#,
         )
@@ -614,6 +631,7 @@ ORDER BY actual_value DESC, c.name
                     category_type: category_type_from_db(&row.category_type),
                     is_archived: row.is_archived,
                     description: row.description,
+                    is_system: row.is_system,
                 },
                 actual_value: row.actual_value,
                 share_of_total_basis_points: share_of_total_basis_points(row.actual_value, total_unbudgeted_actual),
@@ -622,6 +640,17 @@ ORDER BY actual_value DESC, c.name
     }
 
     pub async fn delete_category(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
+        // Guard: system categories cannot be deleted
+        let is_system: bool = sqlx::query_scalar("SELECT is_system FROM category WHERE id = $1 AND user_id = $2")
+            .bind(id)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?
+            .unwrap_or(false);
+        if is_system {
+            return Err(AppError::BadRequest("System categories cannot be deleted.".to_string()));
+        }
+
         // Check for transactions
         let transaction_count: i64 = sqlx::query_scalar(
             r#"
@@ -670,6 +699,17 @@ ORDER BY actual_value DESC, c.name
     }
 
     pub async fn update_category(&self, id: &Uuid, request: &CategoryRequest, user_id: &Uuid) -> Result<Category, AppError> {
+        // Guard: system categories cannot be updated
+        let is_system: bool = sqlx::query_scalar("SELECT is_system FROM category WHERE id = $1 AND user_id = $2")
+            .bind(id)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?
+            .unwrap_or(false);
+        if is_system {
+            return Err(AppError::BadRequest("System categories cannot be modified.".to_string()));
+        }
+
         // Validate parent_id if being set
         if let Some(parent_id) = request.parent_id {
             // Prevent setting parent_id to self
@@ -687,7 +727,8 @@ ORDER BY actual_value DESC, c.name
                     parent_id,
                     category_type::text as category_type,
                     is_archived,
-                    description
+                    description,
+                    is_system
                 FROM category
                 WHERE id = $1 AND user_id = $2
                 "#,
@@ -750,7 +791,8 @@ ORDER BY actual_value DESC, c.name
                 parent_id,
                 category_type::text as category_type,
                 is_archived,
-                description
+                description,
+                is_system
             "#,
         )
         .bind(&request.name)
@@ -787,11 +829,13 @@ ORDER BY actual_value DESC, c.name
                     c.parent_id,
                     c.category_type::text as category_type,
                     c.is_archived,
-                    c.description
+                    c.description,
+                    c.is_system
                 FROM category c
                 LEFT JOIN budget_category bc ON c.id = bc.category_id
                 WHERE bc.id IS NULL
                     AND c.category_type = 'Outgoing'
+                    AND c.is_system = FALSE
                     AND c.user_id = $1
                     AND (c.created_at, c.id) < (SELECT created_at, id FROM category WHERE id = $2)
                 ORDER BY c.created_at DESC, c.id DESC
@@ -814,11 +858,13 @@ ORDER BY actual_value DESC, c.name
                     c.parent_id,
                     c.category_type::text as category_type,
                     c.is_archived,
-                    c.description
+                    c.description,
+                    c.is_system
                 FROM category c
                 LEFT JOIN budget_category bc ON c.id = bc.category_id
                 WHERE bc.id IS NULL
                     AND c.category_type = 'Outgoing'
+                    AND c.is_system = FALSE
                     AND c.user_id = $1
                 ORDER BY c.created_at DESC, c.id DESC
                 LIMIT $2
@@ -844,9 +890,11 @@ ORDER BY actual_value DESC, c.name
                 c.parent_id,
                 c.category_type::text as category_type,
                 c.is_archived,
-                c.description
+                c.description,
+                c.is_system
             FROM category c
             WHERE c.user_id = $1
+              AND c.is_system = FALSE
             ORDER BY c.created_at DESC, c.id DESC
             "#,
         )
@@ -888,12 +936,14 @@ ORDER BY actual_value DESC, c.name
                 c.category_type::text as category_type,
                 c.is_archived,
                 c.description,
+                c.is_system,
                 COALESCE(tc.global_transaction_count, 0) AS global_transaction_count,
                 COALESCE(cc.active_children_count, 0) AS active_children_count
             FROM category c
             LEFT JOIN transaction_counts tc ON c.id = tc.category_id
             LEFT JOIN children_counts cc ON c.id = cc.parent_id
             WHERE c.user_id = $1
+              AND c.is_system = FALSE
             ORDER BY
                 c.is_archived ASC,
                 c.category_type ASC,
@@ -909,6 +959,17 @@ ORDER BY actual_value DESC, c.name
 
     /// Archive a category (soft delete)
     pub async fn archive_category(&self, id: &Uuid, user_id: &Uuid) -> Result<Category, AppError> {
+        // Guard: system categories cannot be archived
+        let is_system: bool = sqlx::query_scalar("SELECT is_system FROM category WHERE id = $1 AND user_id = $2")
+            .bind(id)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?
+            .unwrap_or(false);
+        if is_system {
+            return Err(AppError::BadRequest("System categories cannot be archived.".to_string()));
+        }
+
         // Check for active children
         let active_children_count: i64 = sqlx::query_scalar(
             r#"
@@ -941,7 +1002,8 @@ ORDER BY actual_value DESC, c.name
                 parent_id,
                 category_type::text as category_type,
                 is_archived,
-                description
+                description,
+                is_system
             "#,
         )
         .bind(id)
@@ -950,6 +1012,63 @@ ORDER BY actual_value DESC, c.name
         .await?;
 
         Ok(Category::from(row))
+    }
+
+    /// Create the system Transfer category for a user
+    pub async fn create_system_transfer_category(&self, user_id: &Uuid) -> Result<Category, AppError> {
+        let row = sqlx::query_as::<_, CategoryRow>(
+            r#"
+            INSERT INTO category (user_id, name, color, icon, category_type, is_system)
+            VALUES ($1, 'Transfer', '#868E96', '↔', 'Transfer'::category_type, TRUE)
+            ON CONFLICT DO NOTHING
+            RETURNING
+                id,
+                name,
+                COALESCE(color, '') as color,
+                COALESCE(icon, '') as icon,
+                parent_id,
+                category_type::text as category_type,
+                is_archived,
+                description,
+                is_system
+            "#,
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        match row {
+            Some(r) => Ok(Category::from(r)),
+            None => self.get_transfer_category(user_id).await,
+        }
+    }
+
+    /// Get the system Transfer category for a user
+    pub async fn get_transfer_category(&self, user_id: &Uuid) -> Result<Category, AppError> {
+        let row = sqlx::query_as::<_, CategoryRow>(
+            r#"
+            SELECT
+                id,
+                name,
+                COALESCE(color, '') as color,
+                COALESCE(icon, '') as icon,
+                parent_id,
+                category_type::text as category_type,
+                is_archived,
+                description,
+                is_system
+            FROM category
+            WHERE user_id = $1 AND is_system = TRUE AND category_type = 'Transfer'
+            "#,
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        match row {
+            Some(r) => Ok(Category::from(r)),
+            None => Err(AppError::NotFound("System Transfer category not found".to_string())),
+        }
     }
 
     /// Restore an archived category
@@ -989,7 +1108,8 @@ ORDER BY actual_value DESC, c.name
                 parent_id,
                 category_type::text as category_type,
                 is_archived,
-                description
+                description,
+                is_system
             "#,
         )
         .bind(id)
@@ -1085,6 +1205,7 @@ mod tests {
             category_type: "Outgoing".to_string(),
             is_archived: false,
             description: None,
+            is_system: false,
             budgeted_value: 0,
             actual_value: 4200,
         };
@@ -1107,6 +1228,7 @@ mod tests {
             category_type: "Outgoing".to_string(),
             is_archived: false,
             description: None,
+            is_system: false,
             budgeted_value: 1000,
             actual_value: -250,
         };
