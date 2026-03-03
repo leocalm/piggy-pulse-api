@@ -110,8 +110,10 @@ pub async fn post_complete(pool: &State<PgPool>, _rate_limit: RateLimit, current
         .await
         .map_err(AppError::from)?;
 
-    // Already completed — idempotent success
+    // Already completed — still run period generation in case cron hasn't fired yet
     if onboarding_status == "completed" {
+        let repo = PostgresRepository { pool: db.clone() };
+        repo.generate_automatic_budget_periods().await?;
         return Ok(Status::NoContent);
     }
 
