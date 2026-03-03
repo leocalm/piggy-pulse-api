@@ -242,6 +242,7 @@ fn mount_api_routes(mut rocket: Rocket<Build>, base_path: &str) -> Rocket<Build>
     rocket = rocket.mount(join_base_path(base_path, "transactions"), app_routes::transaction::routes().0);
     rocket = rocket.mount(join_base_path(base_path, "vendors"), app_routes::vendor::routes().0);
     rocket = rocket.mount(join_base_path(base_path, "health"), app_routes::health::routes().0);
+    rocket = rocket.mount(join_base_path(base_path, "onboarding"), app_routes::onboarding::routes().0);
     rocket = rocket.mount(join_base_path(base_path, "dashboard"), app_routes::dashboard::routes().0);
     rocket = rocket.mount(join_base_path(base_path, "budget_period"), app_routes::budget_period::routes().0);
     rocket = rocket.mount(join_base_path(base_path, "overlays"), app_routes::overlay::routes().0);
@@ -285,6 +286,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
             "/transactions" => app_routes::transaction::routes(),
             "/vendors" => app_routes::vendor::routes(),
             "/health" => app_routes::health::routes(),
+            "/onboarding" => app_routes::onboarding::routes(),
             "/dashboard" => app_routes::dashboard::routes(),
             "/budget_period" => app_routes::budget_period::routes(),
             "/overlays" => app_routes::overlay::routes(),
@@ -321,6 +323,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
                 "/transactions" => app_routes::transaction::routes(),
                 "/vendors" => app_routes::vendor::routes(),
                 "/health" => app_routes::health::routes(),
+                "/onboarding" => app_routes::onboarding::routes(),
                 "/dashboard" => app_routes::dashboard::routes(),
                 "/budget_period" => app_routes::budget_period::routes(),
                 "/overlays" => app_routes::overlay::routes(),
