@@ -1,7 +1,6 @@
 use rocket::serde::Serialize;
 use schemars::JsonSchema;
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum OnboardingStatus {
