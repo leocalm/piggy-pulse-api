@@ -318,6 +318,7 @@ pub async fn get_export_transactions(pool: &State<PgPool>, _rate_limit: RateLimi
         } else {
             "outgoing"
         };
+        // lgtm[rust/cleartext-logging] - intentional: authenticated export endpoint returning user's own data
         let to_account = tx.to_account.as_ref().map(|a| a.name.as_str()).unwrap_or("");
         let vendor = tx.vendor.as_ref().map(|v| v.name.as_str()).unwrap_or("");
 
