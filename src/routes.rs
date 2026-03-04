@@ -11,6 +11,7 @@ pub mod onboarding;
 pub mod overlay;
 pub mod password_reset;
 pub mod settings;
+pub mod token_auth;
 pub mod transaction;
 pub mod two_factor;
 pub mod unlock;
