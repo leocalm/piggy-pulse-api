@@ -383,7 +383,9 @@ pub async fn get_export_full(pool: &State<PgPool>, _rate_limit: RateLimit, curre
         "transactions": transaction_responses,
     });
 
-    let json_str = serde_json::to_string_pretty(&export).map_err(|e| AppError::BadRequest(format!("JSON serialization error: {e}")))?;
+    let json_str = serde_json::to_string_pretty(&export).map_err(|e| AppError::PasswordHash {
+        message: format!("JSON serialization error: {e}"),
+    })?;
 
     Ok(FileDownload {
         bytes: json_str.into_bytes(),
