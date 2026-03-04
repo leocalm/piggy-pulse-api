@@ -166,6 +166,10 @@ pub struct SessionInfoResponse {
     pub expires_at: DateTime<Utc>,
     pub user_agent: Option<String>,
     pub ip_address: Option<String>,
+    /// `"web"` for cookie sessions, `"api"` for Bearer token sessions.
+    pub auth_type: String,
+    /// Device name for API token sessions; `None` for web sessions.
+    pub device_name: Option<String>,
 }
 
 // ── Period model ──────────────────────────────────────────────────────────────

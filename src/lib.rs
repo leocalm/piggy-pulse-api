@@ -13,7 +13,7 @@ mod service;
 pub mod test_utils;
 
 pub use config::Config;
-pub use cron_tasks::{GeneratePeriodsResult, generate_periods};
+pub use cron_tasks::{GeneratePeriodsResult, cleanup_expired_tokens, generate_periods};
 
 use crate::db::stage_db;
 use crate::middleware::RequestLogger;

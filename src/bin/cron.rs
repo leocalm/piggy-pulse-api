@@ -1,8 +1,8 @@
-use piggy_pulse::{Config, generate_periods};
+use piggy_pulse::{Config, cleanup_expired_tokens, generate_periods};
 use tracing_subscriber::EnvFilter;
 
 fn print_usage(bin_name: &str) {
-    eprintln!("Usage: {bin_name} generate-periods");
+    eprintln!("Usage: {bin_name} <generate-periods|cleanup-tokens>");
 }
 
 fn init_tracing(log_level: &str, json_format: bool) {
@@ -24,10 +24,13 @@ async fn main() {
     let bin_name = args.next().unwrap_or_else(|| "cron".to_string());
     let command = args.next();
 
-    if command.as_deref() != Some("generate-periods") || args.next().is_some() {
-        print_usage(&bin_name);
-        std::process::exit(2);
-    }
+    let cmd = match command.as_deref() {
+        Some(cmd @ ("generate-periods" | "cleanup-tokens")) if args.next().is_none() => cmd,
+        _ => {
+            print_usage(&bin_name);
+            std::process::exit(2);
+        }
+    };
 
     let config = match Config::load() {
         Ok(config) => config,
@@ -39,16 +42,28 @@ async fn main() {
 
     init_tracing(&config.logging.level, config.logging.json_format);
 
-    match generate_periods(&config).await {
-        Ok(result) => {
-            println!(
-                "Automatic period generation completed: users_processed={}, periods_created={}",
-                result.users_processed, result.periods_created
-            );
-        }
-        Err(err) => {
-            eprintln!("Cron job failed: {err}");
-            std::process::exit(1);
-        }
+    match cmd {
+        "generate-periods" => match generate_periods(&config).await {
+            Ok(result) => {
+                println!(
+                    "Automatic period generation completed: users_processed={}, periods_created={}",
+                    result.users_processed, result.periods_created
+                );
+            }
+            Err(err) => {
+                eprintln!("Cron job failed: {err}");
+                std::process::exit(1);
+            }
+        },
+        "cleanup-tokens" => match cleanup_expired_tokens(&config).await {
+            Ok(()) => {
+                println!("Expired token cleanup completed.");
+            }
+            Err(err) => {
+                eprintln!("Cron job failed: {err}");
+                std::process::exit(1);
+            }
+        },
+        _ => unreachable!(),
     }
 }

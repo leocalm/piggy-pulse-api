@@ -105,6 +105,9 @@ pub async fn verify_two_factor(
     // Enable 2FA
     repo.verify_and_enable_two_factor(&current_user.id).await?;
 
+    // Revoke all API tokens — enabling 2FA is a sensitive change
+    let _ = repo.revoke_all_for_user(&current_user.id).await;
+
     let _ = repo
         .create_security_audit_log(
             Some(&current_user.id),
@@ -169,6 +172,9 @@ pub async fn disable_two_factor(
 
     // Disable 2FA (deletes all 2FA data)
     repo.disable_two_factor(&current_user.id).await?;
+
+    // Revoke all API tokens — disabling 2FA is a sensitive change
+    let _ = repo.revoke_all_for_user(&current_user.id).await;
 
     let _ = repo
         .create_security_audit_log(
