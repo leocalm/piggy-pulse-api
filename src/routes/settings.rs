@@ -162,7 +162,10 @@ pub async fn post_change_password(
     let repo = PostgresRepository { pool: pool.inner().clone() };
     repo.change_password(&current_user.id, &payload.current_password, &payload.new_password).await?;
     // Invalidate all other sessions so stolen session tokens are no longer usable
-    repo.delete_other_sessions_for_user(&current_user.id, &current_user.session_id).await?;
+    match current_user.session_id {
+        Some(ref sid) => repo.delete_other_sessions_for_user(&current_user.id, sid).await?,
+        None => repo.delete_all_sessions_for_user(&current_user.id).await?,
+    }
     let _ = repo
         .create_security_audit_log(
             Some(&current_user.id),

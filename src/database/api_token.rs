@@ -1,8 +1,8 @@
-use chrono::{DateTime, Utc};
-use uuid::Uuid;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::api_token::ApiToken;
+use chrono::{DateTime, Utc};
+use uuid::Uuid;
 
 #[derive(sqlx::FromRow)]
 struct ApiTokenRow {
@@ -37,8 +37,19 @@ impl From<ApiTokenRow> for ApiToken {
     }
 }
 
+#[allow(dead_code)]
 impl PostgresRepository {
-    pub async fn create_api_token(&self, user_id: &Uuid, access_hash: String, refresh_hash: String, device_name: String, device_id: &str, expires_at: &DateTime<Utc>, refresh_expires_at: &DateTime<Utc>) -> Result<ApiToken, AppError> {
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_api_token(
+        &self,
+        user_id: &Uuid,
+        access_hash: String,
+        refresh_hash: String,
+        device_name: String,
+        device_id: &str,
+        expires_at: &DateTime<Utc>,
+        refresh_expires_at: &DateTime<Utc>,
+    ) -> Result<ApiToken, AppError> {
         let row = sqlx::query_as::<_, ApiTokenRow>(
             r#"
             INSERT INTO api_tokens (user_id, access_hash, refresh_hash, device_name, device_id, expires_at, refresh_expires_at)
@@ -62,7 +73,7 @@ impl PostgresRepository {
                 last_used_at,
                 created_at,
                 revoked_at
-            "#
+            "#,
         )
         .bind(user_id)
         .bind(access_hash)
@@ -93,17 +104,13 @@ impl PostgresRepository {
                 created_at,
                 revoked_at
             FROM api_tokens
-            WHERE access_token_hash = $1 AND revoked_at IS NULL"#
+            WHERE access_token_hash = $1 AND revoked_at IS NULL"#,
         )
         .bind(access_hash)
         .fetch_optional(&self.pool)
         .await?;
 
-        if let Some(row) = row {
-            Ok(Some(row.into()))
-        } else{
-            Ok(None)
-        }
+        if let Some(row) = row { Ok(Some(row.into())) } else { Ok(None) }
     }
 
     pub async fn find_by_refresh_hash(&self, refresh_hash: &str) -> Result<Option<ApiToken>, AppError> {
@@ -122,17 +129,13 @@ impl PostgresRepository {
                 created_at,
                 revoked_at
             FROM api_tokens
-            WHERE refresh_token_hash = $1 AND revoked_at IS NULL"#
+            WHERE refresh_token_hash = $1 AND revoked_at IS NULL"#,
         )
-            .bind(refresh_hash)
-            .fetch_optional(&self.pool)
-            .await?;
+        .bind(refresh_hash)
+        .fetch_optional(&self.pool)
+        .await?;
 
-        if let Some(row) = row {
-            Ok(Some(row.into()))
-        } else{
-            Ok(None)
-        }
+        if let Some(row) = row { Ok(Some(row.into())) } else { Ok(None) }
     }
 
     pub async fn find_by_user(&self, user_id: &Uuid) -> Result<Vec<ApiToken>, AppError> {
@@ -151,11 +154,11 @@ impl PostgresRepository {
                     created_at,
                     revoked_at
                 FROM api_tokens
-                WHERE user_id = $1 AND revoked_at IS NULL"#
-            )
-            .bind(user_id)
-            .fetch_all(&self.pool)
-            .await?;
+                WHERE user_id = $1 AND revoked_at IS NULL"#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
 
         Ok(rows.into_iter().map(ApiToken::from).collect())
     }
@@ -165,7 +168,7 @@ impl PostgresRepository {
             r#"
             UPDATE api_tokens
             SET last_used_at = NOW()
-            WHERE id = $1"#
+            WHERE id = $1"#,
         )
         .bind(id)
         .execute(&self.pool)
@@ -179,7 +182,7 @@ impl PostgresRepository {
             r#"
             UPDATE api_tokens
             SET revoked_at = NOW()
-            WHERE id = $1"#
+            WHERE id = $1"#,
         )
         .bind(id)
         .execute(&self.pool)
@@ -193,7 +196,7 @@ impl PostgresRepository {
             r#"
             UPDATE api_tokens
             SET revoked_at = NOW()
-            WHERE user_id = $1 AND revoked_at IS NULL"#
+            WHERE user_id = $1 AND revoked_at IS NULL"#,
         )
         .bind(user_id)
         .execute(&self.pool)
@@ -207,7 +210,7 @@ impl PostgresRepository {
             r#"
             UPDATE api_token
             SET access_token_hash = $1, expires_at = $2
-            WHERE id = $3"#
+            WHERE id = $3"#,
         )
         .bind(new_hash)
         .bind(new_expires_at)
@@ -223,8 +226,10 @@ impl PostgresRepository {
             r#"
             DELETE FROM api_tokens
             WHERE refresh_expires_at < NOW()
-            "#
-        ).execute(&self.pool).await?;
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
 
         Ok(())
     }
