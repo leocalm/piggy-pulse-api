@@ -7,14 +7,22 @@ use rocket_okapi::r#gen::OpenApiGenerator;
 use rocket_okapi::okapi::openapi3::{Object, Responses, SecurityRequirement, SecurityScheme, SecuritySchemeData};
 use rocket_okapi::request::{OpenApiFromRequest, RequestHeaderInput};
 use serde::Serialize;
+use sha2::Digest;
 use sqlx::PgPool;
 use uuid::Uuid;
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub enum AuthMethod {
+    Cookie,
+    Bearer,
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CurrentUser {
     pub id: Uuid,
     pub username: String,
-    pub session_id: Uuid,
+    pub session_id: Option<Uuid>, // None for Bearer auth
+    pub auth_method: AuthMethod,
 }
 
 pub(crate) fn parse_session_cookie_value(value: &str) -> Option<(Uuid, Uuid)> {
@@ -29,23 +37,67 @@ impl<'r> FromRequest<'r> for CurrentUser {
     type Error = AppError;
 
     async fn from_request(req: &'r Request<'_>) -> RequestOutcome<Self, Self::Error> {
+        let pool = match req.rocket().state::<PgPool>() {
+            Some(pool) => pool,
+            None => return Outcome::Error((Status::InternalServerError, AppError::Unauthorized)),
+        };
+
+        let repo = PostgresRepository { pool: pool.clone() };
+
+        // Check Authorization header for Bearer token
+        if let Some(auth_header) = req.headers().get_one("Authorization")
+            && let Some(raw_token) = auth_header.strip_prefix("Bearer ")
+        {
+            let hash = hex::encode(sha2::Sha256::digest(raw_token.as_bytes()));
+
+            match repo.find_by_access_hash(&hash).await {
+                Ok(Some(token)) => {
+                    if token.expires_at <= chrono::Utc::now() {
+                        return Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials));
+                    }
+
+                    let _ = repo.touch(&token.id).await;
+
+                    match repo.get_user_by_id(&token.user_id).await {
+                        Ok(Some(user)) => {
+                            let current_user = CurrentUser {
+                                id: user.id,
+                                username: user.email,
+                                session_id: None,
+                                auth_method: AuthMethod::Bearer,
+                            };
+                            req.local_cache(|| Some(current_user.clone()));
+                            return Outcome::Success(current_user);
+                        }
+                        Ok(None) => {
+                            return Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials));
+                        }
+                        Err(err) => {
+                            return Outcome::Error((Status::InternalServerError, err));
+                        }
+                    }
+                }
+                Ok(None) => {
+                    return Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials));
+                }
+                Err(err) => {
+                    return Outcome::Error((Status::InternalServerError, err));
+                }
+            }
+        }
+
+        // Fall through to cookie-based auth
         let cookies = req.cookies();
         if let Some(cookie) = cookies.get_private("user")
             && let Some((session_id, user_id)) = parse_session_cookie_value(cookie.value())
         {
-            let pool = match req.rocket().state::<PgPool>() {
-                Some(pool) => pool,
-                None => return Outcome::Error((Status::InternalServerError, AppError::Unauthorized)),
-            };
-
-            let repo = PostgresRepository { pool: pool.clone() };
-
             match repo.get_active_session_user(&session_id, &user_id).await {
                 Ok(Some(user)) => {
                     let current_user = CurrentUser {
                         id: user.id,
                         username: user.email,
-                        session_id,
+                        session_id: Some(session_id),
+                        auth_method: AuthMethod::Cookie,
                     };
                     req.local_cache(|| Some(current_user.clone()));
                     return Outcome::Success(current_user);
@@ -143,5 +195,18 @@ mod tests {
     fn parse_session_cookie_value_missing_delimiter() {
         let parsed = parse_session_cookie_value("missing-delimiter");
         assert!(parsed.is_none());
+    }
+
+    #[test]
+    fn bearer_prefix_stripped_correctly() {
+        let header = "Bearer pp_at_abc123";
+        let token = header.strip_prefix("Bearer ").unwrap();
+        assert_eq!(token, "pp_at_abc123");
+    }
+
+    #[test]
+    fn bearer_without_space_not_matched() {
+        let header = "Bearerpp_at_abc123";
+        assert!(header.strip_prefix("Bearer ").is_none());
     }
 }

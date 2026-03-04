@@ -105,6 +105,16 @@ impl PostgresRepository {
         Ok(())
     }
 
+    /// Deletes all sessions for a user. Used when the caller authenticated via Bearer token
+    /// and has no session to preserve.
+    pub async fn delete_all_sessions_for_user(&self, user_id: &Uuid) -> Result<(), AppError> {
+        sqlx::query("DELETE FROM user_session WHERE user_id = $1")
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     /// Deletes a session only if it belongs to the given user.
     /// Returns `NotFound` if the session does not exist or belongs to a different user.
     pub async fn delete_session_for_user(&self, session_id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {

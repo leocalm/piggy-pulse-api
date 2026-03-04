@@ -13,7 +13,7 @@ mod service;
 pub mod test_utils;
 
 pub use config::Config;
-pub use cron_tasks::{GeneratePeriodsResult, generate_periods};
+pub use cron_tasks::{GeneratePeriodsResult, cleanup_expired_tokens, generate_periods};
 
 use crate::db::stage_db;
 use crate::middleware::RequestLogger;
@@ -248,6 +248,7 @@ fn mount_api_routes(mut rocket: Rocket<Build>, base_path: &str) -> Rocket<Build>
     rocket = rocket.mount(join_base_path(base_path, "overlays"), app_routes::overlay::routes().0);
     rocket = rocket.mount(join_base_path(base_path, "two-factor"), app_routes::two_factor::routes().0);
     rocket = rocket.mount(join_base_path(base_path, ""), app_routes::unlock::routes().0);
+    rocket = rocket.mount(join_base_path(base_path, "auth"), app_routes::token_auth::routes().0);
     rocket
 }
 
@@ -292,6 +293,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
             "/overlays" => app_routes::overlay::routes(),
             "/two-factor" => app_routes::two_factor::routes(),
             "" => app_routes::unlock::routes(),
+            "/auth" => app_routes::token_auth::routes(),
         }
         if config.api.expose_swagger_ui {
             let docs_path = join_base_path(primary_base_path, "docs");
@@ -328,6 +330,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
                 "/budget_period" => app_routes::budget_period::routes(),
                 "/overlays" => app_routes::overlay::routes(),
                 "/two-factor" => app_routes::two_factor::routes(),
+                "/auth" => app_routes::token_auth::routes(),
             }
             if config.api.expose_swagger_ui {
                 let docs_path = join_base_path(base_path, "docs");

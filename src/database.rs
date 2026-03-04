@@ -1,4 +1,5 @@
 pub mod account;
+pub mod api_token;
 pub mod audit;
 pub mod budget_category;
 pub mod budget_period;
@@ -8,6 +9,7 @@ pub mod currency;
 pub mod dashboard;
 pub mod overlay;
 pub mod password_reset;
+pub mod pending_2fa_token;
 pub mod postgres_repository;
 pub mod rate_limit;
 pub mod session;

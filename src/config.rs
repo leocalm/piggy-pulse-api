@@ -123,6 +123,10 @@ pub enum RateLimitBackend {
 pub struct SessionConfig {
     pub ttl_seconds: i64,
     pub cookie_secure: bool,
+    #[serde(default)]
+    pub access_token_ttl_seconds: Option<i64>,
+    #[serde(default)]
+    pub refresh_token_ttl_seconds: Option<i64>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -285,6 +289,8 @@ impl Default for SessionConfig {
         Self {
             ttl_seconds: 60 * 60 * 24 * 30,
             cookie_secure: true,
+            access_token_ttl_seconds: None,
+            refresh_token_ttl_seconds: None,
         }
     }
 }

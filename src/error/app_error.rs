@@ -72,6 +72,9 @@ pub enum AppError {
         locked_until: chrono::DateTime<chrono::Utc>,
         message: String,
     },
+
+    #[error("Two-factor authentication token required")]
+    TwoFactorTokenRequired { two_factor_token: String },
 }
 
 impl AppError {
@@ -132,6 +135,7 @@ impl From<&AppError> for Status {
             AppError::TwoFactorRequired => Status::PreconditionRequired,
             AppError::TooManyAttempts { .. } => Status::TooManyRequests,
             AppError::AccountLocked { .. } => Status { code: 423 },
+            AppError::TwoFactorTokenRequired { .. } => Status::Forbidden,
         }
     }
 }
@@ -171,6 +175,11 @@ impl<'r> Responder<'r, 'static> for AppError {
                 // Special case for 2FA required - return custom JSON
                 serde_json::json!({"two_factor_required": true}).to_string()
             }
+            AppError::TwoFactorTokenRequired { two_factor_token } => serde_json::json!({
+                "error": "2fa_required",
+                "two_factor_token": two_factor_token,
+            })
+            .to_string(),
             AppError::TooManyAttempts { retry_after_seconds, message } => {
                 let json = serde_json::json!({
                     "error": "too_many_attempts",

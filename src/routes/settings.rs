@@ -162,7 +162,12 @@ pub async fn post_change_password(
     let repo = PostgresRepository { pool: pool.inner().clone() };
     repo.change_password(&current_user.id, &payload.current_password, &payload.new_password).await?;
     // Invalidate all other sessions so stolen session tokens are no longer usable
-    repo.delete_other_sessions_for_user(&current_user.id, &current_user.session_id).await?;
+    match current_user.session_id {
+        Some(ref sid) => repo.delete_other_sessions_for_user(&current_user.id, sid).await?,
+        None => repo.delete_all_sessions_for_user(&current_user.id).await?,
+    }
+    // Revoke all API tokens — password change invalidates bearer tokens too
+    let _ = repo.revoke_all_for_user(&current_user.id).await;
     let _ = repo
         .create_security_audit_log(
             Some(&current_user.id),
@@ -178,22 +183,43 @@ pub async fn post_change_password(
 
 // ── Security: sessions ────────────────────────────────────────────────────────
 
-/// List all active sessions for the authenticated user
+/// List all active sessions for the authenticated user (cookie sessions and API tokens)
 #[openapi(tag = "Settings")]
 #[get("/security/sessions")]
 pub async fn list_sessions(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser) -> Result<Json<Vec<SessionInfoResponse>>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
+
     let sessions = repo.list_sessions_for_user(&current_user.id).await?;
-    let responses = sessions
-        .into_iter()
-        .map(|s| SessionInfoResponse {
+    let api_tokens = repo.find_by_user(&current_user.id).await?;
+
+    let mut responses: Vec<SessionInfoResponse> = Vec::with_capacity(sessions.len() + api_tokens.len());
+
+    for s in sessions {
+        responses.push(SessionInfoResponse {
             id: s.id,
             created_at: s.created_at,
             expires_at: s.expires_at,
             user_agent: s.user_agent,
             ip_address: s.ip_address,
-        })
-        .collect();
+            auth_type: "web".to_string(),
+            device_name: None,
+        });
+    }
+
+    for t in api_tokens {
+        responses.push(SessionInfoResponse {
+            id: t.id,
+            created_at: t.created_at,
+            expires_at: t.expires_at,
+            user_agent: None,
+            ip_address: None,
+            auth_type: "api".to_string(),
+            device_name: t.device_name,
+        });
+    }
+
+    responses.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+
     Ok(Json(responses))
 }
 
