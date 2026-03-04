@@ -52,11 +52,11 @@ impl PostgresRepository {
     ) -> Result<ApiToken, AppError> {
         let row = sqlx::query_as::<_, ApiTokenRow>(
             r#"
-            INSERT INTO api_tokens (user_id, access_hash, refresh_hash, device_name, device_id, expires_at, refresh_expires_at)
+            INSERT INTO api_tokens (user_id, access_token_hash, refresh_token_hash, device_name, device_id, expires_at, refresh_expires_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (user_id, device_id) DO UPDATE SET
-                access_hash = EXCLUDED.access_hash,
-                refresh_hash = EXCLUDED.refresh_hash,
+                access_token_hash = EXCLUDED.access_token_hash,
+                refresh_token_hash = EXCLUDED.refresh_token_hash,
                 device_name = EXCLUDED.device_name,
                 device_id = EXCLUDED.device_id,
                 expires_at = EXCLUDED.expires_at,
@@ -208,7 +208,7 @@ impl PostgresRepository {
     pub async fn update_access_token(&self, id: &Uuid, new_hash: String, new_expires_at: &DateTime<Utc>) -> Result<(), AppError> {
         sqlx::query(
             r#"
-            UPDATE api_token
+            UPDATE api_tokens
             SET access_token_hash = $1, expires_at = $2
             WHERE id = $3"#,
         )
