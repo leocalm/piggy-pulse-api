@@ -3,17 +3,57 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::RateLimit;
 use crate::middleware::{ClientIp, UserAgent};
+use crate::models::category::{CategoryResponse, CategoryType};
 use crate::models::settings::{
     DeleteAccountRequest, PasswordChangeRequest, PeriodModelRequest, PeriodModelResponse, PreferencesRequest, PreferencesResponse, ProfileRequest,
     ProfileResponse, ResetStructureRequest, SessionInfoResponse, SettingsRequest, SettingsResponse,
 };
-use rocket::http::{Cookie, CookieJar, Status};
+use crate::models::transaction::TransactionResponse;
+use crate::models::vendor::VendorResponse;
+use rocket::http::{Cookie, CookieJar, Header, Status};
+use rocket::request::Request;
+use rocket::response::{Responder, Response};
 use rocket::serde::json::Json;
 use rocket::{State, delete, get, post, put};
+use rocket_okapi::r#gen::OpenApiGenerator;
+use rocket_okapi::okapi::openapi3::Responses;
 use rocket_okapi::openapi;
+use rocket_okapi::response::OpenApiResponderInner;
 use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
+
+/// A typed file download response (used for CSV and JSON exports).
+pub(crate) struct FileDownload {
+    bytes: Vec<u8>,
+    content_type: rocket::http::ContentType,
+    filename: &'static str,
+}
+
+impl<'r> Responder<'r, 'static> for FileDownload {
+    fn respond_to(self, _req: &'r Request<'_>) -> rocket::response::Result<'static> {
+        Response::build()
+            .header(self.content_type)
+            .header(Header::new("Content-Disposition", format!("attachment; filename=\"{}\"", self.filename)))
+            .sized_body(self.bytes.len(), std::io::Cursor::new(self.bytes))
+            .ok()
+    }
+}
+
+impl OpenApiResponderInner for FileDownload {
+    fn responses(_gen: &mut OpenApiGenerator) -> Result<Responses, rocket_okapi::OpenApiError> {
+        use rocket_okapi::okapi::openapi3::{RefOr, Response as OpenApiResponse};
+        let mut responses = Responses::default();
+        responses.responses.insert(
+            "200".to_string(),
+            RefOr::Object(OpenApiResponse {
+                description: "File download".to_string(),
+                ..Default::default()
+            }),
+        );
+        Ok(responses)
+    }
+}
 
 // ── General settings ──────────────────────────────────────────────────────────
 
@@ -248,6 +288,107 @@ pub async fn post_delete_account(
     Ok(Status::Ok)
 }
 
+// ── Export ────────────────────────────────────────────────────────────────────
+
+fn escape_csv(s: &str) -> String {
+    if s.contains(',') || s.contains('"') || s.contains('\n') {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_string()
+    }
+}
+
+/// Export all transactions as CSV
+#[openapi(tag = "Settings")]
+#[get("/export/transactions")]
+pub async fn get_export_transactions(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser) -> Result<FileDownload, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let transactions = repo.list_all_transactions(&current_user.id).await?;
+
+    let mut csv = String::from("date,description,amount,currency,category,type,from_account,to_account,vendor\n");
+
+    for t in &transactions {
+        let tx = TransactionResponse::from(t);
+        let decimal_places = tx.from_account.currency.decimal_places as usize;
+        let amount = tx.amount as f64 / 10f64.powi(tx.from_account.currency.decimal_places);
+        let tx_type = if tx.to_account.is_some() {
+            "transfer"
+        } else if matches!(tx.category.category_type, CategoryType::Incoming) {
+            "incoming"
+        } else {
+            "outgoing"
+        };
+        let to_account = tx.to_account.as_ref().map(|a| a.name.as_str()).unwrap_or("");
+        let vendor = tx.vendor.as_ref().map(|v| v.name.as_str()).unwrap_or("");
+
+        csv.push_str(&format!(
+            "{},{},{:.prec$},{},{},{},{},{},{}\n",
+            tx.occurred_at,
+            escape_csv(&tx.description),
+            amount,
+            tx.from_account.currency.currency,
+            escape_csv(&tx.category.name),
+            tx_type,
+            escape_csv(&tx.from_account.name),
+            escape_csv(to_account),
+            escape_csv(vendor),
+            prec = decimal_places,
+        ));
+    }
+
+    Ok(FileDownload {
+        bytes: csv.into_bytes(),
+        content_type: rocket::http::ContentType::new("text", "csv"),
+        filename: "transactions.csv",
+    })
+}
+
+/// Export full user dataset as JSON (GDPR data portability)
+#[openapi(tag = "Settings")]
+#[get("/export/full")]
+pub async fn get_export_full(pool: &State<PgPool>, _rate_limit: RateLimit, current_user: CurrentUser) -> Result<FileDownload, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+
+    let transactions = repo.list_all_transactions(&current_user.id).await?;
+    let transaction_responses: Vec<TransactionResponse> = transactions.iter().map(TransactionResponse::from).collect();
+
+    let accounts = repo.list_accounts_management(&current_user.id).await?;
+    let categories = repo
+        .list_all_categories(&current_user.id)
+        .await?
+        .iter()
+        .map(CategoryResponse::from)
+        .collect::<Vec<_>>();
+    let vendors = repo
+        .list_all_vendors(&current_user.id)
+        .await?
+        .iter()
+        .map(VendorResponse::from)
+        .collect::<Vec<_>>();
+    let profile = repo.get_profile(&current_user.id).await?;
+    let preferences = repo.get_preferences(&current_user.id).await?;
+    let settings = repo.get_settings(&current_user.id).await?;
+
+    let export = serde_json::json!({
+        "exported_at": chrono::Utc::now().to_rfc3339(),
+        "profile": ProfileResponse::from(&profile),
+        "preferences": PreferencesResponse::from(&preferences),
+        "settings": SettingsResponse::from(&settings),
+        "accounts": accounts,
+        "categories": categories,
+        "vendors": vendors,
+        "transactions": transaction_responses,
+    });
+
+    let json_str = serde_json::to_string_pretty(&export).map_err(|e| AppError::BadRequest(format!("JSON serialization error: {e}")))?;
+
+    Ok(FileDownload {
+        bytes: json_str.into_bytes(),
+        content_type: rocket::http::ContentType::JSON,
+        filename: "piggy-pulse-export.json",
+    })
+}
+
 pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
     rocket_okapi::openapi_get_routes_spec![
         get_settings,
@@ -263,5 +404,7 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
         put_period_model,
         post_reset_structure,
         post_delete_account,
+        get_export_transactions,
+        get_export_full,
     ]
 }
