@@ -291,7 +291,7 @@ pub async fn post_delete_account(
 // ── Export ────────────────────────────────────────────────────────────────────
 
 fn escape_csv(s: &str) -> String {
-    if s.contains(',') || s.contains('"') || s.contains('\n') {
+    if s.contains(',') || s.contains('"') || s.contains('\n') || s.contains('\r') {
         format!("\"{}\"", s.replace('"', "\"\""))
     } else {
         s.to_string()
@@ -309,8 +309,10 @@ pub async fn get_export_transactions(pool: &State<PgPool>, _rate_limit: RateLimi
 
     for t in &transactions {
         let tx = TransactionResponse::from(t);
-        let decimal_places = tx.from_account.currency.decimal_places as usize;
-        let amount = tx.amount as f64 / 10f64.powi(tx.from_account.currency.decimal_places);
+        let decimal_places = tx.from_account.currency.decimal_places as u32;
+        let divisor = 10i64.pow(decimal_places);
+        let whole = tx.amount / divisor;
+        let frac = (tx.amount % divisor).abs();
         let tx_type = if tx.to_account.is_some() {
             "transfer"
         } else if matches!(tx.category.category_type, CategoryType::Incoming) {
@@ -322,17 +324,18 @@ pub async fn get_export_transactions(pool: &State<PgPool>, _rate_limit: RateLimi
         let vendor = tx.vendor.as_ref().map(|v| v.name.as_str()).unwrap_or("");
 
         csv.push_str(&format!(
-            "{},{},{:.prec$},{},{},{},{},{},{}\n",
+            "{},{},{}.{:0>prec$},{},{},{},{},{},{}\n",
             tx.occurred_at,
             escape_csv(&tx.description),
-            amount,
+            whole,
+            frac,
             tx.from_account.currency.currency,
             escape_csv(&tx.category.name),
             tx_type,
             escape_csv(&tx.from_account.name),
             escape_csv(to_account),
             escape_csv(vendor),
-            prec = decimal_places,
+            prec = decimal_places as usize,
         ));
     }
 
