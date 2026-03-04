@@ -583,4 +583,11 @@ impl PostgresRepository {
             net_difference,
         })
     }
+
+    #[allow(dead_code)]
+    pub async fn list_all_transactions(&self, user_id: &Uuid) -> Result<Vec<Transaction>, AppError> {
+        let query = build_transaction_query("transaction t", &["t.user_id = $1"], "t.occurred_at DESC, t.created_at DESC, t.id DESC");
+        let rows = sqlx::query_as::<_, TransactionRow>(&query).bind(user_id).fetch_all(&self.pool).await?;
+        Ok(rows.into_iter().map(Transaction::from).collect())
+    }
 }
