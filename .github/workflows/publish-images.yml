@@ -38,7 +38,7 @@ jobs:
           echo "owner=${GITHUB_REPOSITORY_OWNER}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push API image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
@@ -50,7 +50,7 @@ jobs:
           cache-to: type=registry,ref=ghcr.io/${{ steps.vars.outputs.owner }}/piggy-pulse-api:buildcache,mode=max
 
       - name: Build and push cron image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.cron
