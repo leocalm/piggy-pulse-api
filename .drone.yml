@@ -7,10 +7,54 @@ trigger:
   branch:
     - main
   event:
+    - push
     - promote
     - rollback
 
 steps:
+  - name: build-and-push
+    image: docker:27-cli
+    volumes:
+      - name: dockersock
+        path: /var/run/docker.sock
+    environment:
+      GHCR_USERNAME:
+        from_secret: ghcr_username
+      GHCR_TOKEN:
+        from_secret: ghcr_token
+    when:
+      branch:
+        - main
+      event:
+        - push
+        - promote
+    commands:
+      - echo "🔨 Building Docker images..."
+      - apk add --no-cache git
+      - SHORT_SHA=$(echo "$DRONE_COMMIT_SHA" | cut -c1-7)
+      - OWNER=$(echo "$DRONE_REPO_NAMESPACE" | tr '[:upper:]' '[:lower:]')
+      - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+      - docker build --platform linux/amd64
+          --cache-from "ghcr.io/$OWNER/piggy-pulse-api:buildcache"
+          --build-arg BUILDKIT_INLINE_CACHE=1
+          -t "ghcr.io/$OWNER/piggy-pulse-api:latest"
+          -t "ghcr.io/$OWNER/piggy-pulse-api:$SHORT_SHA"
+          .
+      - docker push "ghcr.io/$OWNER/piggy-pulse-api:latest"
+      - docker push "ghcr.io/$OWNER/piggy-pulse-api:$SHORT_SHA"
+      - docker push "ghcr.io/$OWNER/piggy-pulse-api:buildcache" || true
+      - docker build --platform linux/amd64
+          --cache-from "ghcr.io/$OWNER/piggy-pulse-cron:buildcache"
+          --build-arg BUILDKIT_INLINE_CACHE=1
+          -f Dockerfile.cron
+          -t "ghcr.io/$OWNER/piggy-pulse-cron:latest"
+          -t "ghcr.io/$OWNER/piggy-pulse-cron:$SHORT_SHA"
+          .
+      - docker push "ghcr.io/$OWNER/piggy-pulse-cron:latest"
+      - docker push "ghcr.io/$OWNER/piggy-pulse-cron:$SHORT_SHA"
+      - docker push "ghcr.io/$OWNER/piggy-pulse-cron:buildcache" || true
+      - echo "✅ Images pushed for $SHORT_SHA"
+
   - name: deploy
     image: docker:27-cli
     volumes:
@@ -27,6 +71,7 @@ steps:
       branch:
         - main
       event:
+        - push
         - promote
         - rollback
     commands:
@@ -48,6 +93,7 @@ steps:
       branch:
         - main
       event:
+        - push
         - promote
         - rollback
     commands:
@@ -63,6 +109,8 @@ steps:
         - main
       event:
         - push
+        - promote
+        - rollback
     commands:
       - echo "❌ Build ${DRONE_BUILD_NUMBER} failed!"
       - echo "Commit ${DRONE_COMMIT_SHA:0:7} was not deployed"
