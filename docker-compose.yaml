@@ -158,6 +158,19 @@ services:
     networks:
       - piggy_pulse_network
 
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - piggy_pulse_network
+    environment:
+      - DOZZLE_AUTH_PROVIDER=simple
+    secrets:
+      - source: users
+        target: /data/users.yml
 
 networks:
   piggy_pulse_network:
@@ -167,4 +180,7 @@ volumes:
   postgres_data:
   caddy_data:
   caddy_config:
-  drone_data:  # Added this!
+  drone_data:
+secrets:
+  users:
+    file: users.yml

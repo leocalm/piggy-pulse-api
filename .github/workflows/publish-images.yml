@@ -62,3 +62,12 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ steps.vars.outputs.owner }}/piggy-pulse-cron:buildcache
           cache-to: type=registry,ref=ghcr.io/${{ steps.vars.outputs.owner }}/piggy-pulse-cron:buildcache,mode=max
 
+      - name: Trigger Drone deployment
+        env:
+          DRONE_SERVER: ${{ secrets.DRONE_SERVER }}
+          DRONE_TOKEN: ${{ secrets.DRONE_TOKEN }}
+        run: |
+          curl -sf -X POST \
+            "${DRONE_SERVER}/api/repos/${{ github.repository }}/builds" \
+            -H "Authorization: Bearer ${DRONE_TOKEN}" \
+            -d "branch=main"
