@@ -6,7 +6,7 @@
         level {$CADDY_LOG_LEVEL:INFO}
     }
     tls internal
-    
+
 
     # Reverse proxy to PiggyPulse API
     reverse_proxy {$PIGGY_PULSE_UPSTREAM:piggy-pulse:8000} {
@@ -43,3 +43,7 @@ drone.piggy-pulse.com {
     tls internal
 }
 
+logs.piggy-pulse.com {
+    reverse_proxy dozzle:8080
+    tls internal
+}
