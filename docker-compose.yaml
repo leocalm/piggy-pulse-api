@@ -119,7 +119,6 @@ services:
   # Drone CI Server
   drone-server:
     image: drone/drone:2
-    container_name: drone-server
     restart: unless-stopped
     expose:
       - "80"
@@ -141,7 +140,6 @@ services:
   # Drone CI Runner
   drone-runner:
     image: drone/drone-runner-docker:1
-    container_name: drone-runner
     restart: unless-stopped
     depends_on:
       - drone-server
@@ -160,7 +158,6 @@ services:
 
   dozzle:
     image: amir20/dozzle:latest
-    container_name: dozzle
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
