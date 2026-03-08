@@ -68,6 +68,5 @@ jobs:
           DRONE_TOKEN: ${{ secrets.DRONE_TOKEN }}
         run: |
           curl -sf -X POST \
-            "${DRONE_SERVER}/api/repos/${{ github.repository }}/builds" \
-            -H "Authorization: Bearer ${DRONE_TOKEN}" \
-            -d "branch=main"
+            "${DRONE_SERVER}/api/repos/${{ github.repository }}/builds?branch=main" \
+            -H "Authorization: Bearer ${DRONE_TOKEN}"
