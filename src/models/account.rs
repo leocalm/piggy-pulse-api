@@ -36,7 +36,7 @@ pub struct AccountRequest {
     pub name: String,
     #[validate(length(min = 3))]
     pub color: String,
-    #[validate(length(min = 3))]
+    #[validate(length(min = 1))]
     pub icon: String,
     pub account_type: AccountType,
     pub balance: i64,
@@ -50,7 +50,7 @@ pub struct AccountUpdateRequest {
     pub name: String,
     #[validate(length(min = 3))]
     pub color: String,
-    #[validate(length(min = 3))]
+    #[validate(length(min = 1))]
     pub icon: String,
     pub account_type: AccountType,
     pub spend_limit: Option<i32>,
