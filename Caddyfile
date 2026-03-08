@@ -9,7 +9,7 @@
 
 
     # Reverse proxy to PiggyPulse API
-    reverse_proxy {$PIGGY_PULSE_UPSTREAM:piggy-pulse:8000} {
+    reverse_proxy {$PIGGY_PULSE_UPSTREAM:api:8000} {
         # Health check
         health_uri {$PIGGY_PULSE_HEALTH_URI:/api/v1/health}
         health_interval 30s
