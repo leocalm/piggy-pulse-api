@@ -70,7 +70,7 @@ impl PostgresRepository {
 
         match result {
             Ok(card) => Ok(card),
-            Err(err) if is_unique_violation(&err) => Err(AppError::BadRequest("A card of this type already exists".to_string())),
+            Err(err) if is_unique_violation(&err) => Err(AppError::Conflict("A card of this type already exists".to_string())),
             Err(err) => Err(err.into()),
         }
     }
@@ -123,7 +123,7 @@ impl PostgresRepository {
         match result {
             Ok(Some(card)) => Ok(card),
             Ok(None) => Err(AppError::NotFound("Dashboard card not found".to_string())),
-            Err(err) if is_unique_violation(&err) => Err(AppError::BadRequest("A card for this entity already exists".to_string())),
+            Err(err) if is_unique_violation(&err) => Err(AppError::Conflict("A card for this entity already exists".to_string())),
             Err(err) => Err(err.into()),
         }
     }
