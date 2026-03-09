@@ -7,7 +7,6 @@ pub mod category;
 pub mod category_target;
 pub mod currency;
 pub mod dashboard;
-pub mod dashboard_card;
 pub mod onboarding;
 pub mod overlay;
 pub mod pagination;
