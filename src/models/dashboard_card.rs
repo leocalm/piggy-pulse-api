@@ -23,13 +23,11 @@ pub const GLOBAL_CARD_TYPES: &[&str] = &[
     "recent_transactions",
     "top_categories",
     "budget_per_day",
-    "monthly_burn_rate",
     "remaining_budget",
-    "month_progress",
     "balance_over_time",
 ];
 
-pub const ENTITY_CARD_TYPES: &[&str] = &["account_summary", "category_breakdown", "vendor_spend"];
+pub const ENTITY_CARD_TYPES: &[&str] = &["account_summary", "category_breakdown"];
 
 pub const MAX_CARDS_PER_USER: i64 = 20;
 pub const MAX_ENTITY_CARDS_PER_TYPE: i64 = 5;
@@ -43,13 +41,10 @@ pub fn default_size_for_card_type(card_type: &str) -> Option<CardSize> {
         "recent_transactions" => Some(CardSize::Full),
         "top_categories" => Some(CardSize::Half),
         "budget_per_day" => Some(CardSize::Half),
-        "monthly_burn_rate" => Some(CardSize::Half),
         "remaining_budget" => Some(CardSize::Half),
-        "month_progress" => Some(CardSize::Half),
         "balance_over_time" => Some(CardSize::Full),
         "account_summary" => Some(CardSize::Half),
         "category_breakdown" => Some(CardSize::Half),
-        "vendor_spend" => Some(CardSize::Half),
         _ => None,
     }
 }
@@ -66,7 +61,6 @@ pub fn entity_table_for_card_type(card_type: &str) -> Option<&'static str> {
     match card_type {
         "account_summary" => Some("account"),
         "category_breakdown" => Some("category"),
-        "vendor_spend" => Some("vendor"),
         _ => None,
     }
 }

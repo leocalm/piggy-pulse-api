@@ -992,7 +992,7 @@ mod tests {
         let data = parse_json(&body);
 
         let globals = data["global_cards"].as_array().expect("global_cards array");
-        assert_eq!(globals.len(), 10); // all 10 global types
+        assert_eq!(globals.len(), 8); // all 8 global types
 
         // The 3 defaults should be marked as already_added
         let added_types: Vec<&str> = globals
@@ -1005,7 +1005,7 @@ mod tests {
         assert!(added_types.contains(&"net_position"));
 
         let entity_cards = data["entity_cards"].as_array().expect("entity_cards array");
-        assert_eq!(entity_cards.len(), 3); // account_summary, category_breakdown, vendor_spend
+        assert_eq!(entity_cards.len(), 2); // account_summary, category_breakdown
     }
 
     #[rocket::async_test]
