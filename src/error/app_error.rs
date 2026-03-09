@@ -41,6 +41,8 @@ pub enum AppError {
     UserAlreadyExists(String),
     #[error("Bad request: {0}")]
     BadRequest(String),
+    #[error("Conflict: {0}")]
+    Conflict(String),
     #[error("Not found: {0}")]
     NotFound(String),
     #[error("Currency not found: {0}")]
@@ -126,6 +128,7 @@ impl From<&AppError> for Status {
             AppError::Forbidden => Status::Forbidden,
             AppError::UserAlreadyExists(_) => Status::Conflict,
             AppError::BadRequest(_) => Status::BadRequest,
+            AppError::Conflict(_) => Status::Conflict,
             AppError::NotFound(_) => Status::NotFound,
             AppError::CurrencyDoesNotExist(_) => Status::BadRequest,
             AppError::UuidError { .. } => Status::BadRequest,
