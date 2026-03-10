@@ -170,11 +170,13 @@ WITH total_budget AS (
     SELECT COALESCE(SUM(bc.budgeted_value), 0)::bigint AS value
     FROM budget_category bc
     WHERE bc.user_id = $2
+      AND bc.is_excluded = false
 ),
 spent_budget AS (
     SELECT COALESCE(SUM(t.amount), 0)::bigint AS value
     FROM transaction t
     JOIN  category c       ON t.category_id = c.id
+    JOIN  budget_category bc ON c.id = bc.category_id
     CROSS JOIN budget_period bp
     WHERE bp.id            = $1
       AND bp.user_id       = $2
@@ -182,6 +184,7 @@ spent_budget AS (
       AND c.category_type  = 'Outgoing'
       AND t.occurred_at   >= bp.start_date
       AND t.occurred_at   <= bp.end_date
+      AND bc.is_excluded   = false
 )
 SELECT
     total_budget.value                      AS total_budget,
