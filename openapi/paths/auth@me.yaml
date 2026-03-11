@@ -1,0 +1,16 @@
+get:
+  tags:
+    - Auth
+  summary: Get current user
+  operationId: getMe
+  responses:
+    '200':
+      description: Current authenticated user
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Auth.yaml#/UserResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

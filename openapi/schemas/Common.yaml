@@ -20,6 +20,18 @@ PaginatedResponse:
       type: [ string, "null" ]
       description: Cursor for fetching the next page. Always null when hasMore is false.
 
+ErrorResponse:
+  type: object
+  required:
+    - message
+  properties:
+    message:
+      type: string
+      example: "Unauthorized"
+    code:
+      type: string
+      example: "UNAUTHORIZED"
+
 UnauthorizedErrorResponse:
   type: object
   required:

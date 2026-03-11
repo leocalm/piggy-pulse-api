@@ -1,0 +1,28 @@
+post:
+  tags:
+    - Auth
+  summary: Confirm 2FA setup or complete login challenge
+  operationId: verifyTwoFactor
+  description: |
+    Used in two contexts:
+    - **Setup confirmation**: called after /auth/2fa/enable to activate 2FA with a valid TOTP code.
+    - **Login challenge**: called after a login that returned requiresTwoFactor=true, using the twoFactorToken.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Auth.yaml#/TwoFactorCompleteRequest'
+  responses:
+    '200':
+      description: 2FA verified — returns authenticated user
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Auth.yaml#/AuthenticatedResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

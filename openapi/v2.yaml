@@ -33,6 +33,8 @@ components:
       $ref: './responses/InternalServerError.yaml'
     ServiceUnavailable:
       $ref: './responses/ServiceUnavailable.yaml'
+    TooManyRequests:
+      $ref: './responses/TooManyRequests.yaml'
   parameters:
     PeriodId:
       $ref: './parameters/PeriodId.yaml'
@@ -182,6 +184,33 @@ components:
     UpdateTransactionRequest:
       $ref: './schemas/Transaction.yaml#/UpdateTransactionRequest'
 
+    UserResponse:
+      $ref: './schemas/Auth.yaml#/UserResponse'
+    LoginRequest:
+      $ref: './schemas/Auth.yaml#/LoginRequest'
+    LoginResponse:
+      $ref: './schemas/Auth.yaml#/LoginResponse'
+    TwoFactorChallengeResponse:
+      $ref: './schemas/Auth.yaml#/TwoFactorChallengeResponse'
+    AuthenticatedResponse:
+      $ref: './schemas/Auth.yaml#/AuthenticatedResponse'
+    RegisterRequest:
+      $ref: './schemas/Auth.yaml#/RegisterRequest'
+    TwoFactorCompleteRequest:
+      $ref: './schemas/Auth.yaml#/TwoFactorCompleteRequest'
+    RefreshResponse:
+      $ref: './schemas/Auth.yaml#/RefreshResponse'
+    ForgotPasswordRequest:
+      $ref: './schemas/Auth.yaml#/ForgotPasswordRequest'
+    ResetPasswordRequest:
+      $ref: './schemas/Auth.yaml#/ResetPasswordRequest'
+    TwoFactorEnableResponse:
+      $ref: './schemas/Auth.yaml#/TwoFactorEnableResponse'
+    TwoFactorVerifyRequest:
+      $ref: './schemas/Auth.yaml#/TwoFactorVerifyRequest'
+    TwoFactorDisableRequest:
+      $ref: './schemas/Auth.yaml#/TwoFactorDisableRequest'
+
 security:
   - sessionCookie: []
   - api_key: []
@@ -251,3 +280,24 @@ paths:
     $ref: './paths/transactions.yaml'
   /transactions/{id}:
     $ref: './paths/transactions@{id}.yaml'
+
+  /auth/2fa/enable:
+    $ref: './paths/auth@2fa@enable.yaml'
+  /auth/2fa/verify:
+    $ref: './paths/auth@2fa@verify.yaml'
+  /auth/2fa/disable:
+    $ref: './paths/auth@2fa@disable.yaml'
+  /auth/register:
+    $ref: './paths/auth@register.yaml'
+  /auth/login:
+    $ref: './paths/auth@login.yaml'
+  /auth/logout:
+    $ref: './paths/auth@logout.yaml'
+  /auth/refresh:
+    $ref: './paths/auth@refresh.yaml'
+  /auth/me:
+    $ref: './paths/auth@me.yaml'
+  /auth/forgot-password:
+    $ref: './paths/auth@forgot-password.yaml'
+  /auth/reset-password:
+    $ref: './paths/auth@reset-password.yaml'
