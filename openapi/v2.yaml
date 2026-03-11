@@ -387,8 +387,6 @@ paths:
     $ref: './paths/settings@profile.yaml'
   /settings/preferences:
     $ref: './paths/settings@preferences.yaml'
-  /settings/password:
-    $ref: './paths/auth@password.yaml'
   /settings/sessions:
     $ref: './paths/settings@sessions.yaml'
   /settings/reset-structure:

@@ -1,4 +1,6 @@
 get:
+  tags:
+    - Health
   operationId: health_check
   security: []
   summary: Health check
