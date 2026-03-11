@@ -108,6 +108,13 @@ components:
       $ref: './schemas/Accounts.yaml#/CreateAccountRequest'
     UpdateAccountRequest:
       $ref: './schemas/Accounts.yaml#/UpdateAccountRequest'
+    AccountBalanceHistoryPoint:
+      $ref: './schemas/Account.yaml#/AccountBalanceHistoryPoint'
+    AccountBalanceHistoryResponse:
+      $ref: './schemas/Account.yaml#/AccountBalanceHistoryResponse'
+    AdjustBalanceRequest:
+      $ref: './schemas/Account.yaml#/AdjustBalanceRequest'
+    
     # Vendors
     VendorBase:
       $ref: './schemas/Vendor.yaml#/VendorBase'
@@ -125,6 +132,7 @@ components:
       $ref: './schemas/Vendor.yaml#/CreateVendorRequest'
     UpdateVendorRequest:
       $ref: './schemas/Vendor.yaml#/UpdateVendorRequest'
+    
     # Categories
     CategoryBase:
       $ref: './schemas/Category.yaml#/CategoryBase'
@@ -317,6 +325,11 @@ paths:
     $ref: './paths/accounts@{id}@archive.yaml'
   /accounts/{id}/unarchive:
     $ref: './paths/accounts@{id}@unarchive.yaml'
+  /accounts/{id}/balance-history:
+    $ref: './paths/accounts@{id}@balance-history.yaml'
+  /accounts/{id}/adjust-balance:
+    $ref: './paths/accounts@{id}@adjust-balance.yaml'
+
   /vendors/options:
     $ref: './paths/vendors@options.yaml'
   /vendors:

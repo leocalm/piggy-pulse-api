@@ -434,3 +434,38 @@ AccountDetailsResponse:
           $ref: '#/AccountCategoriesBreakdown'
         transactionsBreakdown:
           $ref: '#/AccountTransactionsBreakdown'
+
+AccountBalanceHistoryPoint:
+  type: object
+  required:
+    - date
+    - balance
+    - transactionCount
+  properties:
+    date:
+      type: string
+      format: date
+      example: "2024-01-15"
+    balance:
+      type: integer
+      description: Account balance in cents at end of day
+      example: 150000
+    transactionCount:
+      type: integer
+      minimum: 0
+      example: 3
+
+AccountBalanceHistoryResponse:
+  type: array
+  items:
+    $ref: '#/AccountBalanceHistoryPoint'
+
+AdjustBalanceRequest:
+  type: object
+  required:
+    - newBalance
+  properties:
+    newBalance:
+      type: integer
+      description: New absolute balance in cents
+      example: 150000
