@@ -94,6 +94,23 @@ components:
       $ref: './schemas/Accounts.yaml#/CreateAccountRequest'
     UpdateAccountRequest:
       $ref: './schemas/Accounts.yaml#/UpdateAccountRequest'
+    # Vendors
+    VendorBase:
+      $ref: './schemas/Vendor.yaml#/VendorBase'
+    VendorResponse:
+      $ref: './schemas/Vendor.yaml#/VendorResponse'
+    VendorSummaryResponse:
+      $ref: './schemas/Vendor.yaml#/VendorSummaryResponse'
+    VendorListResponse:
+      $ref: './schemas/Vendor.yaml#/VendorListResponse'
+    VendorOptionResponse:
+      $ref: './schemas/Vendor.yaml#/VendorOptionResponse'
+    VendorOptionListResponse:
+      $ref: './schemas/Vendor.yaml#/VendorOptionListResponse'
+    CreateVendorRequest:
+      $ref: './schemas/Vendor.yaml#/CreateVendorRequest'
+    UpdateVendorRequest:
+      $ref: './schemas/Vendor.yaml#/UpdateVendorRequest'
 
 security:
   - sessionCookie: []
@@ -128,3 +145,13 @@ paths:
     $ref: './paths/accounts@{id}@archive.yaml'
   /accounts/{id}/unarchive:
     $ref: './paths/accounts@{id}@unarchive.yaml'
+  /vendors/options:
+    $ref: './paths/vendors@options.yaml'
+  /vendors:
+    $ref: './paths/vendors.yaml'
+  /vendors/{id}:
+    $ref: './paths/vendors@{id}.yaml'
+  /vendors/{id}/archive:
+    $ref: './paths/vendors@{id}@archive.yaml'
+  /vendors/{id}/unarchive:
+    $ref: './paths/vendors@{id}@unarchive.yaml'

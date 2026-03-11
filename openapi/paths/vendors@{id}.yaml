@@ -1,0 +1,45 @@
+put:
+  tags:
+    - Vendors
+  summary: Update vendor
+  operationId: updateVendor
+  parameters:
+    - $ref: '../parameters/Id.yaml'
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Vendor.yaml#/UpdateVendorRequest'
+  responses:
+    '200':
+      description: Vendor updated
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Vendor.yaml#/VendorResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+delete:
+  tags:
+    - Vendors
+  summary: Delete vendor
+  operationId: deleteVendor
+  parameters:
+    - $ref: '../parameters/Id.yaml'
+  responses:
+    '204':
+      description: Vendor deleted
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
