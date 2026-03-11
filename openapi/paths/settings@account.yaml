@@ -1,0 +1,21 @@
+delete:
+  tags:
+    - Settings
+  summary: Delete account
+  operationId: deleteAccount
+  description: Permanently deletes the user account and all associated data. Requires password confirmation.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Settings.yaml#/DeleteAccountRequest'
+  responses:
+    '204':
+      description: Account deleted
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

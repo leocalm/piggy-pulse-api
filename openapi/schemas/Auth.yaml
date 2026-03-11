@@ -208,3 +208,18 @@ TwoFactorDisableRequest:
       minLength: 6
       maxLength: 6
       example: "123456"
+
+ChangePasswordRequest:
+  type: object
+  required:
+    - currentPassword
+    - newPassword
+  properties:
+    currentPassword:
+      type: string
+      format: password
+      example: "old-password"
+    newPassword:
+      type: string
+      format: password
+      example: "correct-horse-battery-staple"

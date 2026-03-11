@@ -210,6 +210,31 @@ components:
       $ref: './schemas/Auth.yaml#/TwoFactorVerifyRequest'
     TwoFactorDisableRequest:
       $ref: './schemas/Auth.yaml#/TwoFactorDisableRequest'
+    
+    ProfileResponse:
+      $ref: './schemas/Settings.yaml#/ProfileResponse'
+    UpdateProfileRequest:
+      $ref: './schemas/Settings.yaml#/UpdateProfileRequest'
+    PreferencesResponse:
+      $ref: './schemas/Settings.yaml#/PreferencesResponse'
+    UpdatePreferencesRequest:
+      $ref: './schemas/Settings.yaml#/UpdatePreferencesRequest'
+    Theme:
+      $ref: './schemas/Settings.yaml#/Theme'
+    DateFormat:
+      $ref: './schemas/Settings.yaml#/DateFormat'
+    NumberFormat:
+      $ref: './schemas/Settings.yaml#/NumberFormat'
+    SessionResponse:
+      $ref: './schemas/Settings.yaml#/SessionResponse'
+    SessionListResponse:
+      $ref: './schemas/Settings.yaml#/SessionListResponse'
+    ChangePasswordRequest:
+      $ref: './schemas/Settings.yaml#/ChangePasswordRequest'
+    DeleteAccountRequest:
+      $ref: './schemas/Settings.yaml#/DeleteAccountRequest'
+    ResetStructureRequest:
+      $ref: './schemas/Settings.yaml#/ResetStructureRequest'
 
 security:
   - sessionCookie: []
@@ -301,3 +326,28 @@ paths:
     $ref: './paths/auth@forgot-password.yaml'
   /auth/reset-password:
     $ref: './paths/auth@reset-password.yaml'
+  /auth/password:
+    $ref: './paths/auth@password.yaml'
+
+  ProfileResponse:
+    $ref: './schemas/Settings.yaml#/ProfileResponse'
+  UpdateProfileRequest:
+    $ref: './schemas/Settings.yaml#/UpdateProfileRequest'
+  PreferencesResponse:
+    $ref: './schemas/Settings.yaml#/PreferencesResponse'
+  UpdatePreferencesRequest:
+    $ref: './schemas/Settings.yaml#/UpdatePreferencesRequest'
+  Theme:
+    $ref: './schemas/Settings.yaml#/Theme'
+  DateFormat:
+    $ref: './schemas/Settings.yaml#/DateFormat'
+  NumberFormat:
+    $ref: './schemas/Settings.yaml#/NumberFormat'
+  SessionResponse:
+    $ref: './schemas/Settings.yaml#/SessionResponse'
+  SessionListResponse:
+    $ref: './schemas/Settings.yaml#/SessionListResponse'
+  DeleteAccountRequest:
+    $ref: './schemas/Settings.yaml#/DeleteAccountRequest'
+  ResetStructureRequest:
+    $ref: './schemas/Settings.yaml#/ResetStructureRequest'

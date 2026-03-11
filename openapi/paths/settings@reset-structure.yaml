@@ -1,0 +1,21 @@
+post:
+  tags:
+    - Settings
+  summary: Reset structure
+  operationId: resetStructure
+  description: Deletes all accounts, categories, vendors, periods and transactions while keeping the user account intact. Requires password confirmation.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Settings.yaml#/ResetStructureRequest'
+  responses:
+    '204':
+      description: Structure reset successfully
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

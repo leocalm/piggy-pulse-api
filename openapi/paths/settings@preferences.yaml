@@ -1,0 +1,41 @@
+get:
+  tags:
+    - Settings
+  summary: Get preferences
+  operationId: getPreferences
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Settings.yaml#/PreferencesResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+put:
+  tags:
+    - Settings
+  summary: Update preferences
+  operationId: updatePreferences
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Settings.yaml#/UpdatePreferencesRequest'
+  responses:
+    '200':
+      description: Preferences updated
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Settings.yaml#/PreferencesResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
