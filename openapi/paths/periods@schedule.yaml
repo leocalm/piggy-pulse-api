@@ -1,7 +1,6 @@
 get:
   tags:
-    - Periods
-    - Schedules
+    - Schedule
   summary: Get the schedule
   operationId: getSchedule
   description: Retrieve the schedule for automatic period creation
@@ -21,8 +20,7 @@ get:
 
 post:
   tags:
-    - Periods
-    - Schedules
+    - Schedule
   summary: Create a new schedule
   operationId: createSchedule
   description: Create the new schedule for automatic period creation
@@ -50,8 +48,7 @@ post:
 
 put:
   tags:
-    - Periods
-    - Schedules
+    - Schedule
   summary: Update a schedule
   operationId: updateSchedule
   description: Update the schedule for automatic period creation
@@ -79,8 +76,7 @@ put:
 
 delete:
   tags:
-    - Periods
-    - Schedules
+    - Schedule
   summary: Delete a schedule
   operationId: deleteSchedule
   description: Delete the schedule for automatic period creation

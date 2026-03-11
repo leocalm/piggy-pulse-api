@@ -4,8 +4,8 @@ get:
   summary: Get Periods
   operationId: getPeriods
   parameters:
-    - $ref: '../parameters/cursor.yaml'
-    - $ref: '../parameters/limit.yaml'
+    - $ref: '../parameters/Cursor.yaml'
+    - $ref: '../parameters/Limit.yaml'
   responses:
     '200':
       description: Success

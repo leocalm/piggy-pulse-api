@@ -83,6 +83,17 @@ PeriodResponse:
       description: Number of transactions in the period
       example: 100
       minimum: 0
+    percentageOfTargetUsed:
+      type: integer
+      description: Percentage of target used in the period
+      example: 50
+      minimum: 0
+      maximum: 100
+    status:
+      type: string
+      enum: [ active, upcoming, past ]
+      description: Status of the period
+      example: active
   discriminator:
     propertyName: periodType
     mapping:
