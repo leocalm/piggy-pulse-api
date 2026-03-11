@@ -1,8 +1,8 @@
 delete:
   tags:
     - Settings
-  summary: Delete account
-  operationId: deleteAccount
+  summary: Delete user account
+  operationId: deleteUserAccount
   description: Permanently deletes the user account and all associated data. Requires password confirmation.
   requestBody:
     required: true

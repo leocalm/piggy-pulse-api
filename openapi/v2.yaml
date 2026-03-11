@@ -210,7 +210,7 @@ components:
       $ref: './schemas/Auth.yaml#/TwoFactorVerifyRequest'
     TwoFactorDisableRequest:
       $ref: './schemas/Auth.yaml#/TwoFactorDisableRequest'
-    
+
     ProfileResponse:
       $ref: './schemas/Settings.yaml#/ProfileResponse'
     UpdateProfileRequest:
@@ -230,7 +230,7 @@ components:
     SessionListResponse:
       $ref: './schemas/Settings.yaml#/SessionListResponse'
     ChangePasswordRequest:
-      $ref: './schemas/Settings.yaml#/ChangePasswordRequest'
+      $ref: './schemas/Auth.yaml#/ChangePasswordRequest'
     DeleteAccountRequest:
       $ref: './schemas/Settings.yaml#/DeleteAccountRequest'
     ResetStructureRequest:
@@ -329,25 +329,21 @@ paths:
   /auth/password:
     $ref: './paths/auth@password.yaml'
 
-  ProfileResponse:
-    $ref: './schemas/Settings.yaml#/ProfileResponse'
-  UpdateProfileRequest:
-    $ref: './schemas/Settings.yaml#/UpdateProfileRequest'
-  PreferencesResponse:
-    $ref: './schemas/Settings.yaml#/PreferencesResponse'
-  UpdatePreferencesRequest:
-    $ref: './schemas/Settings.yaml#/UpdatePreferencesRequest'
-  Theme:
-    $ref: './schemas/Settings.yaml#/Theme'
-  DateFormat:
-    $ref: './schemas/Settings.yaml#/DateFormat'
-  NumberFormat:
-    $ref: './schemas/Settings.yaml#/NumberFormat'
-  SessionResponse:
-    $ref: './schemas/Settings.yaml#/SessionResponse'
-  SessionListResponse:
-    $ref: './schemas/Settings.yaml#/SessionListResponse'
-  DeleteAccountRequest:
-    $ref: './schemas/Settings.yaml#/DeleteAccountRequest'
-  ResetStructureRequest:
-    $ref: './schemas/Settings.yaml#/ResetStructureRequest'
+  /settings/export/transactions:
+    $ref: './paths/settings@export@transactions.yaml'
+  /settings/export/data:
+    $ref: './paths/settings@export@data.yaml'
+  /settings/sessions/{id}:
+    $ref: './paths/settings@sessions@{id}.yaml'
+  /settings/profile:
+    $ref: './paths/settings@profile.yaml'
+  /settings/preferences:
+    $ref: './paths/settings@preferences.yaml'
+  /settings/password:
+    $ref: './paths/auth@password.yaml'
+  /settings/sessions:
+    $ref: './paths/settings@sessions.yaml'
+  /settings/reset-structure:
+    $ref: './paths/settings@reset-structure.yaml'
+  /settings/account:
+    $ref: './paths/settings@account.yaml'
