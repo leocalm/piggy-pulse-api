@@ -358,9 +358,15 @@ StabilityContext:
 CategoryBreakdownItem:
   type: object
   required:
+    - categoryId
     - categoryName
     - value
   properties:
+    categoryId:
+      type: string
+      format: uuid
+      description: Category ID
+      example: "123e4567-e89b-12d3-a456-426655440000"
     categoryName:
       type: string
       example: "Groceries"
