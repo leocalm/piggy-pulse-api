@@ -1,0 +1,25 @@
+get:
+  tags:
+    - Dashboard
+  summary: Get current period for dashboard
+  operationId: getDashboardCurrentPeriod
+  parameters:
+    - name: period-id
+      in: query
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Dashboard.yaml#/CurrentPeriod'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

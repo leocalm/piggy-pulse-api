@@ -1,0 +1,97 @@
+CurrentPeriod:
+  type: object
+  required:
+    - spent
+    - target
+    - daysRemaining
+    - daysInPeriod
+    - projectedSpend
+  properties:
+    spent:
+      type: integer
+      description: Amount spent in the current period, in cents
+      example: 10050
+      minimum: 0
+    target:
+      type: integer
+      description: Target amount for the current period, in cents
+      example: 10000
+      minimum: 0
+    daysRemaining:
+      type: integer
+      description: Number of days remaining in the current period
+      example: 10
+      minimum: 0
+    daysInPeriod:
+      type: integer
+      description: Number of days in the current period
+      example: 30
+      minimum: 0
+    projectedSpend:
+      type: integer
+      description: Projected spend for the current period, in cents
+      example: 10000
+      minimum: 0
+
+NetPosition:
+  type: object
+  required:
+    - total
+    - differenceThisPeriod
+    - numberOfAccounts
+    - liquidAmount
+    - protectedAmount
+    - debtAmount
+  properties:
+    total:
+      type: integer
+      description: Total net position, in cents
+      example: 10000
+    differenceThisPeriod:
+      type: integer
+      description: Difference between the current period and the previous period, in cents
+      example: 1000
+    numberOfAccounts:
+      type: integer
+      description: Number of accounts in the net position
+      example: 2
+      minimum: 0
+    liquidAmount:
+      type: integer
+      description: Liquid amount in the net position, in cents
+      example: 10000
+      minimum: 0
+    protectedAmount:
+      type: integer
+      description: Protected amount in the net position, in cents
+      example: 10000
+      minimum: 0
+    debtAmount:
+      type: integer
+      description: Debt amount in the net position, in cents
+      example: 10000
+      minimum: 0
+
+BudgetStability:
+  type: object
+  required:
+    - stability
+    - periodsWithinRange
+    - periodsStability
+  properties:
+    stability:
+      type: integer
+      description: Stability of the budget, as a percentage
+      example: 99
+      minimum: 0
+    periodsWithinRange:
+      type: integer
+      description: Number of periods within the budget stability range
+      example: 10
+      minimum: 0
+    periodsStability:
+      type: array
+      items:
+        type: boolean
+      description: List of periods within the budget stability range
+      example: [true, false, true]

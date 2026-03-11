@@ -1,0 +1,13 @@
+get:
+  operationId: health_check
+  security: []
+  summary: Health check
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Health.yaml#/HealthResponse'
+    '503':
+      $ref: '../responses/ServiceUnavailable.yaml'

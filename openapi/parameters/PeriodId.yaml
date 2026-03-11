@@ -1,0 +1,7 @@
+name: periodId
+in: query
+required: true
+schema:
+  type: string
+  format: uuid
+description: The ID of the period

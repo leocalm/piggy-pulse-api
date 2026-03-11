@@ -1,0 +1,93 @@
+openapi: 3.1.0
+info:
+  title: PiggyPulse API
+  version: 2.0.0
+  description: PiggyPulse personal budgeting API
+  license:
+    name: AGPL-3.0
+    url: https://www.gnu.org/licenses/agpl-3.0.en.html
+
+servers:
+  - url: https://api.piggy-pulse.com/api/v2
+    description: Production
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: session
+      description: Session cookie for authentication
+    api_key:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+  responses:
+    Unauthorized:
+      $ref: './responses/Unauthorized.yaml'
+    BadRequest:
+      $ref: './responses/BadRequest.yaml'
+    NotFound:
+      $ref: './responses/NotFound.yaml'
+    InternalServerError:
+      $ref: './responses/InternalServerError.yaml'
+    ServiceUnavailable:
+      $ref: './responses/ServiceUnavailable.yaml'
+  parameters:
+    PeriodId:
+      $ref: './parameters/PeriodId.yaml'
+    Cursor:
+      $ref: './parameters/Cursor.yaml'
+    Limit:
+      $ref: './parameters/Limit.yaml'
+  schemas:
+    HealthResponse:
+      $ref: './schemas/Health.yaml#/HealthResponse'
+    CurrentPeriod:
+      $ref: './schemas/Dashboard.yaml#/CurrentPeriod'
+    NetPosition:
+      $ref: './schemas/Dashboard.yaml#/NetPosition'
+    BudgetStability:
+      $ref: './schemas/Dashboard.yaml#/BudgetStability'
+    DurationBased:
+      $ref: './schemas/Period.yaml#/DurationBased'
+    ManualEndDate:
+      $ref: './schemas/Period.yaml#/ManualEndDate'
+    PeriodResponse:
+      $ref: './schemas/Period.yaml#/PeriodResponse'
+    PeriodListResponse:
+      $ref: './schemas/Period.yaml#/PeriodListResponse'
+    CreatePeriodRequest:
+      $ref: './schemas/Period.yaml#/CreatePeriodRequest'
+    UpdatePeriodRequest:
+      $ref: './schemas/Period.yaml#/UpdatePeriodRequest'
+    AutomaticSchedule:
+      $ref: './schemas/Period.yaml#/AutomaticSchedule'
+    ManualSchedule:
+      $ref: './schemas/Period.yaml#/ManualSchedule'
+    PeriodScheduleResponse:
+      $ref: './schemas/Period.yaml#/PeriodScheduleResponse'
+    CreatePeriodScheduleRequest:
+      $ref: './schemas/Period.yaml#/CreatePeriodScheduleRequest'
+    UpdatePeriodScheduleRequest:
+      $ref: './schemas/Period.yaml#/UpdatePeriodScheduleRequest'
+
+security:
+  - sessionCookie: []
+  - api_key: []
+
+paths:
+  /health:
+    $ref: './paths/health.yaml'
+  /dashboard/current-period:
+    $ref: './paths/dashboard@current-period.yaml'
+  /dashboard/net-position:
+    $ref: './paths/dashboard@net-position.yaml'
+  /dashboard/budget-stability:
+    $ref: './paths/dashboard@budget-stability.yaml'
+  /periods:
+    $ref: './paths/periods.yaml'
+  /periods/schedule:
+    $ref: './paths/periods@schedule.yaml'
+  /periods/{id}:
+    $ref: './paths/periods@{id}.yaml'

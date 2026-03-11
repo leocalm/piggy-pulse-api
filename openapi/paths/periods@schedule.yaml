@@ -1,0 +1,95 @@
+get:
+  tags:
+    - Periods
+    - Schedules
+  summary: Get the schedule
+  operationId: getSchedule
+  description: Retrieve the schedule for automatic period creation
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Period.yaml#/PeriodScheduleResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+post:
+  tags:
+    - Periods
+    - Schedules
+  summary: Create a new schedule
+  operationId: createSchedule
+  description: Create the new schedule for automatic period creation
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Period.yaml#/CreatePeriodScheduleRequest'
+  responses:
+    '201':
+      description: Created
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Period.yaml#/PeriodScheduleResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '409':
+      $ref: '../responses/Conflict.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+put:
+  tags:
+    - Periods
+    - Schedules
+  summary: Update a schedule
+  operationId: updateSchedule
+  description: Update the schedule for automatic period creation
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Period.yaml#/UpdatePeriodScheduleRequest'
+  responses:
+    '200':
+      description: Updated
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Period.yaml#/PeriodScheduleResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+delete:
+  tags:
+    - Periods
+    - Schedules
+  summary: Delete a schedule
+  operationId: deleteSchedule
+  description: Delete the schedule for automatic period creation
+  responses:
+    '204':
+      description: No Content
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

@@ -1,0 +1,46 @@
+get:
+  tags:
+    - Periods
+  summary: Get Periods
+  operationId: getPeriods
+  parameters:
+    - $ref: '../parameters/cursor.yaml'
+    - $ref: '../parameters/limit.yaml'
+  responses:
+    '200':
+      description: Success
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Period.yaml#/PeriodListResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+post:
+  tags:
+    - Periods
+  summary: Create Period
+  operationId: createPeriod
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Period.yaml#/CreatePeriodRequest'
+  responses:
+    '201':
+      description: Period created
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Period.yaml#/PeriodResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

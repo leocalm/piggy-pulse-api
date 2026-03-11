@@ -1,0 +1,93 @@
+PaginatedResponse:
+  type: object
+  required:
+    - data
+    - nextCursor
+    - totalCount
+    - hasMore
+  properties:
+    data:
+      type: array
+      items: { }       # overridden per-use with allOf
+    totalCount:
+      type: integer
+      description: Total number of items in the collection
+      example: 100
+    hasMore:
+      type: boolean
+      description: Whether there are more items to fetch
+    nextCursor:
+      type: [ string, "null" ]
+      description: Cursor for fetching the next page. Always null when hasMore is false.
+
+UnauthorizedErrorResponse:
+  type: object
+  required:
+    - message
+  properties:
+    message:
+      type: string
+      example: "Unauthorized"
+    code:
+      type: string
+      example: "UNAUTHORIZED"
+
+BadRequestErrorResponse:
+  type: object
+  required:
+    - message
+  properties:
+    message:
+      type: string
+      example: "Bad Request"
+    code:
+      type: string
+      example: "BAD_REQUEST"
+
+NotFoundErrorResponse:
+  type: object
+  required:
+    - message
+  properties:
+    message:
+      type: string
+      example: "Not Found"
+    code:
+      type: string
+      example: "NOT_FOUND"
+
+InternalServerErrorResponse:
+  type: object
+  required:
+    - message
+  properties:
+    message:
+      type: string
+      example: "Internal Server Error"
+    code:
+      type: string
+      example: "INTERNAL_SERVER_ERROR"
+
+ServiceUnavailableErrorResponse:
+  type: object
+  required:
+    - message
+  properties:
+    message:
+      type: string
+      example: "Service Unavailable"
+    code:
+      type: string
+      example: "SERVICE_UNAVAILABLE"
+
+ConflictErrorResponse:
+  type: object
+  required:
+    - message
+  properties:
+    message:
+      type: string
+      example: "Conflict"
+    code:
+      type: string
+      example: "CONFLICT"

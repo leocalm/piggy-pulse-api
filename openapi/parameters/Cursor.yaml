@@ -1,0 +1,7 @@
+name: cursor
+in: query
+required: false
+schema:
+  type: string
+  format: uuid
+  description: Cursor for pagination
