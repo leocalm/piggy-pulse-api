@@ -3,3 +3,6 @@
 paths/health.yaml:
   operation-4xx-response:
     - '#/get/responses'
+paths/currencies.yaml:
+  operation-4xx-response:
+    - '#/get/responses'
