@@ -33,13 +33,7 @@ put:
   description: Update a Period
   operationId: updatePeriod
   parameters:
-    - name: id
-      in: path
-      description: Period ID
-      required: true
-      schema:
-        type: string
-        format: uuid
+    - $ref: '../parameters/Id.yaml'
   requestBody:
     required: true
     content:

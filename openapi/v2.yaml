@@ -40,6 +40,8 @@ components:
       $ref: './parameters/Cursor.yaml'
     Limit:
       $ref: './parameters/Limit.yaml'
+    Id:
+      $ref: './parameters/Id.yaml'
   schemas:
     HealthResponse:
       $ref: './schemas/Health.yaml#/HealthResponse'
@@ -71,6 +73,27 @@ components:
       $ref: './schemas/Period.yaml#/CreatePeriodScheduleRequest'
     UpdatePeriodScheduleRequest:
       $ref: './schemas/Period.yaml#/UpdatePeriodScheduleRequest'
+    # Accounts
+    AccountBase:
+      $ref: './schemas/Accounts.yaml#/AccountBase'
+    AccountResponse:
+      $ref: './schemas/Accounts.yaml#/AccountResponse'
+    AccountListResponse:
+      $ref: './schemas/Accounts.yaml#/AccountListResponse'
+    AccountOptionResponse:
+      $ref: './schemas/Accounts.yaml#/AccountOptionResponse'
+    AccountOptionListResponse:
+      $ref: './schemas/Accounts.yaml#/AccountOptionListResponse'
+    AccountSummaryResponse:
+      $ref: './schemas/Accounts.yaml#/AccountSummaryResponse'
+    AccountSummaryListResponse:
+      $ref: './schemas/Accounts.yaml#/AccountSummaryListResponse'
+    AccountDetailsResponse:
+      $ref: './schemas/Accounts.yaml#/AccountDetailsResponse'
+    CreateAccountRequest:
+      $ref: './schemas/Accounts.yaml#/CreateAccountRequest'
+    UpdateAccountRequest:
+      $ref: './schemas/Accounts.yaml#/UpdateAccountRequest'
 
 security:
   - sessionCookie: []
@@ -91,3 +114,17 @@ paths:
     $ref: './paths/periods@schedule.yaml'
   /periods/{id}:
     $ref: './paths/periods@{id}.yaml'
+  /accounts/options:
+    $ref: './paths/accounts@options.yaml'
+  /accounts/summary:
+    $ref: './paths/accounts@summary.yaml'
+  /accounts:
+    $ref: './paths/accounts.yaml'
+  /accounts/{id}:
+    $ref: './paths/accounts@{id}.yaml'
+  /accounts/{id}/details:
+    $ref: './paths/accounts@{id}@details.yaml'
+  /accounts/{id}/archive:
+    $ref: './paths/accounts@{id}@archive.yaml'
+  /accounts/{id}/unarchive:
+    $ref: './paths/accounts@{id}@unarchive.yaml'

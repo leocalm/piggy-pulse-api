@@ -1,0 +1,430 @@
+AccountBase:
+  type: object
+  required:
+    - id
+    - name
+    - type
+    - color
+    - status
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Account ID
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    name:
+      type: string
+      description: Account name
+      example: "Main Checking Account"
+    color:
+      type: string
+      description: Account color
+      example: "#000000"
+    type:
+      type: string
+      description: Account type
+      enum: ["checking", "savings", "creditCard", "allowance", "wallet"]
+    status:
+      type: string
+      enum: ["active", "inactive"]
+      description: Account status
+      example: "active"
+
+AccountResponse:
+  allOf:
+    - $ref: '#/AccountBase'
+    - type: object
+      required:
+        - initialBalance
+        - currency
+      properties:
+        initialBalance:
+          type: integer
+          example: 10000
+        currency:
+          $ref: './Currencies.yaml#/CurrencyResponse'
+    - discriminator:
+        propertyName: type
+        mapping:
+          checking: '#/CheckingAccountResponse'
+          savings: '#/SavingsAccountResponse'
+          wallet: '#/WalletAccountResponse'
+          creditCard: '#/CreditCardAccountResponse'
+          allowance: '#/AllowanceAccountResponse'
+      oneOf:
+        - $ref: '#/CheckingAccountResponse'
+        - $ref: '#/SavingsAccountResponse'
+        - $ref: '#/WalletAccountResponse'
+        - $ref: '#/CreditCardAccountResponse'
+        - $ref: '#/AllowanceAccountResponse'
+
+CheckingAccountResponse:
+  type: object
+  required:
+    - type
+  properties:
+    type:
+      type: string
+      enum: ["checking"]
+    spendLimit:
+      type: "null"
+
+SavingsAccountResponse:
+  type: object
+  required:
+    - type
+  properties:
+    type:
+      type: string
+      enum: ["savings"]
+    spendLimit:
+      type: "null"
+
+WalletAccountResponse:
+  type: object
+  required:
+    - type
+  properties:
+    type:
+      type: string
+      enum: ["wallet"]
+    spendLimit:
+      type: "null"
+
+CreditCardAccountResponse:
+  type: object
+  required:
+    - type
+  properties:
+    type:
+      type: string
+      enum: ["creditCard"]
+    spendLimit:
+      type: [integer, "null"]
+      description: Spend limit in cents
+      minimum: 0
+      example: 50000
+
+AllowanceAccountResponse:
+  type: object
+  required:
+    - type
+  properties:
+    type:
+      type: string
+      enum: ["allowance"]
+    spendLimit:
+      type: [integer, "null"]
+      description: Spend limit in cents
+      minimum: 0
+      example: 50000
+
+AccountListResponse:
+  allOf:
+    - $ref: './Common.yaml#/PaginatedResponse'
+    - type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/AccountResponse'
+
+CreateAccountRequest:
+  type: object
+  required:
+    - name
+    - type
+    - color
+    - initialBalance
+    - currencyId
+  properties:
+    name:
+      type: string
+      description: Account name
+      example: "Main Checking Account"
+    color:
+      type: string
+      description: Account color
+      example: "#000000"
+    initialBalance:
+      type: integer
+      description: Initial balance in cents
+      example: 10000
+    currencyId:
+      type: string
+      format: uuid
+      description: Currency ID
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    type:
+      type: string
+      enum: ["checking", "savings", "creditCard", "allowance", "wallet"]
+  discriminator:
+    propertyName: type
+    mapping:
+      checking: '#/CheckingAccountRequest'
+      savings: '#/SavingsAccountRequest'
+      wallet: '#/WalletAccountRequest'
+      creditCard: '#/CreditCardAccountRequest'
+      allowance: '#/AllowanceAccountRequest'
+  oneOf:
+    - $ref: '#/CheckingAccountRequest'
+    - $ref: '#/SavingsAccountRequest'
+    - $ref: '#/WalletAccountRequest'
+    - $ref: '#/CreditCardAccountRequest'
+    - $ref: '#/AllowanceAccountRequest'
+
+CheckingAccountRequest:
+  type: object
+  required:
+    - type
+  properties:
+    type:
+      type: string
+      enum: ["checking"]
+    spendLimit:
+      type: "null"
+
+SavingsAccountRequest:
+  type: object
+  required:
+    - type
+  properties:
+    type:
+      type: string
+      enum: ["savings"]
+    spendLimit:
+      type: "null"
+
+WalletAccountRequest:
+  type: object
+  required:
+    - type
+  properties:
+    type:
+      type: string
+      enum: ["wallet"]
+    spendLimit:
+      type: "null"
+
+CreditCardAccountRequest:
+  type: object
+  required:
+    - type
+  properties:
+    type:
+      type: string
+      enum: ["creditCard"]
+    spendLimit:
+      type: [integer, "null"]
+      description: Optional spend limit in cents
+      minimum: 0
+      example: 50000
+
+AllowanceAccountRequest:
+  type: object
+  required:
+    - type
+  properties:
+    type:
+      type: string
+      enum: ["allowance"]
+    spendLimit:
+      type: [integer, "null"]
+      description: Optional spend limit in cents
+      minimum: 0
+      example: 50000
+
+UpdateAccountRequest:
+  allOf:
+    - $ref: '#/CreateAccountRequest'
+
+AccountOptionResponse:
+  type: object
+  required:
+    - id
+    - name
+    - color
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Account ID
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    name:
+      type: string
+      description: Account name
+      example: "Main Checking Account"
+    color:
+      type: string
+      description: Account color
+      example: "#000000"
+
+AccountOptionListResponse:
+  type: array
+  items:
+    $ref: '#/AccountOptionResponse'
+
+AccountSummaryResponse:
+  allOf:
+    - $ref: '#/AccountBase'
+    - type: object
+      required:
+        - currentBalance
+        - netChangeThisPeriod
+        - nextTransfer
+        - balanceAfterNextTransfer
+        - numberOfTransactions
+      properties:
+        currentBalance:
+          type: integer
+          description: Current balance in cents
+          example: 10000
+        netChangeThisPeriod:
+          type: integer
+          description: Net change this period in cents
+          example: 1000
+        nextTransfer:
+          type: [string, "null"]
+          format: date
+          description: Next transfer date
+          example: "2023-01-02"
+        balanceAfterNextTransfer:
+          type: [integer, "null"]
+          description: Balance after next transfer in cents
+          example: 1000
+        numberOfTransactions:
+          type: integer
+          description: Number of transactions
+          example: 10
+          minimum: 0
+
+AccountSummaryListResponse:
+  allOf:
+    - $ref: './Common.yaml#/PaginatedResponse'
+    - type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/AccountSummaryResponse'
+
+LargestOutflow:
+  type: object
+  required:
+    - categoryName
+    - value
+  properties:
+    categoryName:
+      type: string
+      description: Category name
+      example: "Groceries"
+    value:
+      type: integer
+      description: Value in cents
+      example: 1000
+      minimum: 0
+
+StabilityContext:
+  type: object
+  required:
+    - periodsOnTarget
+    - averageClosingBalance
+    - highestClosingBalance
+    - lowestClosingBalance
+    - largestSingleOutflow
+  properties:
+    periodsOnTarget:
+      type: integer
+      description: Periods on target
+      example: 10
+      minimum: 0
+    averageClosingBalance:
+      type: integer
+      description: Average closing balance in cents
+      example: 10000
+    highestClosingBalance:
+      type: integer
+      description: Highest closing balance in cents
+      example: 10000
+    lowestClosingBalance:
+      type: integer
+      description: Lowest closing balance in cents
+      example: 10000
+    largestSingleOutflow:
+      oneOf:
+        - type: "null"
+        - $ref: '#/LargestOutflow'
+
+CategoryBreakdownItem:
+  type: object
+  required:
+    - categoryName
+    - value
+  properties:
+    categoryName:
+      type: string
+      example: "Groceries"
+    value:
+      type: integer
+      minimum: 0
+      example: 1000
+
+TransactionBreakdownItem:
+  type: object
+  required:
+    - date
+    - description
+    - categoryName
+    - amount
+    - balance
+  properties:
+    date:
+      type: string
+      format: date
+    description:
+      type: string
+    categoryName:
+      type: string
+    amount:
+      type: integer
+      minimum: 0
+    balance:
+      type: integer
+
+AccountCategoriesBreakdown:
+  type: array
+  items:
+    $ref: '#/CategoryBreakdownItem'
+
+AccountTransactionsBreakdown:
+  type: array
+  items:
+    $ref: '#/TransactionBreakdownItem'
+
+AccountDetailsResponse:
+  allOf:
+    - $ref: '#/AccountSummaryResponse'
+    - type: object
+      required:
+        - inflow
+        - outflow
+        - stabilityContext
+        - categoriesBreakdown
+        - transactionsBreakdown
+      properties:
+        inflow:
+          type: integer
+          description: Inflow in cents
+          example: 1000
+          minimum: 0
+        outflow:
+          type: integer
+          description: Outflow in cents
+          example: 1000
+          minimum: 0
+        stabilityContext:
+          $ref: '#/StabilityContext'
+        categoriesBreakdown:
+          $ref: '#/AccountCategoriesBreakdown'
+        transactionsBreakdown:
+          $ref: '#/AccountTransactionsBreakdown'
