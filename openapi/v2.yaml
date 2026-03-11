@@ -42,6 +42,18 @@ components:
       $ref: './parameters/Limit.yaml'
     Id:
       $ref: './parameters/Id.yaml'
+    Direction:
+      $ref: './parameters/Direction.yaml'
+    AccountId:
+      $ref: './parameters/AccountId.yaml'
+    CategoryId:
+      $ref: './parameters/CategoryId.yaml'
+    VendorId:
+      $ref: './parameters/VendorId.yaml'
+    FromDate:
+      $ref: './parameters/FromDate.yaml'
+    ToDate:
+      $ref: './parameters/ToDate.yaml'
   schemas:
     HealthResponse:
       $ref: './schemas/Health.yaml#/HealthResponse'
@@ -149,6 +161,27 @@ components:
     UpdateTargetRequest:
       $ref: './schemas/Category.yaml#/UpdateTargetRequest'
 
+    AccountRef:
+      $ref: './schemas/Transaction.yaml#/AccountRef'
+    CategoryRef:
+      $ref: './schemas/Transaction.yaml#/CategoryRef'
+    VendorRef:
+      $ref: './schemas/Transaction.yaml#/VendorRef'
+    TransactionBase:
+      $ref: './schemas/Transaction.yaml#/TransactionBase'
+    RegularTransactionResponse:
+      $ref: './schemas/Transaction.yaml#/RegularTransactionResponse'
+    TransferTransactionResponse:
+      $ref: './schemas/Transaction.yaml#/TransferTransactionResponse'
+    TransactionResponse:
+      $ref: './schemas/Transaction.yaml#/TransactionResponse'
+    TransactionListResponse:
+      $ref: './schemas/Transaction.yaml#/TransactionListResponse'
+    CreateTransactionRequest:
+      $ref: './schemas/Transaction.yaml#/CreateTransactionRequest'
+    UpdateTransactionRequest:
+      $ref: './schemas/Transaction.yaml#/UpdateTransactionRequest'
+
 security:
   - sessionCookie: []
   - api_key: []
@@ -213,3 +246,8 @@ paths:
     $ref: './paths/targets@{id}.yaml'
   /targets/{id}/exclude:
     $ref: './paths/targets@{id}@exclude.yaml'
+
+  /transactions:
+    $ref: './paths/transactions.yaml'
+  /transactions/{id}:
+    $ref: './paths/transactions@{id}.yaml'

@@ -1,0 +1,8 @@
+name: toDate
+in: query
+required: false
+schema:
+  type: string
+  format: date
+description: Filter transactions up to this date (inclusive)
+example: "2024-01-31"

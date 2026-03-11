@@ -1,0 +1,8 @@
+name: fromDate
+in: query
+required: false
+schema:
+  type: string
+  format: date
+description: Filter transactions from this date (inclusive)
+example: "2024-01-01"
