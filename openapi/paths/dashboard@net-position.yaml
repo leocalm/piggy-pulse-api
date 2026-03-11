@@ -4,12 +4,7 @@ get:
   summary: Get net position for dashboard
   operationId: getDashboardNetPosition
   parameters:
-    - name: period-id
-      in: query
-      required: true
-      schema:
-        type: string
-        format: uuid
+    - $ref: '../parameters/PeriodId.yaml'
   responses:
     '200':
       description: OK

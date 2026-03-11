@@ -4,12 +4,7 @@ get:
   summary: Get current period for dashboard
   operationId: getDashboardCurrentPeriod
   parameters:
-    - name: period-id
-      in: query
-      required: true
-      schema:
-        type: string
-        format: uuid
+    - $ref: '../parameters/PeriodId.yaml'
   responses:
     '200':
       description: OK

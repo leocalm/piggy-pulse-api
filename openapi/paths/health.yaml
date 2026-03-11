@@ -1,7 +1,7 @@
 get:
   tags:
     - Health
-  operationId: health_check
+  operationId: healthCheck
   security: []
   summary: Health check
   responses:
