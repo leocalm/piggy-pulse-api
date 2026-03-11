@@ -1,0 +1,44 @@
+get:
+  tags:
+    - Categories
+  summary: List categories
+  operationId: listCategories
+  parameters:
+    - $ref: '../parameters/Cursor.yaml'
+    - $ref: '../parameters/Limit.yaml'
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Category.yaml#/CategoryManagementListResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+post:
+  tags:
+    - Categories
+  summary: Create category
+  operationId: createCategory
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Category.yaml#/CreateCategoryRequest'
+  responses:
+    '201':
+      description: Category created
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Category.yaml#/CategoryResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

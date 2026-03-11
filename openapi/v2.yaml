@@ -111,6 +111,43 @@ components:
       $ref: './schemas/Vendor.yaml#/CreateVendorRequest'
     UpdateVendorRequest:
       $ref: './schemas/Vendor.yaml#/UpdateVendorRequest'
+    # Categories
+    CategoryBase:
+      $ref: './schemas/Category.yaml#/CategoryBase'
+    CategoryResponse:
+      $ref: './schemas/Category.yaml#/CategoryResponse'
+    CategoryManagementListItem:
+      $ref: './schemas/Category.yaml#/CategoryManagementListItem'
+    CategoryManagementListResponse:
+      $ref: './schemas/Category.yaml#/CategoryManagementListResponse'
+    CategorySummaryItem:
+      $ref: './schemas/Category.yaml#/CategorySummaryItem'
+    CategoryOverviewSummary:
+      $ref: './schemas/Category.yaml#/CategoryOverviewSummary'
+    CategoryOverviewResponse:
+      $ref: './schemas/Category.yaml#/CategoryOverviewResponse'
+    CategoryOptionResponse:
+      $ref: './schemas/Category.yaml#/CategoryOptionResponse'
+    CategoryOptionListResponse:
+      $ref: './schemas/Category.yaml#/CategoryOptionListResponse'
+    CreateCategoryRequest:
+      $ref: './schemas/Category.yaml#/CreateCategoryRequest'
+    UpdateCategoryRequest:
+      $ref: './schemas/Category.yaml#/UpdateCategoryRequest'
+
+    # Targets
+    TargetStatus:
+      $ref: './schemas/Category.yaml#/TargetStatus'
+    TargetItem:
+      $ref: './schemas/Category.yaml#/TargetItem'
+    TargetSummary:
+      $ref: './schemas/Category.yaml#/TargetSummary'
+    CategoryTargetsResponse:
+      $ref: './schemas/Category.yaml#/CategoryTargetsResponse'
+    CreateTargetRequest:
+      $ref: './schemas/Category.yaml#/CreateTargetRequest'
+    UpdateTargetRequest:
+      $ref: './schemas/Category.yaml#/UpdateTargetRequest'
 
 security:
   - sessionCookie: []
@@ -155,3 +192,24 @@ paths:
     $ref: './paths/vendors@{id}@archive.yaml'
   /vendors/{id}/unarchive:
     $ref: './paths/vendors@{id}@unarchive.yaml'
+  # Static category paths first
+  /categories/overview:
+    $ref: './paths/categories@overview.yaml'
+  /categories/options:
+    $ref: './paths/categories@options.yaml'
+  /categories:
+    $ref: './paths/categories.yaml'
+  /categories/{id}:
+    $ref: './paths/categories@{id}.yaml'
+  /categories/{id}/archive:
+    $ref: './paths/categories@{id}@archive.yaml'
+  /categories/{id}/unarchive:
+    $ref: './paths/categories@{id}@unarchive.yaml'
+
+  # Targets as own resource
+  /targets:
+    $ref: './paths/targets.yaml'
+  /targets/{id}:
+    $ref: './paths/targets@{id}.yaml'
+  /targets/{id}/exclude:
+    $ref: './paths/targets@{id}@exclude.yaml'

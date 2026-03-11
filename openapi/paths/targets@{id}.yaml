@@ -1,0 +1,29 @@
+put:
+  tags:
+    - Categories
+    - Targets
+  summary: Update category target
+  operationId: updateCategoryTarget
+  parameters:
+    - $ref: '../parameters/Id.yaml'
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Category.yaml#/UpdateTargetRequest'
+  responses:
+    '200':
+      description: Target updated
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Category.yaml#/TargetItem'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
