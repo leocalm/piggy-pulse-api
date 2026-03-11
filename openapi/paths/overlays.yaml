@@ -1,0 +1,44 @@
+get:
+  tags:
+    - Overlays
+  summary: List overlays
+  operationId: listOverlays
+  parameters:
+    - $ref: '../parameters/Cursor.yaml'
+    - $ref: '../parameters/Limit.yaml'
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Overlay.yaml#/OverlayListResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+post:
+  tags:
+    - Overlays
+  summary: Create overlay
+  operationId: createOverlay
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Overlay.yaml#/CreateOverlayRequest'
+  responses:
+    '201':
+      description: Overlay created
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Overlay.yaml#/OverlayResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

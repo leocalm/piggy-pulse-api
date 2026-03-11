@@ -1,0 +1,25 @@
+get:
+  tags:
+    - Currencies
+  summary: Get currency by code
+  operationId: getCurrency
+  security: []
+  parameters:
+    - name: code
+      in: path
+      required: true
+      schema:
+        type: string
+      description: ISO 4217 currency code
+      example: "EUR"
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Misc.yaml#/CurrencyResponse'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

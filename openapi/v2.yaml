@@ -236,6 +236,54 @@ components:
     ResetStructureRequest:
       $ref: './schemas/Settings.yaml#/ResetStructureRequest'
 
+    # Overlay
+    InclusionMode:
+      $ref: './schemas/Overlay.yaml#/InclusionMode'
+    InclusionSource:
+      $ref: './schemas/Overlay.yaml#/InclusionSource'
+    OverlayCategoryCap:
+      $ref: './schemas/Overlay.yaml#/OverlayCategoryCap'
+    OverlayRules:
+      $ref: './schemas/Overlay.yaml#/OverlayRules'
+    OverlayResponse:
+      $ref: './schemas/Overlay.yaml#/OverlayResponse'
+    OverlayListResponse:
+      $ref: './schemas/Overlay.yaml#/OverlayListResponse'
+    CreateOverlayRequest:
+      $ref: './schemas/Overlay.yaml#/CreateOverlayRequest'
+    UpdateOverlayRequest:
+      $ref: './schemas/Overlay.yaml#/UpdateOverlayRequest'
+    OverlayTransactionMembership:
+      $ref: './schemas/Overlay.yaml#/OverlayTransactionMembership'
+    OverlayTransactionResponse:
+      $ref: './schemas/Overlay.yaml#/OverlayTransactionResponse'
+    OverlayTransactionListResponse:
+      $ref: './schemas/Overlay.yaml#/OverlayTransactionListResponse'
+    # Misc
+    CurrencyResponse:
+      $ref: './schemas/Misc.yaml#/CurrencyResponse'
+    CurrencyListResponse:
+      $ref: './schemas/Misc.yaml#/CurrencyListResponse'
+    OnboardingStatus:
+      $ref: './schemas/Misc.yaml#/OnboardingStatus'
+    OnboardingStep:
+      $ref: './schemas/Misc.yaml#/OnboardingStep'
+    OnboardingStatusResponse:
+      $ref: './schemas/Misc.yaml#/OnboardingStatusResponse'
+    UnlockResponse:
+      $ref: './schemas/Misc.yaml#/UnlockResponse'
+    # Auth (additions)
+    TwoFactorStatusResponse:
+      $ref: './schemas/Auth.yaml#/TwoFactorStatusResponse'
+    BackupCodesResponse:
+      $ref: './schemas/Auth.yaml#/BackupCodesResponse'
+    RegenerateBackupCodesRequest:
+      $ref: './schemas/Auth.yaml#/RegenerateBackupCodesRequest'
+    EmergencyDisableRequestBody:
+      $ref: './schemas/Auth.yaml#/EmergencyDisableRequestBody'
+    EmergencyDisableConfirmRequest:
+      $ref: './schemas/Auth.yaml#/EmergencyDisableConfirmRequest'
+
 security:
   - sessionCookie: []
   - api_key: []
@@ -347,3 +395,32 @@ paths:
     $ref: './paths/settings@reset-structure.yaml'
   /settings/account:
     $ref: './paths/settings@account.yaml'
+
+  /overlays/{id}/transactions/{txId}/include:
+    $ref: './paths/overlays@{id}@transactions@{txId}@include.yaml'
+  /overlays/{id}/transactions/{txId}/exclude:
+    $ref: './paths/overlays@{id}@transactions@{txId}@exclude.yaml'
+  /overlays/{id}/transactions:
+    $ref: './paths/overlays@{id}@transactions.yaml'
+  /overlays/{id}:
+    $ref: './paths/overlays@{id}.yaml'
+  /overlays:
+    $ref: './paths/overlays.yaml'
+  /currencies/{code}:
+    $ref: './paths/currencies@{code}.yaml'
+  /currencies:
+    $ref: './paths/currencies.yaml'
+  /onboarding/status:
+    $ref: './paths/onboarding@status.yaml'
+  /onboarding/complete:
+    $ref: './paths/onboarding@complete.yaml'
+  /unlock:
+    $ref: './paths/unlock.yaml'
+  /auth/2fa/backup-codes/regenerate:
+    $ref: './paths/auth@2fa@backup-codes@regenerate.yaml'
+  /auth/2fa/emergency-disable/request:
+    $ref: './paths/auth@2fa@emergency-disable@request.yaml'
+  /auth/2fa/emergency-disable/confirm:
+    $ref: './paths/auth@2fa@emergency-disable@confirm.yaml'
+  /auth/2fa/status:
+    $ref: './paths/auth@2fa@status.yaml'

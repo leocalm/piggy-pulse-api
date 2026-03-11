@@ -183,7 +183,7 @@ TwoFactorEnableResponse:
     qrCodeUri:
       type: string
       description: otpauth:// URI for QR code generation
-      example: "otpauth://totp/PiggyPulse:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=PiggyPulse" # pragma: allowlist secret
+      example: "otpauth://totp/PiggyPulse:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=PiggyPulse"
 
 TwoFactorVerifyRequest:
   type: object
@@ -208,6 +208,69 @@ TwoFactorDisableRequest:
       minLength: 6
       maxLength: 6
       example: "123456"
+
+# ===== 2FA Status =====
+
+TwoFactorStatusResponse:
+  type: object
+  required:
+    - enabled
+    - hasBackupCodes
+    - backupCodesRemaining
+  properties:
+    enabled:
+      type: boolean
+      example: true
+    hasBackupCodes:
+      type: boolean
+      example: true
+    backupCodesRemaining:
+      type: integer
+      example: 6
+
+# ===== Recovery / Backup Codes =====
+
+BackupCodesResponse:
+  type: array
+  items:
+    type: string
+  description: List of plaintext backup codes (only shown once on generation/regeneration)
+  example: ["ABCD-1234", "EFGH-5678"]
+
+RegenerateBackupCodesRequest:
+  type: object
+  required:
+    - code
+  properties:
+    code:
+      type: string
+      description: Current TOTP code to confirm intent
+      minLength: 6
+      maxLength: 6
+      example: "123456"
+
+# ===== Emergency Disable =====
+
+EmergencyDisableRequestBody:
+  type: object
+  required:
+    - email
+  properties:
+    email:
+      type: string
+      format: email
+      description: Account email address — always returns 204 to prevent enumeration
+      example: "user@example.com"
+
+EmergencyDisableConfirmRequest:
+  type: object
+  required:
+    - token
+  properties:
+    token:
+      type: string
+      description: Token received via email to confirm emergency 2FA disable
+      example: "abc123..."
 
 ChangePasswordRequest:
   type: object

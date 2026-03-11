@@ -1,0 +1,73 @@
+# ===== Currency =====
+
+CurrencyResponse:
+  type: object
+  required:
+    - id
+    - name
+    - symbol
+    - currency
+    - decimalPlaces
+    - symbolPosition
+  properties:
+    id:
+      type: string
+      format: uuid
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    name:
+      type: string
+      example: "Euro"
+    symbol:
+      type: string
+      example: "€"
+    currency:
+      type: string
+      description: ISO 4217 currency code
+      example: "EUR"
+    decimalPlaces:
+      type: integer
+      example: 2
+    symbolPosition:
+      type: string
+      enum: ["before", "after"]
+      example: "before"
+
+CurrencyListResponse:
+  type: array
+  items:
+    $ref: '#/CurrencyResponse'
+
+# ===== Onboarding =====
+
+OnboardingStatus:
+  type: string
+  enum: ["not_started", "in_progress", "completed"]
+  example: "in_progress"
+
+OnboardingStep:
+  type: string
+  enum: ["period", "accounts", "categories", "summary"]
+  example: "accounts"
+
+OnboardingStatusResponse:
+  type: object
+  required:
+    - status
+  properties:
+    status:
+      $ref: '#/OnboardingStatus'
+    currentStep:
+      oneOf:
+        - $ref: '#/OnboardingStep'
+        - type: "null"
+
+# ===== Unlock =====
+
+UnlockResponse:
+  type: object
+  required:
+    - message
+  properties:
+    message:
+      type: string
+      example: "Account unlocked successfully"

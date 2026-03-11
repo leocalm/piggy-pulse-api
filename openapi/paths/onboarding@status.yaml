@@ -1,0 +1,16 @@
+get:
+  tags:
+    - Onboarding
+  summary: Get onboarding status
+  operationId: getOnboardingStatus
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Misc.yaml#/OnboardingStatusResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

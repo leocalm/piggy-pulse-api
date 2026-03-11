@@ -1,0 +1,21 @@
+post:
+  tags:
+    - Auth
+  summary: Confirm emergency 2FA disable
+  operationId: emergencyDisableConfirm
+  security: []
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Auth.yaml#/EmergencyDisableConfirmRequest'
+  responses:
+    '204':
+      description: 2FA disabled via emergency flow
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

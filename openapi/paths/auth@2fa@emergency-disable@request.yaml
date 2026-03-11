@@ -1,0 +1,22 @@
+post:
+  tags:
+    - Auth
+  summary: Request emergency 2FA disable
+  operationId: emergencyDisableRequest
+  security: []
+  description: Sends an email with a disable token. Always returns 204 regardless of whether the account exists.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Auth.yaml#/EmergencyDisableRequestBody'
+  responses:
+    '204':
+      description: Email sent if account exists
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '429':
+      $ref: '../responses/TooManyRequests.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

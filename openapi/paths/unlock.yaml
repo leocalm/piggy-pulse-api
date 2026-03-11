@@ -1,0 +1,26 @@
+get:
+  tags:
+    - Auth
+  summary: Unlock account via email token
+  operationId: unlockAccount
+  security: []
+  parameters:
+    - name: token
+      in: query
+      required: true
+      schema:
+        type: string
+      description: Unlock token received via email
+  responses:
+    '200':
+      description: Account unlocked
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Misc.yaml#/UnlockResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
