@@ -10,14 +10,14 @@ post:
     content:
       application/json:
         schema:
-          $ref: '../schemas/Account.yaml#/AdjustBalanceRequest'
+          $ref: '../schemas/Accounts.yaml#/AdjustBalanceRequest'
   responses:
     '200':
       description: Balance adjusted
       content:
         application/json:
           schema:
-            $ref: '../schemas/Account.yaml#/AccountResponse'
+            $ref: '../schemas/Accounts.yaml#/AccountResponse'
     '400':
       $ref: '../responses/BadRequest.yaml'
     '401':
