@@ -1,7 +1,7 @@
 name: id
 in: path
 required: true
+description: Entity id
 schema:
   type: string
   format: uuid
-  description: Entity id

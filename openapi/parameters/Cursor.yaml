@@ -1,7 +1,7 @@
 name: cursor
 in: query
 required: false
+description: Cursor for pagination
 schema:
   type: string
   format: uuid
-  description: Cursor for pagination
