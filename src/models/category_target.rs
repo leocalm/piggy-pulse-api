@@ -20,6 +20,7 @@ pub struct CategoryTargetRow {
     pub is_excluded: bool,
     pub exclusion_reason: Option<String>,
     pub projected_variance_basis_points: Option<i32>,
+    pub spent_amount: Option<i64>,
 }
 
 /// Full response for the category targets page

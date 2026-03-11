@@ -17,6 +17,7 @@ struct RawTargetRow {
     previous_target: Option<i32>,
     is_excluded: bool,
     projected_variance_basis_points: Option<i32>,
+    spent_amount: Option<i64>,
 }
 
 impl From<RawTargetRow> for CategoryTargetRow {
@@ -46,6 +47,7 @@ impl From<RawTargetRow> for CategoryTargetRow {
             is_excluded: row.is_excluded,
             exclusion_reason,
             projected_variance_basis_points: row.projected_variance_basis_points,
+            spent_amount: row.spent_amount,
         }
     }
 }
@@ -145,7 +147,8 @@ impl PostgresRepository {
                     WHEN ct.budgeted_value IS NOT NULL AND ct.budgeted_value > 0 THEN
                         ((COALESCE(ptx.total_amount, 0) * 10000) / ct.budgeted_value)::integer
                     ELSE NULL
-                END as projected_variance_basis_points
+                END as projected_variance_basis_points,
+                ptx.total_amount::bigint as spent_amount
             FROM category c
             LEFT JOIN category parent ON c.parent_id = parent.id
             LEFT JOIN current_targets ct ON ct.category_id = c.id
