@@ -80,8 +80,8 @@ steps:
       - docker compose version
       - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
       - cd /app/piggy-pulse
-      - docker compose pull piggy-pulse cron
-      - docker compose up -d piggy-pulse cron
+      - docker compose pull api cron
+      - docker compose up -d api cron
       - docker image prune -af
       - echo "✅ Deployed version ${DRONE_COMMIT_SHA:0:7}"
 
