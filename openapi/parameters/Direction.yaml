@@ -1,0 +1,7 @@
+name: direction
+in: query
+required: false
+schema:
+  type: string
+  enum: ["income", "expense", "transfer"]
+description: Filter by transaction direction based on category type

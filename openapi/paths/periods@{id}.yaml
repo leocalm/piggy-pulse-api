@@ -1,0 +1,79 @@
+get:
+  tags:
+    - Periods
+  summary: Get a Period
+  description: Get a Period
+  operationId: getPeriod
+  parameters:
+    - name: id
+      in: path
+      description: Period ID
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    '200':
+      description: Success
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Period.yaml#/PeriodResponse'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+put:
+  tags:
+    - Periods
+  summary: Update a Period
+  description: Update a Period
+  operationId: updatePeriod
+  parameters:
+    - $ref: '../parameters/Id.yaml'
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Period.yaml#/UpdatePeriodRequest'
+  responses:
+    '200':
+      description: Period updated
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Period.yaml#/PeriodResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+delete:
+  tags:
+    - Periods
+  summary: Delete a Period
+  description: Delete a Period
+  operationId: deletePeriod
+  parameters:
+    - name: id
+      in: path
+      description: Period ID
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    '204':
+      description: Period deleted
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

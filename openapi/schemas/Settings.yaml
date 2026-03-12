@@ -1,0 +1,133 @@
+# ===== Profile =====
+
+ProfileResponse:
+  type: object
+  required:
+    - name
+    - currency
+  properties:
+    name:
+      type: string
+      example: "Leonardo"
+    currency:
+      type: string
+      example: "EUR"
+
+UpdateProfileRequest:
+  type: object
+  required:
+    - name
+    - currency
+  properties:
+    name:
+      type: string
+      example: "Leonardo"
+    currency:
+      type: string
+      example: "EUR"
+
+# ===== Preferences =====
+
+Theme:
+  type: string
+  enum: ["light", "dark", "system"]
+  example: "dark"
+
+DateFormat:
+  type: string
+  enum: ["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]
+  example: "DD/MM/YYYY"
+
+NumberFormat:
+  type: string
+  enum: ["1,234.56", "1.234,56", "1 234,56"]
+  example: "1.234,56"
+
+PreferencesResponse:
+  type: object
+  required:
+    - theme
+    - dateFormat
+    - numberFormat
+    - language
+  properties:
+    theme:
+      $ref: '#/Theme'
+    dateFormat:
+      $ref: '#/DateFormat'
+    numberFormat:
+      $ref: '#/NumberFormat'
+    language:
+      type: string
+      description: BCP 47 language tag
+      example: "en"
+
+UpdatePreferencesRequest:
+  type: object
+  required:
+    - theme
+    - dateFormat
+    - numberFormat
+    - language
+  properties:
+    theme:
+      $ref: '#/Theme'
+    dateFormat:
+      $ref: '#/DateFormat'
+    numberFormat:
+      $ref: '#/NumberFormat'
+    language:
+      type: string
+      description: BCP 47 language tag
+      example: "en"
+
+# ===== Sessions =====
+
+SessionResponse:
+  type: object
+  required:
+    - id
+    - createdAt
+    - isCurrent
+  properties:
+    id:
+      type: string
+      format: uuid
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    createdAt:
+      type: string
+      format: date-time
+      example: "2024-01-15T10:30:00Z"
+    isCurrent:
+      type: boolean
+      description: Whether this is the session making the request
+      example: true
+
+SessionListResponse:
+  type: array
+  items:
+    $ref: '#/SessionResponse'
+
+# ===== Account Actions =====
+
+DeleteAccountRequest:
+  type: object
+  required:
+    - password
+  properties:
+    password:
+      type: string
+      format: password
+      description: Current password to confirm intent
+      example: "correct-horse-battery-staple"
+
+ResetStructureRequest:
+  type: object
+  required:
+    - password
+  properties:
+    password:
+      type: string
+      format: password
+      description: Current password to confirm intent
+      example: "correct-horse-battery-staple"

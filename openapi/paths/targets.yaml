@@ -1,0 +1,49 @@
+get:
+  tags:
+    - Categories
+    - Targets
+  summary: Get category targets
+  operationId: getCategoryTargets
+  parameters:
+    - $ref: '../parameters/PeriodId.yaml'
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Category.yaml#/CategoryTargetsResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+post:
+  tags:
+    - Categories
+    - Targets
+  summary: Create category target
+  operationId: createCategoryTarget
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Category.yaml#/CreateTargetRequest'
+  responses:
+    '201':
+      description: Target created
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Category.yaml#/TargetItem'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '409':
+      $ref: '../responses/Conflict.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

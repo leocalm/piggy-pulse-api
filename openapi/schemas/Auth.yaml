@@ -1,0 +1,288 @@
+# ===== User =====
+
+UserResponse:
+  type: object
+  required:
+    - id
+    - email
+    - name
+    - currency
+    - twoFactorEnabled
+  properties:
+    id:
+      type: string
+      format: uuid
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    email:
+      type: string
+      format: email
+      example: "user@example.com"
+    name:
+      type: string
+      example: "Leonardo"
+    currency:
+      type: string
+      example: "EUR"
+    twoFactorEnabled:
+      type: boolean
+      example: false
+
+# ===== Login =====
+
+LoginRequest:
+  type: object
+  required:
+    - email
+    - password
+  properties:
+    email:
+      type: string
+      format: email
+      example: "user@example.com"
+    password:
+      type: string
+      format: password
+      example: "correct-horse-battery-staple"
+
+# Login response is a discriminated union:
+# - requiresTwoFactor: true  → TwoFactorChallengeResponse (pending state)
+# - requiresTwoFactor: false → AuthenticatedResponse (fully authenticated)
+
+TwoFactorChallengeResponse:
+  type: object
+  required:
+    - requiresTwoFactor
+    - twoFactorToken
+  properties:
+    requiresTwoFactor:
+      type: boolean
+      enum: [true]
+    twoFactorToken:
+      type: string
+      description: Short-lived opaque token used to complete 2FA verification
+      example: "eyJhbGciOiJIUzI1NiJ9..."
+
+AuthenticatedResponse:
+  type: object
+  required:
+    - requiresTwoFactor
+    - user
+    - token
+  properties:
+    requiresTwoFactor:
+      type: boolean
+      enum: [false]
+    user:
+      $ref: '#/UserResponse'
+    token:
+      type: [string, "null"]
+      description: Bearer token. Present when authenticated via token (iOS). Null for session-based auth (web).
+      example: "pp_tok_abc123..."
+
+LoginResponse:
+  discriminator:
+    propertyName: requiresTwoFactor
+    mapping:
+      "true": '#/TwoFactorChallengeResponse'
+      "false": '#/AuthenticatedResponse'
+  oneOf:
+    - $ref: '#/TwoFactorChallengeResponse'
+    - $ref: '#/AuthenticatedResponse'
+
+# ===== Register =====
+
+RegisterRequest:
+  type: object
+  required:
+    - email
+    - password
+    - name
+  properties:
+    email:
+      type: string
+      format: email
+      example: "user@example.com"
+    password:
+      type: string
+      format: password
+      example: "correct-horse-battery-staple"
+    name:
+      type: string
+      example: "Leonardo"
+
+# ===== 2FA Complete (after challenge) =====
+
+TwoFactorCompleteRequest:
+  type: object
+  required:
+    - twoFactorToken
+    - code
+  properties:
+    twoFactorToken:
+      type: string
+      description: The short-lived token returned from the login challenge
+      example: "eyJhbGciOiJIUzI1NiJ9..."
+    code:
+      type: string
+      description: 6-digit TOTP code from the authenticator app
+      minLength: 6
+      maxLength: 6
+      example: "123456"
+
+# ===== Token Refresh =====
+
+RefreshResponse:
+  type: object
+  required:
+    - token
+  properties:
+    token:
+      type: string
+      description: New bearer token
+      example: "pp_tok_abc123..."
+
+# ===== Forgot / Reset Password =====
+
+ForgotPasswordRequest:
+  type: object
+  required:
+    - email
+  properties:
+    email:
+      type: string
+      format: email
+      example: "user@example.com"
+
+ResetPasswordRequest:
+  type: object
+  required:
+    - token
+    - password
+  properties:
+    token:
+      type: string
+      description: Password reset token received via email
+      example: "abc123..."
+    password:
+      type: string
+      format: password
+      example: "correct-horse-battery-staple"
+
+# ===== 2FA Management =====
+
+TwoFactorEnableResponse:
+  type: object
+  required:
+    - secret
+    - qrCodeUri
+  properties:
+    secret:
+      type: string
+      description: TOTP secret for manual entry into authenticator app
+      example: "JBSWY3DPEHPK3PXP"
+    qrCodeUri:
+      type: string
+      description: otpauth:// URI for QR code generation
+      example: "otpauth://totp/PiggyPulse:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=PiggyPulse"
+
+TwoFactorVerifyRequest:
+  type: object
+  required:
+    - code
+  properties:
+    code:
+      type: string
+      description: 6-digit TOTP code to confirm setup
+      minLength: 6
+      maxLength: 6
+      example: "123456"
+
+TwoFactorDisableRequest:
+  type: object
+  required:
+    - code
+  properties:
+    code:
+      type: string
+      description: 6-digit TOTP code to confirm disabling 2FA
+      minLength: 6
+      maxLength: 6
+      example: "123456"
+
+# ===== 2FA Status =====
+
+TwoFactorStatusResponse:
+  type: object
+  required:
+    - enabled
+    - hasBackupCodes
+    - backupCodesRemaining
+  properties:
+    enabled:
+      type: boolean
+      example: true
+    hasBackupCodes:
+      type: boolean
+      example: true
+    backupCodesRemaining:
+      type: integer
+      example: 6
+
+# ===== Recovery / Backup Codes =====
+
+BackupCodesResponse:
+  type: array
+  items:
+    type: string
+  description: List of plaintext backup codes (only shown once on generation/regeneration)
+  example: ["ABCD-1234", "EFGH-5678"]
+
+RegenerateBackupCodesRequest:
+  type: object
+  required:
+    - code
+  properties:
+    code:
+      type: string
+      description: Current TOTP code to confirm intent
+      minLength: 6
+      maxLength: 6
+      example: "123456"
+
+# ===== Emergency Disable =====
+
+EmergencyDisableRequestBody:
+  type: object
+  required:
+    - email
+  properties:
+    email:
+      type: string
+      format: email
+      description: Account email address — always returns 204 to prevent enumeration
+      example: "user@example.com"
+
+EmergencyDisableConfirmRequest:
+  type: object
+  required:
+    - token
+  properties:
+    token:
+      type: string
+      description: Token received via email to confirm emergency 2FA disable
+      example: "abc123..."
+
+ChangePasswordRequest:
+  type: object
+  required:
+    - currentPassword
+    - newPassword
+  properties:
+    currentPassword:
+      type: string
+      format: password
+      example: "old-password"
+    newPassword:
+      type: string
+      format: password
+      example: "correct-horse-battery-staple"

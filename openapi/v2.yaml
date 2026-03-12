@@ -1,0 +1,437 @@
+openapi: 3.1.0
+info:
+  title: PiggyPulse API
+  version: 2.0.0
+  description: PiggyPulse personal budgeting API
+  license:
+    name: AGPL-3.0
+    url: https://www.gnu.org/licenses/agpl-3.0.en.html
+
+servers:
+  - url: https://api.piggy-pulse.com/api/v2
+    description: Production
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: session
+      description: Session cookie for authentication
+    api_key:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+  responses:
+    Unauthorized:
+      $ref: './responses/Unauthorized.yaml'
+    BadRequest:
+      $ref: './responses/BadRequest.yaml'
+    NotFound:
+      $ref: './responses/NotFound.yaml'
+    InternalServerError:
+      $ref: './responses/InternalServerError.yaml'
+    ServiceUnavailable:
+      $ref: './responses/ServiceUnavailable.yaml'
+    TooManyRequests:
+      $ref: './responses/TooManyRequests.yaml'
+  parameters:
+    PeriodId:
+      $ref: './parameters/PeriodId.yaml'
+    Cursor:
+      $ref: './parameters/Cursor.yaml'
+    Limit:
+      $ref: './parameters/Limit.yaml'
+    Id:
+      $ref: './parameters/Id.yaml'
+    Direction:
+      $ref: './parameters/Direction.yaml'
+    AccountId:
+      $ref: './parameters/AccountId.yaml'
+    CategoryId:
+      $ref: './parameters/CategoryId.yaml'
+    VendorId:
+      $ref: './parameters/VendorId.yaml'
+    FromDate:
+      $ref: './parameters/FromDate.yaml'
+    ToDate:
+      $ref: './parameters/ToDate.yaml'
+  schemas:
+    HealthResponse:
+      $ref: './schemas/Health.yaml#/HealthResponse'
+    CurrentPeriod:
+      $ref: './schemas/Dashboard.yaml#/CurrentPeriod'
+    NetPosition:
+      $ref: './schemas/Dashboard.yaml#/NetPosition'
+    BudgetStability:
+      $ref: './schemas/Dashboard.yaml#/BudgetStability'
+    DurationBased:
+      $ref: './schemas/Period.yaml#/DurationBased'
+    ManualEndDate:
+      $ref: './schemas/Period.yaml#/ManualEndDate'
+    PeriodResponse:
+      $ref: './schemas/Period.yaml#/PeriodResponse'
+    PeriodListResponse:
+      $ref: './schemas/Period.yaml#/PeriodListResponse'
+    CreatePeriodRequest:
+      $ref: './schemas/Period.yaml#/CreatePeriodRequest'
+    UpdatePeriodRequest:
+      $ref: './schemas/Period.yaml#/UpdatePeriodRequest'
+    AutomaticSchedule:
+      $ref: './schemas/Period.yaml#/AutomaticSchedule'
+    ManualSchedule:
+      $ref: './schemas/Period.yaml#/ManualSchedule'
+    PeriodScheduleResponse:
+      $ref: './schemas/Period.yaml#/PeriodScheduleResponse'
+    CreatePeriodScheduleRequest:
+      $ref: './schemas/Period.yaml#/CreatePeriodScheduleRequest'
+    UpdatePeriodScheduleRequest:
+      $ref: './schemas/Period.yaml#/UpdatePeriodScheduleRequest'
+    # Accounts
+    AccountBase:
+      $ref: './schemas/Accounts.yaml#/AccountBase'
+    AccountResponse:
+      $ref: './schemas/Accounts.yaml#/AccountResponse'
+    AccountListResponse:
+      $ref: './schemas/Accounts.yaml#/AccountListResponse'
+    AccountOptionResponse:
+      $ref: './schemas/Accounts.yaml#/AccountOptionResponse'
+    AccountOptionListResponse:
+      $ref: './schemas/Accounts.yaml#/AccountOptionListResponse'
+    AccountSummaryResponse:
+      $ref: './schemas/Accounts.yaml#/AccountSummaryResponse'
+    AccountSummaryListResponse:
+      $ref: './schemas/Accounts.yaml#/AccountSummaryListResponse'
+    AccountDetailsResponse:
+      $ref: './schemas/Accounts.yaml#/AccountDetailsResponse'
+    CreateAccountRequest:
+      $ref: './schemas/Accounts.yaml#/CreateAccountRequest'
+    UpdateAccountRequest:
+      $ref: './schemas/Accounts.yaml#/UpdateAccountRequest'
+    AccountBalanceHistoryPoint:
+      $ref: './schemas/Accounts.yaml#/AccountBalanceHistoryPoint'
+    AccountBalanceHistoryResponse:
+      $ref: './schemas/Accounts.yaml#/AccountBalanceHistoryResponse'
+    AdjustBalanceRequest:
+      $ref: './schemas/Accounts.yaml#/AdjustBalanceRequest'
+
+    # Vendors
+    VendorBase:
+      $ref: './schemas/Vendor.yaml#/VendorBase'
+    VendorResponse:
+      $ref: './schemas/Vendor.yaml#/VendorResponse'
+    VendorSummaryResponse:
+      $ref: './schemas/Vendor.yaml#/VendorSummaryResponse'
+    VendorListResponse:
+      $ref: './schemas/Vendor.yaml#/VendorListResponse'
+    VendorOptionResponse:
+      $ref: './schemas/Vendor.yaml#/VendorOptionResponse'
+    VendorOptionListResponse:
+      $ref: './schemas/Vendor.yaml#/VendorOptionListResponse'
+    CreateVendorRequest:
+      $ref: './schemas/Vendor.yaml#/CreateVendorRequest'
+    UpdateVendorRequest:
+      $ref: './schemas/Vendor.yaml#/UpdateVendorRequest'
+
+    # Categories
+    CategoryBase:
+      $ref: './schemas/Category.yaml#/CategoryBase'
+    CategoryResponse:
+      $ref: './schemas/Category.yaml#/CategoryResponse'
+    CategoryManagementListItem:
+      $ref: './schemas/Category.yaml#/CategoryManagementListItem'
+    CategoryManagementListResponse:
+      $ref: './schemas/Category.yaml#/CategoryManagementListResponse'
+    CategorySummaryItem:
+      $ref: './schemas/Category.yaml#/CategorySummaryItem'
+    CategoryOverviewSummary:
+      $ref: './schemas/Category.yaml#/CategoryOverviewSummary'
+    CategoryOverviewResponse:
+      $ref: './schemas/Category.yaml#/CategoryOverviewResponse'
+    CategoryOptionResponse:
+      $ref: './schemas/Category.yaml#/CategoryOptionResponse'
+    CategoryOptionListResponse:
+      $ref: './schemas/Category.yaml#/CategoryOptionListResponse'
+    CreateCategoryRequest:
+      $ref: './schemas/Category.yaml#/CreateCategoryRequest'
+    UpdateCategoryRequest:
+      $ref: './schemas/Category.yaml#/UpdateCategoryRequest'
+
+    # Targets
+    TargetStatus:
+      $ref: './schemas/Category.yaml#/TargetStatus'
+    TargetItem:
+      $ref: './schemas/Category.yaml#/TargetItem'
+    TargetSummary:
+      $ref: './schemas/Category.yaml#/TargetSummary'
+    CategoryTargetsResponse:
+      $ref: './schemas/Category.yaml#/CategoryTargetsResponse'
+    CreateTargetRequest:
+      $ref: './schemas/Category.yaml#/CreateTargetRequest'
+    UpdateTargetRequest:
+      $ref: './schemas/Category.yaml#/UpdateTargetRequest'
+
+    AccountRef:
+      $ref: './schemas/Transaction.yaml#/AccountRef'
+    CategoryRef:
+      $ref: './schemas/Transaction.yaml#/CategoryRef'
+    VendorRef:
+      $ref: './schemas/Transaction.yaml#/VendorRef'
+    TransactionBase:
+      $ref: './schemas/Transaction.yaml#/TransactionBase'
+    RegularTransactionResponse:
+      $ref: './schemas/Transaction.yaml#/RegularTransactionResponse'
+    TransferTransactionResponse:
+      $ref: './schemas/Transaction.yaml#/TransferTransactionResponse'
+    TransactionResponse:
+      $ref: './schemas/Transaction.yaml#/TransactionResponse'
+    TransactionListResponse:
+      $ref: './schemas/Transaction.yaml#/TransactionListResponse'
+    CreateTransactionRequest:
+      $ref: './schemas/Transaction.yaml#/CreateTransactionRequest'
+    UpdateTransactionRequest:
+      $ref: './schemas/Transaction.yaml#/UpdateTransactionRequest'
+
+    UserResponse:
+      $ref: './schemas/Auth.yaml#/UserResponse'
+    LoginRequest:
+      $ref: './schemas/Auth.yaml#/LoginRequest'
+    LoginResponse:
+      $ref: './schemas/Auth.yaml#/LoginResponse'
+    TwoFactorChallengeResponse:
+      $ref: './schemas/Auth.yaml#/TwoFactorChallengeResponse'
+    AuthenticatedResponse:
+      $ref: './schemas/Auth.yaml#/AuthenticatedResponse'
+    RegisterRequest:
+      $ref: './schemas/Auth.yaml#/RegisterRequest'
+    TwoFactorCompleteRequest:
+      $ref: './schemas/Auth.yaml#/TwoFactorCompleteRequest'
+    RefreshResponse:
+      $ref: './schemas/Auth.yaml#/RefreshResponse'
+    ForgotPasswordRequest:
+      $ref: './schemas/Auth.yaml#/ForgotPasswordRequest'
+    ResetPasswordRequest:
+      $ref: './schemas/Auth.yaml#/ResetPasswordRequest'
+    TwoFactorEnableResponse:
+      $ref: './schemas/Auth.yaml#/TwoFactorEnableResponse'
+    TwoFactorVerifyRequest:
+      $ref: './schemas/Auth.yaml#/TwoFactorVerifyRequest'
+    TwoFactorDisableRequest:
+      $ref: './schemas/Auth.yaml#/TwoFactorDisableRequest'
+
+    ProfileResponse:
+      $ref: './schemas/Settings.yaml#/ProfileResponse'
+    UpdateProfileRequest:
+      $ref: './schemas/Settings.yaml#/UpdateProfileRequest'
+    PreferencesResponse:
+      $ref: './schemas/Settings.yaml#/PreferencesResponse'
+    UpdatePreferencesRequest:
+      $ref: './schemas/Settings.yaml#/UpdatePreferencesRequest'
+    Theme:
+      $ref: './schemas/Settings.yaml#/Theme'
+    DateFormat:
+      $ref: './schemas/Settings.yaml#/DateFormat'
+    NumberFormat:
+      $ref: './schemas/Settings.yaml#/NumberFormat'
+    SessionResponse:
+      $ref: './schemas/Settings.yaml#/SessionResponse'
+    SessionListResponse:
+      $ref: './schemas/Settings.yaml#/SessionListResponse'
+    ChangePasswordRequest:
+      $ref: './schemas/Auth.yaml#/ChangePasswordRequest'
+    DeleteAccountRequest:
+      $ref: './schemas/Settings.yaml#/DeleteAccountRequest'
+    ResetStructureRequest:
+      $ref: './schemas/Settings.yaml#/ResetStructureRequest'
+
+    # Overlay
+    InclusionMode:
+      $ref: './schemas/Overlay.yaml#/InclusionMode'
+    InclusionSource:
+      $ref: './schemas/Overlay.yaml#/InclusionSource'
+    OverlayCategoryCap:
+      $ref: './schemas/Overlay.yaml#/OverlayCategoryCap'
+    OverlayRules:
+      $ref: './schemas/Overlay.yaml#/OverlayRules'
+    OverlayResponse:
+      $ref: './schemas/Overlay.yaml#/OverlayResponse'
+    OverlayListResponse:
+      $ref: './schemas/Overlay.yaml#/OverlayListResponse'
+    CreateOverlayRequest:
+      $ref: './schemas/Overlay.yaml#/CreateOverlayRequest'
+    UpdateOverlayRequest:
+      $ref: './schemas/Overlay.yaml#/UpdateOverlayRequest'
+    OverlayTransactionMembership:
+      $ref: './schemas/Overlay.yaml#/OverlayTransactionMembership'
+    OverlayTransactionResponse:
+      $ref: './schemas/Overlay.yaml#/OverlayTransactionResponse'
+    OverlayTransactionListResponse:
+      $ref: './schemas/Overlay.yaml#/OverlayTransactionListResponse'
+    # Misc
+    CurrencyResponse:
+      $ref: './schemas/Misc.yaml#/CurrencyResponse'
+    CurrencyListResponse:
+      $ref: './schemas/Misc.yaml#/CurrencyListResponse'
+    OnboardingStatus:
+      $ref: './schemas/Misc.yaml#/OnboardingStatus'
+    OnboardingStep:
+      $ref: './schemas/Misc.yaml#/OnboardingStep'
+    OnboardingStatusResponse:
+      $ref: './schemas/Misc.yaml#/OnboardingStatusResponse'
+    UnlockResponse:
+      $ref: './schemas/Misc.yaml#/UnlockResponse'
+    # Auth (additions)
+    TwoFactorStatusResponse:
+      $ref: './schemas/Auth.yaml#/TwoFactorStatusResponse'
+    BackupCodesResponse:
+      $ref: './schemas/Auth.yaml#/BackupCodesResponse'
+    RegenerateBackupCodesRequest:
+      $ref: './schemas/Auth.yaml#/RegenerateBackupCodesRequest'
+    EmergencyDisableRequestBody:
+      $ref: './schemas/Auth.yaml#/EmergencyDisableRequestBody'
+    EmergencyDisableConfirmRequest:
+      $ref: './schemas/Auth.yaml#/EmergencyDisableConfirmRequest'
+
+security:
+  - sessionCookie: []
+  - api_key: []
+
+paths:
+  /health:
+    $ref: './paths/health.yaml'
+  /dashboard/current-period:
+    $ref: './paths/dashboard@current-period.yaml'
+  /dashboard/net-position:
+    $ref: './paths/dashboard@net-position.yaml'
+  /dashboard/budget-stability:
+    $ref: './paths/dashboard@budget-stability.yaml'
+  /periods:
+    $ref: './paths/periods.yaml'
+  /periods/schedule:
+    $ref: './paths/periods@schedule.yaml'
+  /periods/{id}:
+    $ref: './paths/periods@{id}.yaml'
+  /accounts/options:
+    $ref: './paths/accounts@options.yaml'
+  /accounts/summary:
+    $ref: './paths/accounts@summary.yaml'
+  /accounts:
+    $ref: './paths/accounts.yaml'
+  /accounts/{id}:
+    $ref: './paths/accounts@{id}.yaml'
+  /accounts/{id}/details:
+    $ref: './paths/accounts@{id}@details.yaml'
+  /accounts/{id}/archive:
+    $ref: './paths/accounts@{id}@archive.yaml'
+  /accounts/{id}/unarchive:
+    $ref: './paths/accounts@{id}@unarchive.yaml'
+  /accounts/{id}/balance-history:
+    $ref: './paths/accounts@{id}@balance-history.yaml'
+  /accounts/{id}/adjust-balance:
+    $ref: './paths/accounts@{id}@adjust-balance.yaml'
+
+  /vendors/options:
+    $ref: './paths/vendors@options.yaml'
+  /vendors:
+    $ref: './paths/vendors.yaml'
+  /vendors/{id}:
+    $ref: './paths/vendors@{id}.yaml'
+  /vendors/{id}/archive:
+    $ref: './paths/vendors@{id}@archive.yaml'
+  /vendors/{id}/unarchive:
+    $ref: './paths/vendors@{id}@unarchive.yaml'
+  # Static category paths first
+  /categories/overview:
+    $ref: './paths/categories@overview.yaml'
+  /categories/options:
+    $ref: './paths/categories@options.yaml'
+  /categories:
+    $ref: './paths/categories.yaml'
+  /categories/{id}:
+    $ref: './paths/categories@{id}.yaml'
+  /categories/{id}/archive:
+    $ref: './paths/categories@{id}@archive.yaml'
+  /categories/{id}/unarchive:
+    $ref: './paths/categories@{id}@unarchive.yaml'
+
+  # Targets as own resource
+  /targets:
+    $ref: './paths/targets.yaml'
+  /targets/{id}:
+    $ref: './paths/targets@{id}.yaml'
+  /targets/{id}/exclude:
+    $ref: './paths/targets@{id}@exclude.yaml'
+
+  /transactions:
+    $ref: './paths/transactions.yaml'
+  /transactions/{id}:
+    $ref: './paths/transactions@{id}.yaml'
+
+  /auth/2fa/enable:
+    $ref: './paths/auth@2fa@enable.yaml'
+  /auth/2fa/verify:
+    $ref: './paths/auth@2fa@verify.yaml'
+  /auth/2fa/disable:
+    $ref: './paths/auth@2fa@disable.yaml'
+  /auth/register:
+    $ref: './paths/auth@register.yaml'
+  /auth/login:
+    $ref: './paths/auth@login.yaml'
+  /auth/logout:
+    $ref: './paths/auth@logout.yaml'
+  /auth/refresh:
+    $ref: './paths/auth@refresh.yaml'
+  /auth/me:
+    $ref: './paths/auth@me.yaml'
+  /auth/forgot-password:
+    $ref: './paths/auth@forgot-password.yaml'
+  /auth/reset-password:
+    $ref: './paths/auth@reset-password.yaml'
+  /auth/password:
+    $ref: './paths/auth@password.yaml'
+
+  /settings/export/transactions:
+    $ref: './paths/settings@export@transactions.yaml'
+  /settings/export/data:
+    $ref: './paths/settings@export@data.yaml'
+  /settings/sessions/{id}:
+    $ref: './paths/settings@sessions@{id}.yaml'
+  /settings/profile:
+    $ref: './paths/settings@profile.yaml'
+  /settings/preferences:
+    $ref: './paths/settings@preferences.yaml'
+  /settings/sessions:
+    $ref: './paths/settings@sessions.yaml'
+  /settings/reset-structure:
+    $ref: './paths/settings@reset-structure.yaml'
+  /settings/account:
+    $ref: './paths/settings@account.yaml'
+
+  /overlays/{id}/transactions/{txId}/include:
+    $ref: './paths/overlays@{id}@transactions@{txId}@include.yaml'
+  /overlays/{id}/transactions/{txId}/exclude:
+    $ref: './paths/overlays@{id}@transactions@{txId}@exclude.yaml'
+  /overlays/{id}/transactions:
+    $ref: './paths/overlays@{id}@transactions.yaml'
+  /overlays/{id}:
+    $ref: './paths/overlays@{id}.yaml'
+  /overlays:
+    $ref: './paths/overlays.yaml'
+  /currencies/{code}:
+    $ref: './paths/currencies@{code}.yaml'
+  /currencies:
+    $ref: './paths/currencies.yaml'
+  /onboarding/status:
+    $ref: './paths/onboarding@status.yaml'
+  /onboarding/complete:
+    $ref: './paths/onboarding@complete.yaml'
+  /unlock:
+    $ref: './paths/unlock.yaml'
+  /auth/2fa/backup-codes/regenerate:
+    $ref: './paths/auth@2fa@backup-codes@regenerate.yaml'
+  /auth/2fa/emergency-disable/request:
+    $ref: './paths/auth@2fa@emergency-disable@request.yaml'
+  /auth/2fa/emergency-disable/confirm:
+    $ref: './paths/auth@2fa@emergency-disable@confirm.yaml'
+  /auth/2fa/status:
+    $ref: './paths/auth@2fa@status.yaml'

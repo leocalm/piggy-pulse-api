@@ -1,0 +1,45 @@
+put:
+  tags:
+    - Categories
+  summary: Update category
+  operationId: updateCategory
+  parameters:
+    - $ref: '../parameters/Id.yaml'
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Category.yaml#/UpdateCategoryRequest'
+  responses:
+    '200':
+      description: Category updated
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Category.yaml#/CategoryResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+delete:
+  tags:
+    - Categories
+  summary: Delete category
+  operationId: deleteCategory
+  parameters:
+    - $ref: '../parameters/Id.yaml'
+  responses:
+    '204':
+      description: Category deleted
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

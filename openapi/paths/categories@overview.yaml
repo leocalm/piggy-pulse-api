@@ -1,0 +1,20 @@
+get:
+  tags:
+    - Categories
+  summary: Get categories overview
+  operationId: getCategoriesOverview
+  parameters:
+    - $ref: '../parameters/PeriodId.yaml'
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Category.yaml#/CategoryOverviewResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

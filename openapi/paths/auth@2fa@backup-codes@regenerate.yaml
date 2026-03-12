@@ -1,0 +1,25 @@
+post:
+  tags:
+    - Auth
+  summary: Regenerate backup codes
+  operationId: regenerateBackupCodes
+  description: Invalidates existing backup codes and generates a new set. Requires current TOTP code to confirm.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Auth.yaml#/RegenerateBackupCodesRequest'
+  responses:
+    '200':
+      description: New backup codes generated (shown once only)
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Auth.yaml#/BackupCodesResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

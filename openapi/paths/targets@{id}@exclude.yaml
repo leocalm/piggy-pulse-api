@@ -1,0 +1,23 @@
+post:
+  tags:
+    - Categories
+    - Targets
+  summary: Exclude category from targets
+  operationId: excludeCategoryTarget
+  parameters:
+    - $ref: '../parameters/Id.yaml'
+  responses:
+    '200':
+      description: Category excluded from targets
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Category.yaml#/TargetItem'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '409':
+      $ref: '../responses/Conflict.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

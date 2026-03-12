@@ -1,0 +1,16 @@
+get:
+  tags:
+    - Auth
+  summary: Get 2FA status
+  operationId: getTwoFactorStatus
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Auth.yaml#/TwoFactorStatusResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

@@ -1,0 +1,375 @@
+CategoryBase:
+  type: object
+  required:
+    - id
+    - name
+    - type
+    - icon
+    - color
+    - status
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Category ID
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    name:
+      type: string
+      description: Category name
+      example: "Groceries"
+    type:
+      type: string
+      enum: ["income", "expense", "transfer"]
+      description: Category type
+      example: "expense"
+    icon:
+      type: string
+      description: Category icon
+      example: "cart"
+    color:
+      type: string
+      description: Category color
+      example: "#FF0000"
+    parentId:
+      type: [string, "null"]
+      format: uuid
+      description: Parent category ID
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    status:
+      type: string
+      enum: ["active", "inactive"]
+      description: Category status
+      example: "active"
+
+CategoryResponse:
+  allOf:
+    - $ref: '#/CategoryBase'
+    - type: object
+      required:
+        - description
+      properties:
+        description:
+          type: [string, "null"]
+          description: Category description
+          example: "Monthly grocery shopping"
+
+CategoryManagementListItem:
+  allOf:
+    - $ref: '#/CategoryBase'
+    - type: object
+      required:
+        - numberOfTransactions
+        - description
+      properties:
+        description:
+          type: [string, "null"]
+          description: Category description
+          example: "Monthly grocery shopping"
+        numberOfTransactions:
+          type: integer
+          description: Total number of transactions
+          example: 10
+          minimum: 0
+
+CategoryManagementListResponse:
+  allOf:
+    - $ref: '../schemas/Common.yaml#/PaginatedResponse'
+    - type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/CategoryManagementListItem'
+
+CategorySummaryItem:
+  allOf:
+    - $ref: '#/CategoryBase'
+    - type: object
+      required:
+        - actual
+        - projected
+        - budgeted
+        - variance
+      properties:
+        actual:
+          type: integer
+          description: Actual spent in period in cents
+          example: 10000
+          minimum: 0
+        projected:
+          type: integer
+          description: Projected spend at current pace in cents
+          example: 12000
+          minimum: 0
+        budgeted:
+          type: [integer, "null"]
+          description: Budgeted amount in cents
+          example: 15000
+          minimum: 0
+        variance:
+          type: integer
+          description: Variance between budgeted and actual in cents
+          example: 5000
+
+CategoryOverviewSummary:
+  type: object
+  required:
+    - periodName
+    - periodElapsedPercent
+    - totalSpent
+    - totalBudgeted
+    - variance
+  properties:
+    periodName:
+      type: string
+      description: Period name
+      example: "January 2024"
+    periodElapsedPercent:
+      type: integer
+      description: Percentage of period elapsed
+      example: 45
+      minimum: 0
+      maximum: 100
+    totalSpent:
+      type: integer
+      description: Total spent in period in cents
+      example: 50000
+      minimum: 0
+    totalBudgeted:
+      type: [integer, "null"]
+      description: Total budgeted in period in cents
+      example: 100000
+      minimum: 0
+    variance:
+      type: integer
+      description: Variance between budgeted and actual in cents
+      example: 50000
+
+CategoryOverviewResponse:
+  type: object
+  required:
+    - summary
+    - categories
+  properties:
+    summary:
+      $ref: '#/CategoryOverviewSummary'
+    categories:
+      type: array
+      items:
+        $ref: '#/CategorySummaryItem'
+
+CategoryOptionResponse:
+  type: object
+  required:
+    - id
+    - name
+    - icon
+    - color
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Category ID
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    name:
+      type: string
+      description: Category name
+      example: "Groceries"
+    icon:
+      type: string
+      description: Category icon
+      example: "cart"
+    color:
+      type: string
+      description: Category color
+      example: "#FF0000"
+
+CategoryOptionListResponse:
+  type: array
+  items:
+    $ref: '#/CategoryOptionResponse'
+
+CreateCategoryRequest:
+  type: object
+  required:
+    - name
+    - type
+    - icon
+    - color
+  properties:
+    name:
+      type: string
+      description: Category name
+      example: "Groceries"
+    type:
+      type: string
+      enum: ["income", "expense", "transfer"]
+      description: Category type
+      example: "expense"
+    icon:
+      type: string
+      description: Category icon
+      example: "cart"
+    color:
+      type: string
+      description: Category color
+      example: "#FF0000"
+    description:
+      type: [string, "null"]
+      description: Category description
+      example: "Monthly grocery shopping"
+    parentId:
+      type: [string, "null"]
+      format: uuid
+      description: Parent category ID
+      example: "123e4567-e89b-12d3-a456-426655440000"
+
+UpdateCategoryRequest:
+  allOf:
+    - $ref: '#/CreateCategoryRequest'
+
+# Targets
+
+TargetStatus:
+  type: string
+  enum: ["active", "excluded"]
+  description: Target status
+  example: "active"
+
+TargetItem:
+  type: object
+  required:
+    - id
+    - name
+    - type
+    - parentId
+    - currentTarget
+    - projectedVariance
+    - status
+    - spentInPeriod
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Target ID
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    name:
+      type: string
+      description: Category name
+      example: "Groceries"
+    type:
+      type: string
+      enum: ["income", "expense", "transfer"]
+      description: Category type
+      example: "expense"
+    parentId:
+      type: [string, "null"]
+      format: uuid
+      description: Parent category ID
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    previousTarget:
+      type: [integer, "null"]
+      description: Previous target amount in cents
+      example: 10000
+      minimum: 0
+    currentTarget:
+      type: [integer, "null"]
+      description: Current target amount in cents
+      example: 15000
+      minimum: 0
+    projectedVariance:
+      type: integer
+      description: Projected variance in cents
+      example: 5000
+    status:
+      $ref: '#/TargetStatus'
+    spentInPeriod:
+      type: integer
+      description: Amount spent in period in cents
+      example: 8000
+      minimum: 0
+
+TargetSummary:
+  type: object
+  required:
+    - periodName
+    - periodStart
+    - periodEnd
+    - currentPosition
+    - categoriesWithTargets
+    - periodProgress
+  properties:
+    periodName:
+      type: string
+      description: Period name
+      example: "January 2024"
+    periodStart:
+      type: string
+      format: date
+      description: Period start date
+      example: "2024-01-01"
+    periodEnd:
+      type: [string, "null"]
+      format: date
+      description: Period end date
+      example: "2024-01-31"
+    currentPosition:
+      type: integer
+      description: Current budget position in cents
+      example: 50000
+    categoriesWithTargets:
+      type: object
+      required:
+        - withTargets
+        - total
+      properties:
+        withTargets:
+          type: integer
+          description: Number of categories with targets
+          example: 2
+          minimum: 0
+        total:
+          type: integer
+          description: Total number of categories
+          example: 4
+          minimum: 0
+    periodProgress:
+      type: integer
+      description: Period progress as percentage
+      example: 45
+      minimum: 0
+      maximum: 100
+
+CategoryTargetsResponse:
+  type: object
+  required:
+    - summary
+    - targets
+  properties:
+    summary:
+      $ref: '#/TargetSummary'
+    targets:
+      type: array
+      items:
+        $ref: '#/TargetItem'
+
+CreateTargetRequest:
+  type: object
+  required:
+    - categoryId
+    - value
+  properties:
+    categoryId:
+      type: string
+      format: uuid
+      description: Category ID
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    value:
+      type: integer
+      description: Target amount in cents
+      example: 15000
+      minimum: 0
+
+UpdateTargetRequest:
+  allOf:
+    - $ref: '#/CreateTargetRequest'

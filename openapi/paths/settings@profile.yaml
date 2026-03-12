@@ -1,0 +1,41 @@
+get:
+  tags:
+    - Settings
+  summary: Get profile settings
+  operationId: getProfile
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Settings.yaml#/ProfileResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+put:
+  tags:
+    - Settings
+  summary: Update profile settings
+  operationId: updateProfile
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Settings.yaml#/UpdateProfileRequest'
+  responses:
+    '200':
+      description: Profile updated
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Settings.yaml#/ProfileResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

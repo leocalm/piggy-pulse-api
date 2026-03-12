@@ -1,0 +1,255 @@
+DurationBased:
+  required:
+    - duration
+  properties:
+    periodType:
+      type: string
+      enum: [ duration ]
+    duration:
+      type: object
+      required:
+        - durationUnits
+        - durationUnit
+      properties:
+        durationUnits:
+          type: integer
+          description: Number of units in the period
+          example: 30
+          minimum: 1
+        durationUnit:
+          type: string
+          description: The unit of the period duration
+          enum: [ days, weeks, months ]
+          example: days
+    manualEndDate:
+      type: "null"
+
+ManualEndDate:
+  required:
+    - manualEndDate
+  properties:
+    periodType:
+      type: string
+      enum: [ manualEndDate ]
+    duration:
+      type: "null"
+    manualEndDate:
+      type: string
+      format: date
+      description: Manual end date of the period
+      example: "2022-01-31"
+
+PeriodResponse:
+  type: object
+  required:
+    - id
+    - startDate
+    - name
+    - periodType
+    - length
+    - remainingDays
+    - numberOfTransactions
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Unique identifier of the period
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    startDate:
+      type: string
+      format: date
+      description: Start date of the period
+      example: "2022-01-01"
+    name:
+      type: string
+      description: Name of the period
+      example: "January 2022"
+    periodType:
+      type: string
+      enum: [ duration, manualEndDate ]
+      description: Discriminator for the period type
+    length:
+      type: integer
+      description: Length of the period in days
+      example: 30
+      minimum: 1
+    remainingDays:
+      type: [integer, "null"]
+      description: Number of days remaining in the period
+      example: 27
+      minimum: 0
+    numberOfTransactions:
+      type: integer
+      description: Number of transactions in the period
+      example: 100
+      minimum: 0
+    percentageOfTargetUsed:
+      type: integer
+      description: Percentage of target used in the period
+      example: 50
+      minimum: 0
+      maximum: 100
+    status:
+      type: string
+      enum: [ active, upcoming, past ]
+      description: Status of the period
+      example: active
+  discriminator:
+    propertyName: periodType
+    mapping:
+      duration: '#/DurationBased'
+      manualEndDate: '#/ManualEndDate'
+  oneOf:
+    - $ref: '#/DurationBased'
+    - $ref: '#/ManualEndDate'
+
+PeriodListResponse:
+  allOf:
+    - $ref: '../schemas/Common.yaml#/PaginatedResponse'
+    - type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/PeriodResponse'
+
+CreatePeriodRequest:
+  type: object
+  required:
+    - startDate
+    - name
+    - periodType
+  properties:
+    startDate:
+      type: string
+      format: date
+      description: Start date of the period
+      example: "2022-01-01"
+    name:
+      type: string
+      description: Name of the period
+      example: "January 2022"
+    periodType:
+      type: string
+      enum: [ duration, manualEndDate ]
+      description: Discriminator for the period type
+  discriminator:
+    propertyName: periodType
+    mapping:
+      duration: '#/DurationBased'
+      manualEndDate: '#/ManualEndDate'
+  oneOf:
+    - $ref: '#/DurationBased'
+    - $ref: '#/ManualEndDate'
+
+UpdatePeriodRequest:
+  allOf:
+    - $ref: '#/CreatePeriodRequest'
+
+AutomaticSchedule:
+  type: object
+  required:
+    - scheduleType
+    - startDayOfTheMonth
+    - periodDuration
+    - generateAhead
+    - durationUnit
+    - saturdayPolicy
+    - sundayPolicy
+    - namePattern
+  properties:
+    scheduleType:
+      type: string
+      enum: [ automatic ]
+      description: Type of schedule
+    startDayOfTheMonth:
+      type: integer
+      description: Day of the month to start the schedule
+      example: 1
+      minimum: 1
+      maximum: 31
+    periodDuration:
+      type: integer
+      description: Duration of each period in days
+      example: 30
+      minimum: 1
+    generateAhead:
+      type: integer
+      description: Number of periods to generate ahead
+      example: 3
+      minimum: 1
+    durationUnit:
+      type: string
+      enum: [ days, weeks, months ]
+      description: Unit of the period duration
+      example: days
+    saturdayPolicy:
+      type: string
+      enum: [ keep, monday, friday ]
+      description: Policy for Saturdays in the schedule
+      example: keep
+      default: keep
+    sundayPolicy:
+      type: string
+      enum: [ keep, monday, friday ]
+      description: Policy for Sundays in the schedule
+      example: keep
+      default: keep
+    namePattern:
+      type: string
+      description: Pattern for the period name
+      example: "{MONTH} {YEAR}"
+
+ManualSchedule:
+  type: object
+  required:
+    - scheduleType
+  properties:
+    scheduleType:
+      type: string
+      enum: [ manual ]
+      description: Type of schedule
+
+PeriodScheduleResponse:
+  type: object
+  required:
+    - id
+    - scheduleType
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Unique identifier of the schedule
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    scheduleType:
+      type: string
+      enum: [ manual, automatic ]
+  discriminator:
+    propertyName: scheduleType
+    mapping:
+      manual: '#/ManualSchedule'
+      automatic: '#/AutomaticSchedule'
+  oneOf:
+    - $ref: '#/ManualSchedule'
+    - $ref: '#/AutomaticSchedule'
+
+CreatePeriodScheduleRequest:
+  type: object
+  required:
+    - scheduleType
+  properties:
+    scheduleType:
+      type: string
+      enum: [ manual, automatic ]
+  discriminator:
+    propertyName: scheduleType
+    mapping:
+      manual: '#/ManualSchedule'
+      automatic: '#/AutomaticSchedule'
+  oneOf:
+    - $ref: '#/ManualSchedule'
+    - $ref: '#/AutomaticSchedule'
+
+UpdatePeriodScheduleRequest:
+  allOf:
+    - $ref: '#/CreatePeriodScheduleRequest'

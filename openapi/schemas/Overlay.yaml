@@ -1,0 +1,178 @@
+InclusionMode:
+  type: string
+  enum: ["manual", "rules", "all"]
+  example: "rules"
+
+InclusionSource:
+  type: string
+  enum: ["manual", "rules", "all"]
+  example: "rules"
+
+OverlayCategoryCap:
+  type: object
+  required:
+    - categoryId
+    - capAmount
+  properties:
+    categoryId:
+      type: string
+      format: uuid
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    capAmount:
+      type: integer
+      minimum: 0
+      description: Cap amount in cents
+      example: 10000
+
+OverlayRules:
+  type: object
+  properties:
+    categoryIds:
+      type: array
+      items:
+        type: string
+        format: uuid
+    vendorIds:
+      type: array
+      items:
+        type: string
+        format: uuid
+    accountIds:
+      type: array
+      items:
+        type: string
+        format: uuid
+
+OverlayResponse:
+  type: object
+  required:
+    - id
+    - name
+    - startDate
+    - endDate
+    - inclusionMode
+    - spentAmount
+    - transactionCount
+    - categoryCaps
+    - rules
+  properties:
+    id:
+      type: string
+      format: uuid
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    name:
+      type: string
+      example: "Holiday spending"
+    icon:
+      type: [string, "null"]
+      example: "gift"
+    startDate:
+      type: string
+      format: date
+      example: "2024-12-01"
+    endDate:
+      type: string
+      format: date
+      example: "2024-12-31"
+    inclusionMode:
+      $ref: '#/InclusionMode'
+    totalCapAmount:
+      type: [integer, "null"]
+      minimum: 0
+      description: Optional total cap in cents
+      example: 50000
+    spentAmount:
+      type: integer
+      minimum: 0
+      description: Total spent within this overlay in cents
+      example: 12000
+    transactionCount:
+      type: integer
+      minimum: 0
+      example: 8
+    categoryCaps:
+      type: array
+      items:
+        $ref: '#/OverlayCategoryCap'
+    rules:
+      $ref: '#/OverlayRules'
+
+OverlayListResponse:
+  allOf:
+    - $ref: '../schemas/Common.yaml#/PaginatedResponse'
+    - type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/OverlayResponse'
+
+CreateOverlayRequest:
+  type: object
+  required:
+    - name
+    - startDate
+    - endDate
+    - inclusionMode
+  properties:
+    name:
+      type: string
+      example: "Holiday spending"
+    icon:
+      type: [string, "null"]
+      example: "gift"
+    startDate:
+      type: string
+      format: date
+      example: "2024-12-01"
+    endDate:
+      type: string
+      format: date
+      example: "2024-12-31"
+    inclusionMode:
+      $ref: '#/InclusionMode'
+    totalCapAmount:
+      type: [integer, "null"]
+      minimum: 0
+      example: 50000
+    categoryCaps:
+      type: array
+      items:
+        $ref: '#/OverlayCategoryCap'
+      default: []
+    rules:
+      $ref: '#/OverlayRules'
+
+UpdateOverlayRequest:
+  allOf:
+    - $ref: '#/CreateOverlayRequest'
+
+# ===== Overlay Transactions =====
+
+OverlayTransactionMembership:
+  type: object
+  required:
+    - isIncluded
+  properties:
+    isIncluded:
+      type: boolean
+      example: true
+    inclusionSource:
+      oneOf:
+        - $ref: '#/InclusionSource'
+        - type: "null"
+
+OverlayTransactionResponse:
+  allOf:
+    - $ref: '../schemas/Transaction.yaml#/TransactionResponse'
+    - type: object
+      required:
+        - membership
+      properties:
+        membership:
+          $ref: '#/OverlayTransactionMembership'
+
+OverlayTransactionListResponse:
+  type: array
+  items:
+    $ref: '#/OverlayTransactionResponse'

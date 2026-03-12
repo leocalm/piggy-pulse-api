@@ -1,0 +1,16 @@
+get:
+  tags:
+    - Vendors
+  summary: List vendor options
+  operationId: listVendorOptions
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Vendor.yaml#/VendorOptionListResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

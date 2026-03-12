@@ -1,0 +1,16 @@
+get:
+  tags:
+    - Categories
+  summary: List category options
+  operationId: listCategoryOptions
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Category.yaml#/CategoryOptionListResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

@@ -1,0 +1,20 @@
+get:
+  tags:
+    - Overlays
+  summary: List overlay transactions
+  operationId: listOverlayTransactions
+  parameters:
+    - $ref: '../parameters/Id.yaml'
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Overlay.yaml#/OverlayTransactionListResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

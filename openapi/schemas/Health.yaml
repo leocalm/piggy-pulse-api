@@ -1,0 +1,14 @@
+HealthResponse:
+  type: object
+  required:
+    - status
+    - database
+  properties:
+    status:
+      type: string
+      description: Status of the health check
+      example: OK
+    database:
+      type: string
+      description: Database status
+      example: connected

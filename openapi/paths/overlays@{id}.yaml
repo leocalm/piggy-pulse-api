@@ -1,0 +1,66 @@
+get:
+  tags:
+    - Overlays
+  summary: Get overlay by ID
+  operationId: getOverlay
+  parameters:
+    - $ref: '../parameters/Id.yaml'
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Overlay.yaml#/OverlayResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+put:
+  tags:
+    - Overlays
+  summary: Update overlay
+  operationId: updateOverlay
+  parameters:
+    - $ref: '../parameters/Id.yaml'
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Overlay.yaml#/UpdateOverlayRequest'
+  responses:
+    '200':
+      description: Overlay updated
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Overlay.yaml#/OverlayResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+delete:
+  tags:
+    - Overlays
+  summary: Delete overlay
+  operationId: deleteOverlay
+  parameters:
+    - $ref: '../parameters/Id.yaml'
+  responses:
+    '204':
+      description: Overlay deleted
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

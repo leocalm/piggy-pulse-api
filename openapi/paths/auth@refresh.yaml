@@ -1,0 +1,17 @@
+post:
+  tags:
+    - Auth
+  summary: Refresh bearer token
+  operationId: refreshToken
+  description: Exchanges the current bearer token for a new one with a refreshed expiry. Session-based clients (web) do not need this endpoint.
+  responses:
+    '200':
+      description: New bearer token issued
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Auth.yaml#/RefreshResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

@@ -1,0 +1,239 @@
+# ===== Embedded object shapes =====
+
+AccountRef:
+  type: object
+  required:
+    - id
+    - name
+    - color
+  properties:
+    id:
+      type: string
+      format: uuid
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    name:
+      type: string
+      example: "Main Checking"
+    color:
+      type: string
+      example: "#38BDF8"
+
+CategoryRef:
+  type: object
+  required:
+    - id
+    - name
+    - color
+    - icon
+    - type
+  properties:
+    id:
+      type: string
+      format: uuid
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    name:
+      type: string
+      example: "Groceries"
+    color:
+      type: string
+      example: "#6366F1"
+    icon:
+      type: string
+      example: "cart"
+    type:
+      type: string
+      enum: ["income", "expense", "transfer"]
+      example: "expense"
+
+VendorRef:
+  type: object
+  required:
+    - id
+    - name
+  properties:
+    id:
+      type: string
+      format: uuid
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    name:
+      type: string
+      example: "Amazon"
+
+# ===== Response =====
+
+TransactionBase:
+  type: object
+  required:
+    - id
+    - date
+    - description
+    - amount
+    - transactionType
+    - fromAccount
+    - category
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Transaction ID
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    date:
+      type: string
+      format: date
+      description: Transaction date
+      example: "2024-01-15"
+    description:
+      type: string
+      description: Transaction description
+      example: "Grocery shopping"
+    amount:
+      type: integer
+      description: Transaction amount in cents
+      example: 5000
+      minimum: 0
+    transactionType:
+      type: string
+      enum: ["regular", "transfer"]
+      description: Used as discriminator
+      example: "regular"
+    fromAccount:
+      $ref: '#/AccountRef'
+    category:
+      $ref: '#/CategoryRef'
+    vendor:
+      oneOf:
+        - $ref: '#/VendorRef'
+        - type: "null"
+
+RegularTransactionResponse:
+  type: object
+  required:
+    - transactionType
+  properties:
+    transactionType:
+      type: string
+      enum: ["regular"]
+    toAccount:
+      type: "null"
+
+TransferTransactionResponse:
+  type: object
+  required:
+    - transactionType
+    - toAccount
+  properties:
+    transactionType:
+      type: string
+      enum: ["transfer"]
+    toAccount:
+      $ref: '#/AccountRef'
+
+TransactionResponse:
+  allOf:
+    - $ref: '#/TransactionBase'
+    - discriminator:
+        propertyName: transactionType
+        mapping:
+          regular: '#/RegularTransactionResponse'
+          transfer: '#/TransferTransactionResponse'
+      oneOf:
+        - $ref: '#/RegularTransactionResponse'
+        - $ref: '#/TransferTransactionResponse'
+
+TransactionListResponse:
+  allOf:
+    - $ref: '../schemas/Common.yaml#/PaginatedResponse'
+    - type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/TransactionResponse'
+
+# ===== Requests =====
+
+TransactionRequestBase:
+  type: object
+  required:
+    - date
+    - description
+    - amount
+    - fromAccountId
+    - categoryId
+    - transactionType
+  properties:
+    date:
+      type: string
+      format: date
+      description: Transaction date
+      example: "2024-01-15"
+    description:
+      type: string
+      description: Transaction description
+      example: "Grocery shopping"
+    amount:
+      type: integer
+      description: Transaction amount in cents
+      example: 5000
+      minimum: 0
+    fromAccountId:
+      type: string
+      format: uuid
+      description: Source account ID
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    categoryId:
+      type: string
+      format: uuid
+      description: Category ID
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    vendorId:
+      type: [string, "null"]
+      format: uuid
+      description: Vendor ID (optional)
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    transactionType:
+      type: string
+      enum: ["regular", "transfer"]
+      description: Used as discriminator
+
+CreateRegularTransactionRequest:
+  type: object
+  required:
+    - transactionType
+  properties:
+    transactionType:
+      type: string
+      enum: ["regular"]
+    toAccountId:
+      type: "null"
+
+CreateTransferTransactionRequest:
+  type: object
+  required:
+    - transactionType
+    - toAccountId
+  properties:
+    transactionType:
+      type: string
+      enum: ["transfer"]
+    toAccountId:
+      type: string
+      format: uuid
+      description: Destination account ID
+      example: "123e4567-e89b-12d3-a456-426655440000"
+
+CreateTransactionRequest:
+  allOf:
+    - $ref: '#/TransactionRequestBase'
+    - discriminator:
+        propertyName: transactionType
+        mapping:
+          regular: '#/CreateRegularTransactionRequest'
+          transfer: '#/CreateTransferTransactionRequest'
+      oneOf:
+        - $ref: '#/CreateRegularTransactionRequest'
+        - $ref: '#/CreateTransferTransactionRequest'
+
+UpdateTransactionRequest:
+  allOf:
+    - $ref: '#/CreateTransactionRequest'

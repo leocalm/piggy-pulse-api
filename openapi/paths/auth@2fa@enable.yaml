@@ -1,0 +1,19 @@
+post:
+  tags:
+    - Auth
+  summary: Begin 2FA setup
+  operationId: enableTwoFactor
+  description: Returns a TOTP secret and QR code URI. 2FA is not active until confirmed via /auth/2fa/verify.
+  responses:
+    '200':
+      description: TOTP secret and QR code URI returned
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Auth.yaml#/TwoFactorEnableResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '409':
+      $ref: '../responses/Conflict.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

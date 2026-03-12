@@ -1,0 +1,25 @@
+post:
+  tags:
+    - Auth
+  summary: Register a new account
+  operationId: register
+  security: []
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Auth.yaml#/RegisterRequest'
+  responses:
+    '201':
+      description: Account created and authenticated
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Auth.yaml#/AuthenticatedResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '409':
+      $ref: '../responses/Conflict.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

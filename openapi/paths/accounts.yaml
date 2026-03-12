@@ -1,0 +1,44 @@
+get:
+  tags:
+    - Accounts
+  summary: List accounts
+  operationId: listAccounts
+  parameters:
+    - $ref: '../parameters/Cursor.yaml'
+    - $ref: '../parameters/Limit.yaml'
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Accounts.yaml#/AccountListResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+post:
+  tags:
+    - Accounts
+  summary: Create account
+  operationId: createAccount
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Accounts.yaml#/CreateAccountRequest'
+  responses:
+    '201':
+      description: Account created
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Accounts.yaml#/AccountResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

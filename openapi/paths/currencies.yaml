@@ -1,0 +1,15 @@
+get:
+  tags:
+    - Currencies
+  summary: List all currencies
+  operationId: listCurrencies
+  security: []
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Misc.yaml#/CurrencyListResponse'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

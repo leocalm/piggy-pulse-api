@@ -1,0 +1,22 @@
+post:
+  tags:
+    - Categories
+  summary: Unarchive category
+  operationId: unarchiveCategory
+  parameters:
+    - $ref: '../parameters/Id.yaml'
+  responses:
+    '200':
+      description: Category unarchived
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Category.yaml#/CategoryResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '409':
+      $ref: '../responses/Conflict.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

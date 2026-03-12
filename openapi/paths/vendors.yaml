@@ -1,0 +1,44 @@
+get:
+  tags:
+    - Vendors
+  summary: List vendors
+  operationId: listVendors
+  parameters:
+    - $ref: '../parameters/Cursor.yaml'
+    - $ref: '../parameters/Limit.yaml'
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Vendor.yaml#/VendorListResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+post:
+  tags:
+    - Vendors
+  summary: Create vendor
+  operationId: createVendor
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Vendor.yaml#/CreateVendorRequest'
+  responses:
+    '201':
+      description: Vendor created
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Vendor.yaml#/VendorResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

@@ -1,0 +1,29 @@
+post:
+  tags:
+    - Auth
+  summary: Login
+  operationId: login
+  security: []
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Auth.yaml#/LoginRequest'
+  responses:
+    '200':
+      description: |
+        Login result. If the account has 2FA enabled, returns a challenge token.
+        Otherwise returns the authenticated user and (for token clients) a bearer token.
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Auth.yaml#/LoginResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '429':
+      $ref: '../responses/TooManyRequests.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
