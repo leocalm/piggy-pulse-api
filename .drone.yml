@@ -86,7 +86,19 @@ steps:
       - echo "✅ Deployed version ${DRONE_COMMIT_SHA:0:7}"
 
   - name: notify-success
-    image: alpine:latest
+    image: plugins/slack
+    settings:
+      webhook:
+        from_secret: slack_webhook  # pragma: allowlist secret
+      channel: deployments
+      username: Drone CI
+      icon_emoji: rocket
+      template: >
+        ✅ *Deploy succeeded* — <{{build.link}}|build #{{build.number}}>
+        *Repo:* {{repo.name}}
+        *Branch:* {{build.branch}}
+        *Commit:* <{{build.link}}|{{truncate build.commit 7}}> — {{build.message}}
+        *Author:* {{build.author}}
     when:
       status:
         - success
@@ -96,12 +108,21 @@ steps:
         - push
         - promote
         - rollback
-    commands:
-      - echo "✅ Build ${DRONE_BUILD_NUMBER} completed successfully!"
-      - echo "📦 Version ${DRONE_COMMIT_SHA:0:7} deployed to production"
 
   - name: notify-failure
-    image: alpine:latest
+    image: plugins/slack
+    settings:
+      webhook:
+        from_secret: slack_webhook  # pragma: allowlist secret
+      channel: deployments
+      username: Drone CI
+      icon_emoji: rotating_light
+      template: >
+        ❌ *Deploy failed* — <{{build.link}}|build #{{build.number}}>
+        *Repo:* {{repo.name}}
+        *Branch:* {{build.branch}}
+        *Commit:* <{{build.link}}|{{truncate build.commit 7}}> — {{build.message}}
+        *Author:* {{build.author}}
     when:
       status:
         - failure
@@ -111,9 +132,6 @@ steps:
         - push
         - promote
         - rollback
-    commands:
-      - echo "❌ Build ${DRONE_BUILD_NUMBER} failed!"
-      - echo "Commit ${DRONE_COMMIT_SHA:0:7} was not deployed"
 
 volumes:
   - name: dockersock
