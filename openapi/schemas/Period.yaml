@@ -37,7 +37,7 @@ ManualEndDate:
       type: string
       format: date
       description: Manual end date of the period
-      example: 2022-01-31
+      example: "2022-01-31"
 
 PeriodResponse:
   type: object
@@ -54,12 +54,12 @@ PeriodResponse:
       type: string
       format: uuid
       description: Unique identifier of the period
-      example: 123e4567-e89b-12d3-a456-426655440000
+      example: "123e4567-e89b-12d3-a456-426655440000"
     startDate:
       type: string
       format: date
       description: Start date of the period
-      example: 2022-01-01
+      example: "2022-01-01"
     name:
       type: string
       description: Name of the period
@@ -124,7 +124,7 @@ CreatePeriodRequest:
       type: string
       format: date
       description: Start date of the period
-      example: 2022-01-01
+      example: "2022-01-01"
     name:
       type: string
       description: Name of the period
@@ -220,7 +220,7 @@ PeriodScheduleResponse:
       type: string
       format: uuid
       description: Unique identifier of the schedule
-      example: 123e4567-e89b-12d3-a456-426655440000
+      example: "123e4567-e89b-12d3-a456-426655440000"
     scheduleType:
       type: string
       enum: [ manual, automatic ]

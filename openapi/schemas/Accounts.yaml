@@ -42,7 +42,7 @@ AccountResponse:
           type: integer
           example: 10000
         currency:
-          $ref: './Currencies.yaml#/CurrencyResponse'
+          $ref: './Misc.yaml#/CurrencyResponse'
     - discriminator:
         propertyName: type
         mapping:
