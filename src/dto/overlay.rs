@@ -94,6 +94,7 @@ pub struct CreateOverlayRequest {
     pub inclusion_mode: InclusionMode,
     #[validate(range(min = 0))]
     pub total_cap_amount: Option<i64>,
+    #[serde(default)]
     #[validate(nested)]
     pub category_caps: Vec<OverlayCategoryCap>,
     pub rules: Option<OverlayRules>,
