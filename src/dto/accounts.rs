@@ -1,15 +1,10 @@
 #![allow(unused)]
 
-use std::sync::LazyLock;
-
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
-static HEX_COLOR_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^#[0-9A-Fa-f]{6}$").unwrap());
-
-use crate::dto::common::{Date, PaginatedResponse};
+use crate::dto::common::{Date, HEX_COLOR_REGEX, PaginatedResponse};
 use crate::dto::misc::CurrencyResponse;
 
 // ===== Enums =====
