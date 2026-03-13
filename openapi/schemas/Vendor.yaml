@@ -84,10 +84,12 @@ CreateVendorRequest:
     name:
       type: string
       description: Vendor name
+      minLength: 3
       example: "Amazon"
     description:
       type: [string, "null"]
       description: Vendor description
+      maxLength: 500
       example: "Online shopping"
 
 UpdateVendorRequest:

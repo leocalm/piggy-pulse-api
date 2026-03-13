@@ -38,87 +38,18 @@ AccountResponse:
       required:
         - initialBalance
         - currency
+        - spendLimit
       properties:
         initialBalance:
           type: integer
           example: 10000
         currency:
           $ref: './Misc.yaml#/CurrencyResponse'
-    - discriminator:
-        propertyName: type
-        mapping:
-          checking: '#/CheckingAccountResponse'
-          savings: '#/SavingsAccountResponse'
-          wallet: '#/WalletAccountResponse'
-          creditCard: '#/CreditCardAccountResponse'
-          allowance: '#/AllowanceAccountResponse'
-      oneOf:
-        - $ref: '#/CheckingAccountResponse'
-        - $ref: '#/SavingsAccountResponse'
-        - $ref: '#/WalletAccountResponse'
-        - $ref: '#/CreditCardAccountResponse'
-        - $ref: '#/AllowanceAccountResponse'
-
-CheckingAccountResponse:
-  type: object
-  required:
-    - type
-  properties:
-    type:
-      type: string
-      enum: ["checking"]
-    spendLimit:
-      type: "null"
-
-SavingsAccountResponse:
-  type: object
-  required:
-    - type
-  properties:
-    type:
-      type: string
-      enum: ["savings"]
-    spendLimit:
-      type: "null"
-
-WalletAccountResponse:
-  type: object
-  required:
-    - type
-  properties:
-    type:
-      type: string
-      enum: ["wallet"]
-    spendLimit:
-      type: "null"
-
-CreditCardAccountResponse:
-  type: object
-  required:
-    - type
-  properties:
-    type:
-      type: string
-      enum: ["creditCard"]
-    spendLimit:
-      type: [integer, "null"]
-      description: Spend limit in cents
-      minimum: 0
-      example: 50000
-
-AllowanceAccountResponse:
-  type: object
-  required:
-    - type
-  properties:
-    type:
-      type: string
-      enum: ["allowance"]
-    spendLimit:
-      type: [integer, "null"]
-      description: Spend limit in cents
-      minimum: 0
-      example: 50000
+        spendLimit:
+          type: [integer, "null"]
+          description: Spend limit in cents. Always null for checking, savings, and wallet accounts.
+          minimum: 0
+          example: 50000
 
 AccountListResponse:
   allOf:
@@ -160,79 +91,9 @@ CreateAccountRequest:
     type:
       type: string
       enum: ["checking", "savings", "creditCard", "allowance", "wallet"]
-  discriminator:
-    propertyName: type
-    mapping:
-      checking: '#/CheckingAccountRequest'
-      savings: '#/SavingsAccountRequest'
-      wallet: '#/WalletAccountRequest'
-      creditCard: '#/CreditCardAccountRequest'
-      allowance: '#/AllowanceAccountRequest'
-  oneOf:
-    - $ref: '#/CheckingAccountRequest'
-    - $ref: '#/SavingsAccountRequest'
-    - $ref: '#/WalletAccountRequest'
-    - $ref: '#/CreditCardAccountRequest'
-    - $ref: '#/AllowanceAccountRequest'
-
-CheckingAccountRequest:
-  type: object
-  required:
-    - type
-  properties:
-    type:
-      type: string
-      enum: ["checking"]
-    spendLimit:
-      type: "null"
-
-SavingsAccountRequest:
-  type: object
-  required:
-    - type
-  properties:
-    type:
-      type: string
-      enum: ["savings"]
-    spendLimit:
-      type: "null"
-
-WalletAccountRequest:
-  type: object
-  required:
-    - type
-  properties:
-    type:
-      type: string
-      enum: ["wallet"]
-    spendLimit:
-      type: "null"
-
-CreditCardAccountRequest:
-  type: object
-  required:
-    - type
-  properties:
-    type:
-      type: string
-      enum: ["creditCard"]
     spendLimit:
       type: [integer, "null"]
-      description: Optional spend limit in cents
-      minimum: 0
-      example: 50000
-
-AllowanceAccountRequest:
-  type: object
-  required:
-    - type
-  properties:
-    type:
-      type: string
-      enum: ["allowance"]
-    spendLimit:
-      type: [integer, "null"]
-      description: Optional spend limit in cents
+      description: Optional spend limit in cents. Only meaningful for creditCard and allowance accounts.
       minimum: 0
       example: 50000
 

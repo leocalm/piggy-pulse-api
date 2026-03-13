@@ -33,29 +33,22 @@ pub enum AccountStatus {
 #[derive(Serialize, Debug)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum AccountResponse {
-    Checking(AccountResponseBase),
-    Savings(AccountResponseBase),
-    CreditCard(AccountResponseBaseWithSpendLimit),
-    Wallet(AccountResponseBase),
-    Allowance(AccountResponseBaseWithSpendLimit),
+    Checking(AccountResponseFields),
+    Savings(AccountResponseFields),
+    CreditCard(AccountResponseFields),
+    Wallet(AccountResponseFields),
+    Allowance(AccountResponseFields),
 }
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct AccountResponseBase {
+pub struct AccountResponseFields {
     pub id: Uuid,
     pub name: String,
     pub color: String,
     pub status: AccountStatus,
     pub initial_balance: i64,
     pub currency: CurrencyResponse,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct AccountResponseBaseWithSpendLimit {
-    #[serde(flatten)]
-    pub base: AccountResponseBase,
     pub spend_limit: Option<i64>,
 }
 
@@ -159,30 +152,22 @@ pub type AccountBalanceHistoryResponse = Vec<AccountBalanceHistoryPoint>;
 #[derive(Deserialize, Debug)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum CreateAccountRequest {
-    Checking(AccountRequestBase),
-    Savings(AccountRequestBase),
-    CreditCard(AccountRequestBaseWithSpendLimit),
-    Wallet(AccountRequestBase),
-    Allowance(AccountRequestBaseWithSpendLimit),
+    Checking(AccountRequestFields),
+    Savings(AccountRequestFields),
+    CreditCard(AccountRequestFields),
+    Wallet(AccountRequestFields),
+    Allowance(AccountRequestFields),
 }
 
 #[derive(Deserialize, Debug, Validate)]
 #[serde(rename_all = "camelCase")]
-pub struct AccountRequestBase {
+pub struct AccountRequestFields {
     #[validate(length(min = 3))]
     pub name: String,
     #[validate(regex(path = *HEX_COLOR_REGEX))]
     pub color: String,
     pub initial_balance: i64,
     pub currency_id: Uuid,
-}
-
-#[derive(Deserialize, Debug, Validate)]
-#[serde(rename_all = "camelCase")]
-pub struct AccountRequestBaseWithSpendLimit {
-    #[serde(flatten)]
-    #[validate(nested)]
-    pub base: AccountRequestBase,
     pub spend_limit: Option<i64>,
 }
 

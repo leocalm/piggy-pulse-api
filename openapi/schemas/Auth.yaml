@@ -97,6 +97,7 @@ RegisterRequest:
     - email
     - password
     - name
+    - currencyId
   properties:
     email:
       type: string
@@ -109,6 +110,11 @@ RegisterRequest:
     name:
       type: string
       example: "Leonardo"
+    currencyId:
+      type: string
+      format: uuid
+      description: Default currency ID for the user
+      example: "123e4567-e89b-12d3-a456-426655440000"
 
 # ===== 2FA Complete (after challenge) =====
 
