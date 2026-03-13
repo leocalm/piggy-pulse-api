@@ -9,7 +9,7 @@ use crate::dto::misc::CurrencyResponse;
 
 // ===== Enums =====
 
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq, Default)]
+#[derive(Serialize, Debug, Copy, Clone, Eq, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum AccountType {
     #[default]

@@ -23,7 +23,7 @@ impl<'de> Deserialize<'de> for Date {
 
 // ===== Pagination =====
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PaginatedResponse<T> {
     pub data: Vec<T>,

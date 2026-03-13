@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 // ===== Currency =====
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, sqlx::Type, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum SymbolPosition {
     #[default]
