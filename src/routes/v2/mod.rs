@@ -1,3 +1,6 @@
+// Single-endpoint domains (health, unlock) use flat files.
+// All other domains use a subdirectory with mod.rs + one file per OpenAPI path.
+
 pub mod accounts;
 pub mod auth;
 pub mod categories;

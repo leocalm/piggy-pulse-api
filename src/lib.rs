@@ -231,6 +231,8 @@ fn stage_rate_limiter(rate_limit_config: config::RateLimitConfig) -> AdHoc {
     })
 }
 
+/// Mount v2 route handlers (spec-first, no rocket_okapi / OpenAPI generation).
+/// V2 routes are not included in Swagger UI — the OpenAPI spec is maintained externally.
 fn mount_v2_routes(mut rocket: Rocket<Build>, base_path: &str) -> Rocket<Build> {
     // Auth (multiple route groups)
     rocket = rocket.mount(join_base_path(base_path, "auth"), app_routes::v2::auth::routes());
@@ -330,8 +332,12 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
         rocket = mount_api_routes(rocket, primary_base_path);
     }
 
-    // Mount v2 routes at /api/v2
+    // Mount v2 routes at /v2 (primary path only; additional_base_paths are v1-only for now)
     let v2_base_path = primary_base_path.replace("/v1", "/v2");
+    debug_assert!(
+        v2_base_path != *primary_base_path,
+        "v2 base path must differ from v1 — ensure primary_base_path contains '/v1'"
+    );
     rocket = mount_v2_routes(rocket, &v2_base_path);
 
     rocket = rocket.register(
