@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
+use crate::dto::common::{BCP_47_REGEX, ISO_4217_REGEX};
+
 // ===== Profile =====
 
 #[derive(Serialize, Debug)]
@@ -19,7 +21,7 @@ pub struct ProfileResponse {
 pub struct UpdateProfileRequest {
     #[validate(length(min = 1))]
     pub name: String,
-    #[validate(length(min = 1))]
+    #[validate(regex(path = *ISO_4217_REGEX))]
     pub currency: String,
 }
 
@@ -70,7 +72,7 @@ pub struct UpdatePreferencesRequest {
     pub theme: Theme,
     pub date_format: DateFormat,
     pub number_format: NumberFormat,
-    #[validate(length(min = 1))]
+    #[validate(regex(path = *BCP_47_REGEX))]
     pub language: String,
 }
 
@@ -84,9 +86,7 @@ pub struct SessionResponse {
     pub is_current: bool,
 }
 
-#[derive(Serialize, Debug)]
-#[serde(transparent)]
-pub struct SessionListResponse(pub Vec<SessionResponse>);
+pub type SessionListResponse = Vec<SessionResponse>;
 
 // ===== Account Actions =====
 
@@ -97,9 +97,4 @@ pub struct DeleteAccountRequest {
     pub password: String,
 }
 
-#[derive(Deserialize, Debug, Validate)]
-#[serde(rename_all = "camelCase")]
-pub struct ResetStructureRequest {
-    #[validate(length(min = 1))]
-    pub password: String,
-}
+pub type ResetStructureRequest = DeleteAccountRequest;

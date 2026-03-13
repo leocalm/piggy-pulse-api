@@ -7,6 +7,8 @@ use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub static HEX_COLOR_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^#[0-9A-Fa-f]{6}$").unwrap());
+pub static ISO_4217_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[A-Z]{3}$").unwrap());
+pub static BCP_47_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$").unwrap());
 
 // ===== Date =====
 
