@@ -3,11 +3,6 @@ InclusionMode:
   enum: ["manual", "rules", "all"]
   example: "rules"
 
-InclusionSource:
-  type: string
-  enum: ["manual", "rules", "all"]
-  example: "rules"
-
 OverlayCategoryCap:
   type: object
   required:
@@ -153,13 +148,14 @@ OverlayTransactionMembership:
   type: object
   required:
     - isIncluded
+    - inclusionSource
   properties:
     isIncluded:
       type: boolean
       example: true
     inclusionSource:
       oneOf:
-        - $ref: '#/InclusionSource'
+        - $ref: '#/InclusionMode'
         - type: "null"
 
 OverlayTransactionResponse:
@@ -173,6 +169,11 @@ OverlayTransactionResponse:
           $ref: '#/OverlayTransactionMembership'
 
 OverlayTransactionListResponse:
-  type: array
-  items:
-    $ref: '#/OverlayTransactionResponse'
+  allOf:
+    - $ref: '../schemas/Common.yaml#/PaginatedResponse'
+    - type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/OverlayTransactionResponse'

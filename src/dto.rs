@@ -5,6 +5,7 @@ pub mod common;
 pub mod dashboard;
 pub mod health;
 pub mod misc;
+pub mod overlay;
 pub mod period;
 pub mod settings;
 pub mod transactions;
