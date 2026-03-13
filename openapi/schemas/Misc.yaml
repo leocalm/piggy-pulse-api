@@ -6,7 +6,7 @@ CurrencyResponse:
     - id
     - name
     - symbol
-    - currency
+    - code
     - decimalPlaces
     - symbolPosition
   properties:

@@ -47,8 +47,8 @@ pub struct PeriodDuration {
 #[derive(Serialize, Debug)]
 #[serde(tag = "periodType", rename_all = "camelCase")]
 pub enum PeriodKind {
-    Duration { duration: PeriodDuration, manual_end_date: Option<Date> },
-    ManualEndDate { duration: Option<PeriodDuration>, manual_end_date: Date },
+    Duration { duration: PeriodDuration },
+    ManualEndDate { manual_end_date: Date },
 }
 
 // ===== PeriodResponse =====
