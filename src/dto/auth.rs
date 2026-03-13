@@ -1,4 +1,4 @@
-#![allow(unused)]
+#![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

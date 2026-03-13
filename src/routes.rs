@@ -16,4 +16,5 @@ pub mod transaction;
 pub mod two_factor;
 pub mod unlock;
 pub mod user;
+pub mod v2;
 pub mod vendor;
