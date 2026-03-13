@@ -8,3 +8,4 @@ pub mod misc;
 pub mod period;
 pub mod settings;
 pub mod transactions;
+pub mod vendors;
