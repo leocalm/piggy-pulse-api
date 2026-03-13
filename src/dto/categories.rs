@@ -7,12 +7,17 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::{Validate, ValidationError};
 
-use crate::dto::common::{Date, PaginatedResponse};
+use crate::dto::common::{Date, HEX_COLOR_REGEX, PaginatedResponse};
 
-static HEX_COLOR_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^#[0-9A-Fa-f]{6}$").unwrap());
 static EMOJI_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     // Matches a single emoji sequence: an Emoji_Presentation char optionally followed by
     // a skin-tone modifier or variation selector, and zero or more ZWJ-joined pairs.
+    //
+    // Known limitations (acceptable for decorative category icons):
+    // - Regional indicator flag sequences (e.g. 🇺🇸 = \p{Regional_Indicator}{2}) are not matched
+    //   because each Regional_Indicator character lacks the Emoji_Presentation property on its own.
+    // - Keycap sequences that start with an ASCII digit or symbol (e.g. 1️⃣ = [0-9#*]\uFE0F\u20E3)
+    //   are not matched because their first character is plain ASCII, not Emoji_Presentation.
     Regex::new(r"^\p{Emoji_Presentation}(\p{Emoji_Modifier}|\u{FE0F}|\u{20E3})?(\u{200D}\p{Emoji_Presentation}(\p{Emoji_Modifier}|\u{FE0F})?)*$").unwrap()
 });
 
@@ -201,6 +206,7 @@ pub struct CategoryTargetsResponse {
 #[serde(rename_all = "camelCase")]
 pub struct CreateTargetRequest {
     pub category_id: Uuid,
+    #[validate(range(min = 0))]
     pub value: i64,
 }
 

@@ -25,7 +25,7 @@ CategoryBase:
     icon:
       type: string
       description: Category icon
-      example: "cart"
+      example: "🛒"
     color:
       type: string
       description: Category color
@@ -178,7 +178,7 @@ CategoryOptionResponse:
     icon:
       type: string
       description: Category icon
-      example: "cart"
+      example: "🛒"
     color:
       type: string
       description: Category color
@@ -209,7 +209,7 @@ CreateCategoryRequest:
     icon:
       type: string
       description: Category icon
-      example: "cart"
+      example: "🛒"
     color:
       type: string
       description: Category color
