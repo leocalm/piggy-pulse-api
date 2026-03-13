@@ -1822,6 +1822,7 @@ dependencies = [
  "qrcode",
  "rand 0.10.0",
  "redis",
+ "regex",
  "rocket",
  "rocket_cors",
  "rocket_okapi",

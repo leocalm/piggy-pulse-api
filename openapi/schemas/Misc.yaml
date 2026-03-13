@@ -20,7 +20,7 @@ CurrencyResponse:
     symbol:
       type: string
       example: "€"
-    currency:
+    code:
       type: string
       description: ISO 4217 currency code
       example: "EUR"

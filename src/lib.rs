@@ -3,6 +3,7 @@ mod config;
 mod cron_tasks;
 mod database;
 mod db;
+mod dto;
 mod error;
 mod middleware;
 mod models;

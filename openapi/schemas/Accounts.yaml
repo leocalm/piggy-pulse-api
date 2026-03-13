@@ -18,7 +18,8 @@ AccountBase:
       example: "Main Checking Account"
     color:
       type: string
-      description: Account color
+      description: Account color in #RRGGBB hex format
+      pattern: '^#[0-9A-Fa-f]{6}$'
       example: "#000000"
     type:
       type: string
@@ -144,7 +145,8 @@ CreateAccountRequest:
       example: "Main Checking Account"
     color:
       type: string
-      description: Account color
+      description: Account color in #RRGGBB hex format
+      pattern: '^#[0-9A-Fa-f]{6}$'
       example: "#000000"
     initialBalance:
       type: integer
@@ -256,7 +258,8 @@ AccountOptionResponse:
       example: "Main Checking Account"
     color:
       type: string
-      description: Account color
+      description: Account color in #RRGGBB hex format
+      pattern: '^#[0-9A-Fa-f]{6}$'
       example: "#000000"
 
 AccountOptionListResponse:
