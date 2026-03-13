@@ -39,6 +39,15 @@ pub struct PaginatedResponse<T> {
     pub next_cursor: Option<String>,
 }
 
+// ===== Shared embedded refs =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct VendorMinimal {
+    pub id: uuid::Uuid,
+    pub name: String,
+}
+
 // ===== Error Responses =====
 
 #[derive(Serialize, Deserialize, Debug)]

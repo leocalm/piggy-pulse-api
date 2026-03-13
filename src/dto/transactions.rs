@@ -27,12 +27,7 @@ pub struct CategoryRef {
     pub category_type: CategoryType,
 }
 
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct VendorRef {
-    pub id: Uuid,
-    pub name: String,
-}
+pub use crate::dto::common::VendorMinimal as VendorRef;
 
 // ===== TransactionResponse =====
 

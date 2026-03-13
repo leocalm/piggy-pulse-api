@@ -4,14 +4,14 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
-use crate::dto::common::PaginatedResponse;
-use crate::dto::transactions::VendorRef;
+use crate::dto::common::{PaginatedResponse, VendorMinimal};
 
 // ===== Enums =====
 
-#[derive(Serialize, Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Serialize, Debug, Copy, Clone, Eq, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum VendorStatus {
+    #[default]
     Active,
     Inactive,
 }
@@ -50,7 +50,7 @@ pub type VendorListResponse = PaginatedResponse<VendorSummaryResponse>;
 
 // ===== VendorOptionResponse =====
 
-pub type VendorOptionResponse = VendorRef;
+pub type VendorOptionResponse = VendorMinimal;
 pub type VendorOptionListResponse = Vec<VendorOptionResponse>;
 
 // ===== Requests =====
