@@ -3,4 +3,5 @@ pub mod auth;
 pub mod categories;
 pub mod common;
 pub mod dashboard;
+pub mod health;
 pub mod misc;
