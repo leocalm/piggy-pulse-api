@@ -41,7 +41,7 @@ pub struct VendorRef {
 #[derive(Serialize, Debug)]
 #[serde(tag = "transactionType", rename_all = "camelCase")]
 pub enum TransactionKind {
-    Regular,
+    Regular { to_account: Option<AccountRef> },
     Transfer { to_account: AccountRef },
 }
 
@@ -51,7 +51,7 @@ pub struct TransactionResponse {
     pub id: Uuid,
     pub date: Date,
     pub description: String,
-    pub amount: i64,
+    pub amount: i64, // INVARIANT: amount >= 0, validated in route layer
     pub from_account: AccountRef,
     pub category: CategoryRef,
     pub vendor: Option<VendorRef>,
@@ -72,7 +72,7 @@ pub enum CreateTransactionRequest {
     Regular {
         date: Date,
         description: String,
-        amount: i64,
+        amount: i64, // INVARIANT: amount >= 0, validated in route layer
         from_account_id: Uuid,
         category_id: Uuid,
         vendor_id: Option<Uuid>,
@@ -80,7 +80,7 @@ pub enum CreateTransactionRequest {
     Transfer {
         date: Date,
         description: String,
-        amount: i64,
+        amount: i64, // INVARIANT: amount >= 0, validated in route layer
         from_account_id: Uuid,
         category_id: Uuid,
         vendor_id: Option<Uuid>,
