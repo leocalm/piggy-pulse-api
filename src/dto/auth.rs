@@ -30,16 +30,35 @@ pub struct LoginRequest {
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TwoFactorChallengeResponse {
-    pub requires_two_factor: bool,
+    requires_two_factor: bool,
     pub two_factor_token: String,
+}
+
+impl TwoFactorChallengeResponse {
+    pub fn new(two_factor_token: String) -> Self {
+        Self {
+            requires_two_factor: true,
+            two_factor_token,
+        }
+    }
 }
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthenticatedResponse {
-    pub requires_two_factor: bool,
+    requires_two_factor: bool,
     pub user: UserResponse,
     pub token: Option<String>,
+}
+
+impl AuthenticatedResponse {
+    pub fn new(user: UserResponse, token: Option<String>) -> Self {
+        Self {
+            requires_two_factor: false,
+            user,
+            token,
+        }
+    }
 }
 
 /// Discriminated union on `requiresTwoFactor` (boolean).
@@ -58,10 +77,12 @@ pub enum LoginResponse {
 pub struct RegisterRequest {
     #[validate(email)]
     pub email: String,
-    #[validate(length(min = 1))]
+    #[validate(length(min = 8))]
+    #[validate(custom(function = "crate::models::user::validate_password_strength"))]
     pub password: String,
     #[validate(length(min = 1))]
     pub name: String,
+    pub currency_id: Uuid,
 }
 
 // ===== 2FA Complete (after challenge) =====
@@ -97,7 +118,8 @@ pub struct ForgotPasswordRequest {
 pub struct ResetPasswordRequest {
     #[validate(length(min = 1))]
     pub token: String,
-    #[validate(length(min = 1))]
+    #[validate(length(min = 8))]
+    #[validate(custom(function = "crate::models::user::validate_password_strength"))]
     pub password: String,
 }
 
@@ -131,12 +153,14 @@ pub struct TwoFactorDisableRequest {
 pub struct TwoFactorStatusResponse {
     pub enabled: bool,
     pub has_backup_codes: bool,
-    pub backup_codes_remaining: i32,
+    pub backup_codes_remaining: u32,
 }
 
 // ===== Recovery / Backup Codes =====
 
-pub type BackupCodesResponse = Vec<String>;
+#[derive(Serialize, Debug)]
+#[serde(transparent)]
+pub struct BackupCodesResponse(pub Vec<String>);
 
 #[derive(Deserialize, Debug, Validate)]
 #[serde(rename_all = "camelCase")]
@@ -168,6 +192,7 @@ pub struct EmergencyDisableConfirmRequest {
 pub struct ChangePasswordRequest {
     #[validate(length(min = 1))]
     pub current_password: String,
-    #[validate(length(min = 1))]
+    #[validate(length(min = 8))]
+    #[validate(custom(function = "crate::models::user::validate_password_strength"))]
     pub new_password: String,
 }
