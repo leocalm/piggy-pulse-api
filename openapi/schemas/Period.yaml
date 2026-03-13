@@ -21,8 +21,6 @@ DurationBased:
           description: The unit of the period duration
           enum: [ days, weeks, months ]
           example: days
-    manualEndDate:
-      type: "null"
 
 ManualEndDate:
   required:
@@ -31,8 +29,6 @@ ManualEndDate:
     periodType:
       type: string
       enum: [ manualEndDate ]
-    duration:
-      type: "null"
     manualEndDate:
       type: string
       format: date
