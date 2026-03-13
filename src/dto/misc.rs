@@ -19,7 +19,7 @@ pub struct CurrencyResponse {
     pub id: Uuid,
     pub name: String,
     pub symbol: String,
-    pub currency: String,
+    pub code: String,
     pub decimal_places: i32,
     pub symbol_position: SymbolPosition,
 }

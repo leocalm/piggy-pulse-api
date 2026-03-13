@@ -1,8 +1,13 @@
 #![allow(unused)]
 
+use std::sync::LazyLock;
+
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
+
+static HEX_COLOR_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^#[0-9A-Fa-f]{6}$").unwrap());
 
 use crate::dto::common::{Date, PaginatedResponse};
 use crate::dto::misc::CurrencyResponse;
@@ -171,7 +176,7 @@ pub enum CreateAccountRequest {
 pub struct AccountRequestBase {
     #[validate(length(min = 3))]
     pub name: String,
-    #[validate(length(equal = 7))]
+    #[validate(regex(path = *HEX_COLOR_REGEX))]
     pub color: String,
     pub initial_balance: i64,
     pub currency_id: Uuid,
