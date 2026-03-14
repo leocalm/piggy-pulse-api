@@ -28,26 +28,31 @@ use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
 
 fn init_tracing(log_level: &str, json_format: bool) {
-    // Configure logging with environment variable support
-    // RUST_LOG environment variable can be used for fine-grained control per module:
-    // Examples:
-    //   RUST_LOG=debug                    - Set all to debug
-    //   RUST_LOG=piggy_pulse=debug             - Set piggy_pulse crate to debug
-    //   RUST_LOG=piggy_pulse::routes=trace     - Set specific module to trace
-    //   RUST_LOG=info,piggy_pulse::routes=debug - Global info, routes at debug
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
+    use std::sync::Once;
+    static TRACING_INIT: Once = Once::new();
 
-    let subscriber = tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_target(true)
-        .with_line_number(true)
-        .with_thread_ids(false);
+    TRACING_INIT.call_once(|| {
+        // Configure logging with environment variable support
+        // RUST_LOG environment variable can be used for fine-grained control per module:
+        // Examples:
+        //   RUST_LOG=debug                    - Set all to debug
+        //   RUST_LOG=piggy_pulse=debug             - Set piggy_pulse crate to debug
+        //   RUST_LOG=piggy_pulse::routes=trace     - Set specific module to trace
+        //   RUST_LOG=info,piggy_pulse::routes=debug - Global info, routes at debug
+        let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
 
-    if json_format {
-        subscriber.json().init();
-    } else {
-        subscriber.init();
-    }
+        let subscriber = tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .with_target(true)
+            .with_line_number(true)
+            .with_thread_ids(false);
+
+        if json_format {
+            subscriber.json().init();
+        } else {
+            subscriber.init();
+        }
+    });
 }
 
 fn ensure_rocket_secret_key() {
