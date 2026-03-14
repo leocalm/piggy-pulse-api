@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
@@ -106,7 +104,7 @@ pub struct RegisterRequest {
 pub struct TwoFactorCompleteRequest {
     #[validate(length(min = 1))]
     pub two_factor_token: String,
-    #[validate(length(min = 6, max = 6))]
+    #[validate(length(min = 6, max = 16))]
     pub code: String,
 }
 
@@ -156,7 +154,7 @@ pub struct TwoFactorVerifyRequest {
 #[derive(Deserialize, Debug, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct TwoFactorDisableRequest {
-    #[validate(length(min = 6, max = 6))]
+    #[validate(length(min = 6, max = 16))]
     pub code: String,
 }
 
@@ -179,7 +177,7 @@ pub struct BackupCodesResponse(pub Vec<String>);
 #[derive(Deserialize, Debug, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct RegenerateBackupCodesRequest {
-    #[validate(length(min = 6, max = 6))]
+    #[validate(length(min = 6, max = 16))]
     pub code: String,
 }
 
