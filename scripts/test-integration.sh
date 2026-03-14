@@ -22,7 +22,12 @@ step "Starting test database..."
 docker compose -f docker-compose.test.yaml up -d --wait
 
 step "Running V2 integration tests..."
-if DATABASE_URL="$DB_URL" cargo test --test 'v2_*' -- --ignored "$@"; then
+TEST_ARGS=""
+for test_file in tests/v2_*.rs; do
+    TEST_ARGS="$TEST_ARGS --test $(basename "${test_file%.rs}")"
+done
+
+if DATABASE_URL="$DB_URL" cargo test $TEST_ARGS -- --ignored "$@"; then
     pass "All V2 integration tests passed"
 else
     fail "Some V2 integration tests failed"

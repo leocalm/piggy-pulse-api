@@ -29,22 +29,3 @@ pub fn assert_date(value: &Value) {
     let s = value.as_str().expect("expected string for date");
     chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").expect("valid YYYY-MM-DD date");
 }
-
-/// Asserts that all object keys in the JSON are camelCase (no underscores).
-/// Recursively checks nested objects and arrays.
-pub fn assert_camel_case_keys(json: &Value) {
-    match json {
-        Value::Object(map) => {
-            for (key, val) in map {
-                assert!(!key.contains('_'), "key '{}' contains underscore — expected camelCase", key);
-                assert_camel_case_keys(val);
-            }
-        }
-        Value::Array(arr) => {
-            for val in arr {
-                assert_camel_case_keys(val);
-            }
-        }
-        _ => {}
-    }
-}

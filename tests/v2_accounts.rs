@@ -577,7 +577,8 @@ async fn test_unarchive_account_happy() {
     let account_id = common::entities::create_account(&client, "To Unarchive", 10000).await;
 
     // Archive first
-    client.post(format!("{}/accounts/{}/archive", V2_BASE, account_id)).dispatch().await;
+    let archive_resp = client.post(format!("{}/accounts/{}/archive", V2_BASE, account_id)).dispatch().await;
+    assert_eq!(archive_resp.status(), Status::Ok, "archive precondition failed");
 
     let resp = client.post(format!("{}/accounts/{}/unarchive", V2_BASE, account_id)).dispatch().await;
 

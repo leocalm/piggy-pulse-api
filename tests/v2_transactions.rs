@@ -293,14 +293,16 @@ async fn test_update_transaction_happy() {
 async fn test_update_transaction_not_found() {
     let client = test_client().await;
     create_user_and_login(&client).await;
+    let account_id = common::entities::create_account(&client, "NotFound Tx Acct", 100000).await;
+    let category_id = common::entities::create_category(&client, "NotFound Tx Cat", "expense").await;
 
     let payload = serde_json::json!({
         "transactionType": "Regular",
         "date": "2026-03-01",
         "description": "Ghost",
         "amount": 1000,
-        "fromAccountId": Uuid::new_v4(),
-        "categoryId": Uuid::new_v4(),
+        "fromAccountId": account_id,
+        "categoryId": category_id,
         "vendorId": null
     });
 

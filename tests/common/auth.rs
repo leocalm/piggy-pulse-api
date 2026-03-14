@@ -21,7 +21,7 @@ pub async fn create_user_and_login(client: &Client) -> (String, String) {
     let register_payload = serde_json::json!({
         "name": format!("Test User {}", unique),
         "email": email,
-        "password": "CorrectHorseBatteryStaple!2026"
+        "password": super::TEST_PASSWORD
     });
 
     let resp = client
@@ -37,7 +37,7 @@ pub async fn create_user_and_login(client: &Client) -> (String, String) {
 
     let login_payload = serde_json::json!({
         "email": email,
-        "password": "CorrectHorseBatteryStaple!2026"
+        "password": super::TEST_PASSWORD
     });
 
     let resp = client
