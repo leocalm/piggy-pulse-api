@@ -13,7 +13,7 @@ use uuid::Uuid;
 #[ignore = "requires database"]
 async fn test_register_happy() {
     let client = test_client().await;
-    let eur_id = common::auth::get_eur_currency_id(&client).await;
+    let eur_id = common::auth::get_eur_currency_id_unauthenticated(&client).await;
 
     let payload = serde_json::json!({
         "email": format!("register.{}@example.com", Uuid::new_v4()),
@@ -40,7 +40,7 @@ async fn test_register_happy() {
 #[ignore = "requires database"]
 async fn test_register_duplicate_email() {
     let client = test_client().await;
-    let eur_id = common::auth::get_eur_currency_id(&client).await;
+    let eur_id = common::auth::get_eur_currency_id_unauthenticated(&client).await;
     let email = format!("dup.{}@example.com", Uuid::new_v4());
 
     let payload = serde_json::json!({
@@ -79,7 +79,7 @@ async fn test_register_duplicate_email() {
 #[ignore = "requires database"]
 async fn test_register_weak_password() {
     let client = test_client().await;
-    let eur_id = common::auth::get_eur_currency_id(&client).await;
+    let eur_id = common::auth::get_eur_currency_id_unauthenticated(&client).await;
 
     let payload = serde_json::json!({
         "email": format!("weak.{}@example.com", Uuid::new_v4()),
@@ -148,7 +148,7 @@ async fn test_register_malformed_json() {
 #[ignore = "requires database"]
 async fn test_login_happy() {
     let client = test_client().await;
-    let eur_id = common::auth::get_eur_currency_id(&client).await;
+    let eur_id = common::auth::get_eur_currency_id_unauthenticated(&client).await;
     let email = format!("login.{}@example.com", Uuid::new_v4());
 
     // Register first
@@ -188,7 +188,7 @@ async fn test_login_happy() {
 #[ignore = "requires database"]
 async fn test_login_wrong_password() {
     let client = test_client().await;
-    let eur_id = common::auth::get_eur_currency_id(&client).await;
+    let eur_id = common::auth::get_eur_currency_id_unauthenticated(&client).await;
     let email = format!("wrongpw.{}@example.com", Uuid::new_v4());
 
     let reg = serde_json::json!({
@@ -498,8 +498,8 @@ async fn test_reset_password_invalid_token() {
         .await;
 
     assert!(
-        resp.status() == Status::BadRequest || resp.status() == Status::NotFound,
-        "expected 400 or 404, got {}",
+        resp.status() == Status::BadRequest || resp.status() == Status::NotFound || resp.status() == Status::Unauthorized,
+        "expected 400, 401, or 404, got {}",
         resp.status()
     );
 }

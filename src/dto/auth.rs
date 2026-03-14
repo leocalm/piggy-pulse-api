@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
@@ -48,7 +46,11 @@ impl TwoFactorChallengeResponse {
 pub struct AuthenticatedResponse {
     requires_two_factor: bool,
     pub user: UserResponse,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
+    /// One-time backup codes, only present after 2FA setup confirmation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backup_codes: Option<Vec<String>>,
 }
 
 impl AuthenticatedResponse {
@@ -57,6 +59,16 @@ impl AuthenticatedResponse {
             requires_two_factor: false,
             user,
             token,
+            backup_codes: None,
+        }
+    }
+
+    pub fn with_backup_codes(user: UserResponse, backup_codes: Vec<String>) -> Self {
+        Self {
+            requires_two_factor: false,
+            user,
+            token: None,
+            backup_codes: Some(backup_codes),
         }
     }
 }
@@ -92,7 +104,7 @@ pub struct RegisterRequest {
 pub struct TwoFactorCompleteRequest {
     #[validate(length(min = 1))]
     pub two_factor_token: String,
-    #[validate(length(min = 6, max = 6))]
+    #[validate(length(min = 6, max = 16))]
     pub code: String,
 }
 
@@ -142,7 +154,7 @@ pub struct TwoFactorVerifyRequest {
 #[derive(Deserialize, Debug, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct TwoFactorDisableRequest {
-    #[validate(length(min = 6, max = 6))]
+    #[validate(length(min = 6, max = 16))]
     pub code: String,
 }
 
@@ -165,7 +177,7 @@ pub struct BackupCodesResponse(pub Vec<String>);
 #[derive(Deserialize, Debug, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct RegenerateBackupCodesRequest {
-    #[validate(length(min = 6, max = 6))]
+    #[validate(length(min = 6, max = 16))]
     pub code: String,
 }
 

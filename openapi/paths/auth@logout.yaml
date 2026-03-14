@@ -4,7 +4,7 @@ post:
   summary: Logout
   operationId: logout
   responses:
-    '204':
+    '200':
       description: Logged out successfully
     '401':
       $ref: '../responses/Unauthorized.yaml'

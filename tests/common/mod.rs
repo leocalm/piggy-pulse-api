@@ -25,6 +25,8 @@ pub fn test_config() -> Config {
     config.database.min_connections = 1;
     config.rate_limit.require_client_ip = false;
     config.session.cookie_secure = false;
+    // Set a valid 2FA encryption key for tests (insecure, debug-only)
+    config.two_factor.encryption_key = "0000000000000000000000000000000000000000000000000000000000000000".to_string();
     config
 }
 

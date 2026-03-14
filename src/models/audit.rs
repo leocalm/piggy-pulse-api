@@ -10,6 +10,7 @@ pub mod audit_events {
     pub const TWO_FACTOR_ENABLED: &str = "2fa_enabled";
     pub const TWO_FACTOR_DISABLED: &str = "2fa_disabled";
     pub const TWO_FACTOR_BACKUP_USED: &str = "2fa_backup_used";
+    pub const TWO_FACTOR_BACKUP_REGENERATED: &str = "2fa_backup_regenerated";
 
     // Account events
     pub const PASSWORD_CHANGED: &str = "password_changed";

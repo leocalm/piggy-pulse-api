@@ -87,6 +87,15 @@ impl PostgresRepository {
         let _ = Argon2::default().verify_password(password.as_bytes(), &hash);
     }
 
+    /// Timing-equalization helper for flows where no real password is available
+    /// (e.g. forgot-password for a non-existent email). Uses a fixed input to
+    /// burn the same CPU time as a real verification.
+    pub fn dummy_verify_no_input() {
+        // The input value is irrelevant — we only need to spend Argon2 CPU time.
+        let hash = PasswordHash::new(&DUMMY_HASH).expect("invalid dummy hash");
+        let _ = Argon2::default().verify_password(b"timing-equalization", &hash);
+    }
+
     pub async fn update_user(&self, id: &Uuid, name: &str, email: &str, new_password: Option<&str>) -> Result<User, AppError> {
         let user = if let Some(password) = new_password {
             let (salt, hash) = password_hash(password);
