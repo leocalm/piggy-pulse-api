@@ -228,22 +228,9 @@ impl<'a> TwoFactorService<'a> {
             return Err(AppError::BadRequest("Two-factor authentication is not enabled.".to_string()));
         }
 
-        let encryption_key = self.config.two_factor.parse_encryption_key().map_err(AppError::BadRequest)?;
-
-        // Decrypt and verify in blocking task
-        let encrypted_secret = two_factor.encrypted_secret.clone();
-        let encryption_nonce = two_factor.encryption_nonce.clone();
-        let code_owned = code.to_string();
-        tokio::task::spawn_blocking(move || {
-            let secret = PostgresRepository::decrypt_secret(&encrypted_secret, &encryption_nonce, &encryption_key)?;
-            let is_valid = PostgresRepository::verify_totp_code(&secret, &code_owned)?;
-            if !is_valid {
-                return Err(AppError::BadRequest("Invalid two-factor code.".to_string()));
-            }
-            Ok::<_, AppError>(())
-        })
-        .await
-        .map_err(|e| AppError::BadRequest(format!("Task join error: {}", e)))??;
+        // Delegate to AuthService::verify_two_factor for rate-limited TOTP/backup verification
+        let auth = AuthService::new(self.repo, self.config);
+        auth.verify_two_factor(user_id, two_factor, code, client_ip.clone(), user_agent.clone()).await?;
 
         let backup_codes = self.repo.generate_backup_codes(user_id).await?;
 

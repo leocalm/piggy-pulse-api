@@ -29,13 +29,11 @@ pub async fn verify_two_factor_setup(
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let tfa = TwoFactorService::new(&repo, config);
 
-    let _backup_codes = tfa.verify_setup(&user.id, &payload.code, client_ip.0.clone(), user_agent.0.clone()).await?;
+    let backup_codes = tfa.verify_setup(&user.id, &payload.code, client_ip.0.clone(), user_agent.0.clone()).await?;
 
     let auth = AuthService::new(&repo, config);
     let user_response = auth.get_user_response(&user.id).await?;
-    // Note: backup codes are generated during verify_setup but not included in
-    // AuthenticatedResponse. Users can retrieve them via POST /backup-codes/regenerate.
-    Ok(Json(AuthenticatedResponse::new(user_response, None)))
+    Ok(Json(AuthenticatedResponse::with_backup_codes(user_response, backup_codes)))
 }
 
 /// Complete 2FA login challenge (unauthenticated, uses two_factor_token).
@@ -60,6 +58,6 @@ pub async fn verify_two_factor_login(
     set_session_cookie(cookies, config, session_id, user.id);
 
     let auth = AuthService::new(&repo, config);
-    let user_response = auth.get_user_response(&user.id).await?;
+    let user_response = auth.build_user_response(user).await?;
     Ok(Json(AuthenticatedResponse::new(user_response, None)))
 }
