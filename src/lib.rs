@@ -231,6 +231,33 @@ fn stage_rate_limiter(rate_limit_config: config::RateLimitConfig) -> AdHoc {
     })
 }
 
+/// Mount v2 route handlers (spec-first, no rocket_okapi / OpenAPI generation).
+/// V2 routes are not included in Swagger UI — the OpenAPI spec is maintained externally.
+fn mount_v2_routes(mut rocket: Rocket<Build>, base_path: &str) -> Rocket<Build> {
+    // Auth (multiple route groups)
+    rocket = rocket.mount(join_base_path(base_path, "auth"), app_routes::v2::auth::routes());
+    rocket = rocket.mount(join_base_path(base_path, "auth/2fa"), app_routes::v2::auth::two_factor_routes());
+    // Resources
+    rocket = rocket.mount(join_base_path(base_path, "accounts"), app_routes::v2::accounts::routes());
+    rocket = rocket.mount(join_base_path(base_path, "categories"), app_routes::v2::categories::routes());
+    rocket = rocket.mount(join_base_path(base_path, "vendors"), app_routes::v2::vendors::routes());
+    rocket = rocket.mount(join_base_path(base_path, "overlays"), app_routes::v2::overlays::routes());
+    rocket = rocket.mount(join_base_path(base_path, "periods"), app_routes::v2::periods::routes());
+    rocket = rocket.mount(join_base_path(base_path, "targets"), app_routes::v2::targets::routes());
+    rocket = rocket.mount(join_base_path(base_path, "transactions"), app_routes::v2::transactions::routes());
+    // Settings (multiple route groups)
+    rocket = rocket.mount(join_base_path(base_path, "settings"), app_routes::v2::settings::routes());
+    rocket = rocket.mount(join_base_path(base_path, "settings/sessions"), app_routes::v2::settings::session_routes());
+    rocket = rocket.mount(join_base_path(base_path, "settings/export"), app_routes::v2::settings::export_routes());
+    // Dashboard, reference data, system
+    rocket = rocket.mount(join_base_path(base_path, "dashboard"), app_routes::v2::dashboard::routes());
+    rocket = rocket.mount(join_base_path(base_path, "currencies"), app_routes::v2::currencies::routes());
+    rocket = rocket.mount(join_base_path(base_path, "onboarding"), app_routes::v2::onboarding::routes());
+    rocket = rocket.mount(join_base_path(base_path, "health"), app_routes::v2::health::routes());
+    rocket = rocket.mount(join_base_path(base_path, ""), app_routes::v2::unlock::routes());
+    rocket
+}
+
 fn mount_api_routes(mut rocket: Rocket<Build>, base_path: &str) -> Rocket<Build> {
     rocket = rocket.mount(join_base_path(base_path, "accounts"), app_routes::account::routes().0);
     rocket = rocket.mount(join_base_path(base_path, "users"), app_routes::user::routes().0);
@@ -304,6 +331,14 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
     } else {
         rocket = mount_api_routes(rocket, primary_base_path);
     }
+
+    // Mount v2 routes at /v2 (primary path only; additional_base_paths are v1-only for now)
+    let v2_base_path = primary_base_path.replace("/v1", "/v2");
+    debug_assert!(
+        v2_base_path != *primary_base_path,
+        "v2 base path must differ from v1 — ensure primary_base_path contains '/v1'"
+    );
+    rocket = mount_v2_routes(rocket, &v2_base_path);
 
     rocket = rocket.register(
         primary_base_path.as_str(),
