@@ -10,7 +10,8 @@ pub fn routes() -> Vec<rocket::Route> {
     rocket::routes![
         status::two_factor_status,
         enable::enable_two_factor,
-        verify::verify_two_factor,
+        verify::verify_two_factor_setup,
+        verify::verify_two_factor_login,
         disable::disable_two_factor,
         backup_codes::regenerate_backup_codes,
         emergency_disable_request::emergency_disable_request,

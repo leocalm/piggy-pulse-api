@@ -1,5 +1,5 @@
 mod forgot_password;
-mod login;
+pub(crate) mod login;
 mod logout;
 mod me;
 mod password;

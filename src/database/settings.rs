@@ -78,6 +78,17 @@ impl PostgresRepository {
         Ok(settings)
     }
 
+    /// Update only the default currency on an existing settings row.
+    #[allow(dead_code)]
+    pub async fn update_settings_currency(&self, user_id: &Uuid, currency_id: &Uuid) -> Result<(), AppError> {
+        sqlx::query("UPDATE settings SET default_currency_id = $1, updated_at = now() WHERE user_id = $2")
+            .bind(currency_id)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     pub async fn create_default_settings(&self, user_id: &Uuid) -> Result<Settings, AppError> {
         let settings = sqlx::query_as::<_, Settings>(
             r#"

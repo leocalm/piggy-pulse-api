@@ -4,9 +4,16 @@ post:
   summary: Confirm 2FA setup or complete login challenge
   operationId: verifyTwoFactor
   description: |
-    Used in two contexts:
-    - **Setup confirmation**: called after /auth/2fa/enable to activate 2FA with a valid TOTP code.
-    - **Login challenge**: called after a login that returned requiresTwoFactor=true, using the twoFactorToken.
+    Dual-purpose endpoint that supports both authenticated and unauthenticated contexts:
+
+    **Setup confirmation (authenticated):**
+    Called after `POST /auth/2fa/enable` to activate 2FA with a valid TOTP code.
+    Requires an active session cookie. Request body: `{ "code": "123456" }`.
+
+    **Login challenge (unauthenticated):**
+    Called after a login that returned `requiresTwoFactor: true`, using the
+    `twoFactorToken` from the login response. No session cookie required.
+    Request body: `{ "code": "123456", "twoFactorToken": "..." }`.
   requestBody:
     required: true
     content:
