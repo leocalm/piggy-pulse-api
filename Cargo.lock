@@ -112,7 +112,7 @@ dependencies = [
  "base64ct",
  "blake2",
  "cpufeatures 0.2.17",
- "password-hash",
+ "password-hash 0.5.0",
 ]
 
 [[package]]
@@ -1745,6 +1745,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "password-hash"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ccbd25f71dd5249dba9ed843d52500c8757a25511560d01a94f4abf56b52a1d5"
+
+[[package]]
 name = "pear"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1817,7 +1823,7 @@ dependencies = [
  "lettre",
  "log",
  "okapi",
- "password-hash",
+ "password-hash 0.6.0",
  "proptest",
  "qrcode",
  "rand 0.10.0",
