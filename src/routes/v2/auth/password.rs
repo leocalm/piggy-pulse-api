@@ -29,6 +29,7 @@ pub async fn change_password(
 
     auth.change_password(
         &user.id,
+        user.session_id,
         &payload.current_password,
         &payload.new_password,
         client_ip.0.clone(),

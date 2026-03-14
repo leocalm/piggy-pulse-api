@@ -398,6 +398,21 @@ impl PostgresRepository {
         Ok(())
     }
 
+    /// Count emergency disable tokens created for a user since a given time.
+    pub async fn count_emergency_tokens_since(&self, user_id: &Uuid, since: chrono::DateTime<chrono::Utc>) -> Result<i64, AppError> {
+        let count: (i64,) = sqlx::query_as(
+            r#"
+            SELECT COUNT(*) FROM two_factor_emergency_tokens
+            WHERE user_id = $1 AND created_at >= $2
+            "#,
+        )
+        .bind(user_id)
+        .bind(since)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(count.0)
+    }
+
     /// Create emergency disable token
     pub async fn create_emergency_token(&self, user_id: &Uuid) -> Result<String, AppError> {
         // Generate random token (32 bytes = 64 hex chars)

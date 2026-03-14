@@ -19,7 +19,6 @@ pub enum LoginOutcome {
 }
 
 /// What happened during a V2 login attempt.
-#[allow(dead_code)]
 pub enum V2LoginOutcome {
     /// Credentials valid and session created successfully.
     Success { session_id: Uuid, user: User },
@@ -293,7 +292,6 @@ impl<'a> AuthService<'a> {
     // ─── V2 methods ─────────────────────────────────────────────────────────
 
     /// Register a new user, create default resources, and start a session.
-    #[allow(dead_code)]
     pub async fn register(
         &self,
         email: &str,
@@ -335,7 +333,6 @@ impl<'a> AuthService<'a> {
 
     /// V2 login flow. Returns V2LoginOutcome on success.
     /// On 2FA required: creates a pending 2FA token and returns it.
-    #[allow(dead_code)]
     pub async fn login_v2(
         &self,
         email: &str,
@@ -429,12 +426,15 @@ impl<'a> AuthService<'a> {
     }
 
     /// Build a UserResponse DTO for V2 endpoints.
-    #[allow(dead_code)]
     pub async fn get_user_response(&self, user_id: &Uuid) -> Result<crate::dto::auth::UserResponse, AppError> {
         let user = self.repo.get_user_by_id(user_id).await?.ok_or(AppError::UserNotFound)?;
+        self.build_user_response(user).await
+    }
 
+    /// Build a UserResponse DTO from an already-loaded User (avoids redundant DB fetch).
+    pub async fn build_user_response(&self, user: User) -> Result<crate::dto::auth::UserResponse, AppError> {
         // Resolve currency code from settings
-        let settings = self.repo.get_settings(user_id).await?;
+        let settings = self.repo.get_settings(&user.id).await?;
         let currency_code = if let Some(currency_id) = settings.default_currency_id {
             self.repo
                 .get_currency_by_id(&currency_id)
@@ -446,7 +446,7 @@ impl<'a> AuthService<'a> {
         };
 
         // 2FA status
-        let two_factor_enabled = self.repo.get_two_factor_by_user(user_id).await?.map(|tf| tf.is_enabled).unwrap_or(false);
+        let two_factor_enabled = self.repo.get_two_factor_by_user(&user.id).await?.map(|tf| tf.is_enabled).unwrap_or(false);
 
         Ok(crate::dto::auth::UserResponse {
             id: user.id,
@@ -458,10 +458,11 @@ impl<'a> AuthService<'a> {
     }
 
     /// Change password for V2 (maps wrong-current-password to 401).
-    #[allow(dead_code)]
+    /// Invalidates all other sessions after successful change.
     pub async fn change_password(
         &self,
         user_id: &Uuid,
+        current_session_id: Option<Uuid>,
         current_password: &str,
         new_password: &str,
         client_ip: Option<String>,
@@ -476,6 +477,13 @@ impl<'a> AuthService<'a> {
 
         self.repo.update_user_password(user_id, new_password).await?;
 
+        // Invalidate all other sessions (keep the current one)
+        if let Some(session_id) = current_session_id {
+            let _ = self.repo.delete_other_sessions_for_user(user_id, &session_id).await;
+        } else {
+            let _ = self.repo.delete_all_sessions_for_user(user_id).await;
+        }
+
         let _ = self
             .repo
             .create_security_audit_log(Some(user_id), audit_events::PASSWORD_CHANGED, true, client_ip, user_agent, None)
@@ -485,7 +493,6 @@ impl<'a> AuthService<'a> {
     }
 
     /// Request a password reset email. Always returns Ok for anti-enumeration.
-    #[allow(dead_code)]
     pub async fn forgot_password(&self, email: &str) -> Result<(), AppError> {
         let user = match self.repo.get_user_by_email(email).await? {
             Some(u) => u,
@@ -532,7 +539,6 @@ impl<'a> AuthService<'a> {
     }
 
     /// Reset a password using a token. Returns Unauthorized on invalid/expired token.
-    #[allow(dead_code)]
     pub async fn reset_password(&self, token: &str, new_password: &str) -> Result<(), AppError> {
         let token_hash = hex::encode(Sha256::digest(token.as_bytes()));
 
@@ -569,23 +575,23 @@ impl<'a> AuthService<'a> {
         Ok(())
     }
 
-    /// Refresh a cookie-based session. For cookie auth, the session is already
-    #[allow(dead_code)]
-    /// valid (guard passed), so this is a no-op confirmation.
-    pub async fn refresh_session(
-        &self,
-        _user_id: &Uuid,
-        _session_id: Option<Uuid>,
-        _user_agent: Option<&str>,
-        _client_ip: Option<&str>,
-    ) -> Result<(), AppError> {
-        // For cookie-based auth the session cookie is managed by the framework.
-        // Nothing to rotate/extend server-side — the route returns success.
-        Ok(())
+    /// Refresh a cookie-based session by replacing the current session with a new one.
+    /// Returns the new session_id so the caller can re-stamp the cookie.
+    pub async fn refresh_session(&self, user_id: &Uuid, session_id: Option<Uuid>, user_agent: Option<&str>, client_ip: Option<&str>) -> Result<Uuid, AppError> {
+        // Delete the old session
+        if let Some(sid) = session_id {
+            let _ = self.repo.delete_session(&sid).await;
+        }
+
+        // Create a fresh session with full TTL
+        let ttl_seconds = self.config.session.ttl_seconds.max(60);
+        let expires_at = Utc::now() + chrono::Duration::seconds(ttl_seconds);
+        let new_session = self.repo.create_session(user_id, expires_at, user_agent, client_ip).await?;
+
+        Ok(new_session.id)
     }
 
     /// Log out by deleting the session and recording an audit event.
-    #[allow(dead_code)]
     pub async fn logout(&self, user_id: &Uuid, session_id: Option<Uuid>, client_ip: Option<String>, user_agent: Option<String>) -> Result<(), AppError> {
         if let Some(sid) = session_id {
             let _ = self.repo.delete_session(&sid).await;

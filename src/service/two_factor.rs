@@ -11,13 +11,11 @@ use chrono::Utc;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-#[allow(dead_code)]
 pub struct TwoFactorService<'a> {
     pub repo: &'a PostgresRepository,
     pub config: &'a Config,
 }
 
-#[allow(dead_code)]
 impl<'a> TwoFactorService<'a> {
     pub fn new(repo: &'a PostgresRepository, config: &'a Config) -> Self {
         TwoFactorService { repo, config }
@@ -49,7 +47,7 @@ impl<'a> TwoFactorService<'a> {
         if let Some(existing) = self.repo.get_two_factor_by_user(user_id).await?
             && existing.is_enabled
         {
-            return Err(AppError::UserAlreadyExists("Two-factor authentication is already enabled.".to_string()));
+            return Err(AppError::BadRequest("Two-factor authentication is already enabled.".to_string()));
         }
 
         let encryption_key = self.config.two_factor.parse_encryption_key().map_err(AppError::BadRequest)?;
@@ -65,17 +63,16 @@ impl<'a> TwoFactorService<'a> {
         .await
         .map_err(|e| AppError::BadRequest(format!("Task join error: {}", e)))??;
 
-        // Store encrypted secret (not yet enabled)
+        // Store encrypted secret (not yet enabled — backup codes are generated
+        // after the user confirms setup via verify_setup())
         self.repo.create_two_factor_setup(user_id, &encrypted_secret, &nonce).await?;
-
-        // Generate backup codes (stored but not returned in V2 enable response)
-        let _ = self.repo.generate_backup_codes(user_id).await?;
 
         Ok(TwoFactorEnableResponse { secret, qr_code_uri: qr_code })
     }
 
     /// Verify a TOTP code and enable 2FA for the user.
-    pub async fn verify_setup(&self, user_id: &Uuid, code: &str, client_ip: Option<String>, user_agent: Option<String>) -> Result<(), AppError> {
+    /// Returns the backup codes so they can be shown to the user once.
+    pub async fn verify_setup(&self, user_id: &Uuid, code: &str, client_ip: Option<String>, user_agent: Option<String>) -> Result<Vec<String>, AppError> {
         let two_factor = self
             .repo
             .get_two_factor_by_user(user_id)
@@ -105,7 +102,9 @@ impl<'a> TwoFactorService<'a> {
             .create_security_audit_log(Some(user_id), audit_events::TWO_FACTOR_ENABLED, true, client_ip, user_agent, None)
             .await;
 
-        Ok(())
+        // Return the backup codes so the user can save them (shown only once)
+        let backup_codes = self.repo.generate_backup_codes(user_id).await?;
+        Ok(backup_codes)
     }
 
     /// Complete a 2FA login challenge: verify token + TOTP code, create session.
@@ -186,20 +185,9 @@ impl<'a> TwoFactorService<'a> {
             return Err(AppError::BadRequest("Two-factor authentication is not enabled.".to_string()));
         }
 
-        let encryption_key = self.config.two_factor.parse_encryption_key().map_err(AppError::BadRequest)?;
-        let secret = PostgresRepository::decrypt_secret(&two_factor.encrypted_secret, &two_factor.encryption_nonce, &encryption_key)?;
-
-        // Verify TOTP or backup code
-        let totp_valid = PostgresRepository::verify_totp_code(&secret, code)?;
-        let backup_valid = if !totp_valid {
-            self.repo.verify_backup_code(user_id, code).await?
-        } else {
-            false
-        };
-
-        if !totp_valid && !backup_valid {
-            return Err(AppError::BadRequest("Invalid two-factor code.".to_string()));
-        }
+        // Delegate to AuthService::verify_two_factor for rate-limited TOTP/backup verification
+        let auth = AuthService::new(self.repo, self.config);
+        auth.verify_two_factor(user_id, two_factor, code, client_ip.clone(), user_agent.clone()).await?;
 
         // Disable 2FA
         self.repo.disable_two_factor(user_id).await?;
@@ -223,7 +211,13 @@ impl<'a> TwoFactorService<'a> {
     }
 
     /// Regenerate backup codes (requires a valid TOTP/backup code).
-    pub async fn regenerate_backup_codes(&self, user_id: &Uuid, code: &str) -> Result<Vec<String>, AppError> {
+    pub async fn regenerate_backup_codes(
+        &self,
+        user_id: &Uuid,
+        code: &str,
+        client_ip: Option<String>,
+        user_agent: Option<String>,
+    ) -> Result<Vec<String>, AppError> {
         let two_factor = self
             .repo
             .get_two_factor_by_user(user_id)
@@ -252,6 +246,12 @@ impl<'a> TwoFactorService<'a> {
         .map_err(|e| AppError::BadRequest(format!("Task join error: {}", e)))??;
 
         let backup_codes = self.repo.generate_backup_codes(user_id).await?;
+
+        let _ = self
+            .repo
+            .create_security_audit_log(Some(user_id), audit_events::TWO_FACTOR_BACKUP_REGENERATED, true, client_ip, user_agent, None)
+            .await;
+
         Ok(backup_codes)
     }
 
@@ -266,6 +266,13 @@ impl<'a> TwoFactorService<'a> {
 
         if !has_2fa {
             return Ok(());
+        }
+
+        // Rate limit: max N emergency requests per hour (reuse password reset config)
+        let since = Utc::now() - chrono::Duration::hours(1);
+        let attempts = self.repo.count_emergency_tokens_since(&user.id, since).await?;
+        if attempts >= self.config.password_reset.max_attempts_per_hour as i64 {
+            return Ok(()); // silently bail to prevent enumeration
         }
 
         let token = self.repo.create_emergency_token(&user.id).await?;
