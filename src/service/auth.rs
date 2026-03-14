@@ -490,7 +490,7 @@ impl<'a> AuthService<'a> {
         let user = match self.repo.get_user_by_email(email).await? {
             Some(u) => u,
             None => {
-                PostgresRepository::dummy_verify("fake_password");
+                PostgresRepository::dummy_verify_no_input();
                 return Ok(());
             }
         };
