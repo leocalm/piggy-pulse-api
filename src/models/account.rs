@@ -173,6 +173,7 @@ pub struct AccountDetailResponse {
     pub inflows: i64,
     pub outflows: i64,
     pub net: i64,
+    pub transaction_count: i64,
     pub period_start: NaiveDate,
     pub period_end: NaiveDate,
 }

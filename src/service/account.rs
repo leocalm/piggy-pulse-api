@@ -166,6 +166,8 @@ impl<'a> AccountService<'a> {
         let inflow = detail.as_ref().map_or(0, |d| d.inflows);
         let outflow = detail.as_ref().map_or(0, |d| d.outflows);
         let net_change = detail.as_ref().map_or(0, |d| d.inflows - d.outflows);
+        // Use period-scoped count when available, fall back to all-time
+        let transaction_count = detail.as_ref().map_or(metrics.transaction_count, |d| d.transaction_count);
 
         // Fetch context (stability + category impact) when we have a period
         let context = if let Some(pid) = &resolved_period_id {
@@ -249,7 +251,7 @@ impl<'a> AccountService<'a> {
             net_change_this_period: net_change,
             next_transfer: None,
             balance_after_next_transfer: None,
-            number_of_transactions: metrics.transaction_count,
+            number_of_transactions: transaction_count,
         };
 
         Ok(AccountDetailsResponse {

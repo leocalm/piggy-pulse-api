@@ -351,12 +351,7 @@ impl PostgresRepository {
                             ELSE 0
                         END
                     ), 0)::bigint AS balance_change_this_period,
-                    COALESCE(SUM(
-                        CASE
-                            WHEN t.from_account_id = a.id THEN 1
-                            ELSE 0
-                        END
-                    ), 0)::bigint AS transaction_count
+                    COUNT(t.id)::bigint AS transaction_count
                 FROM account a
                 JOIN currency c ON c.id = a.currency_id
                 LEFT JOIN period p ON true
@@ -441,12 +436,7 @@ impl PostgresRepository {
                             ELSE 0
                         END
                     ), 0)::bigint AS balance_change_this_period,
-                    COALESCE(SUM(
-                        CASE
-                            WHEN t.from_account_id = a.id THEN 1
-                            ELSE 0
-                        END
-                    ), 0)::bigint AS transaction_count
+                    COUNT(t.id)::bigint AS transaction_count
                 FROM account a
                 JOIN currency c ON c.id = a.currency_id
                 LEFT JOIN period p ON true
@@ -946,6 +936,7 @@ ORDER BY a.id, d.day
             balance: i64,
             inflows: i64,
             outflows: i64,
+            transaction_count: i64,
             period_start: NaiveDate,
             period_end: NaiveDate,
         }
@@ -982,13 +973,15 @@ flow AS (
             WHEN category_type = 'Outgoing' THEN amount
             WHEN category_type = 'Transfer' AND from_account_id = $1 THEN amount
             ELSE 0
-        END), 0) AS outflows
+        END), 0) AS outflows,
+        COUNT(*)::bigint AS transaction_count
     FROM period_txs
 )
 SELECT
     a.balance                         AS balance,
     flow.inflows::bigint              AS inflows,
     flow.outflows::bigint             AS outflows,
+    flow.transaction_count::bigint    AS transaction_count,
     period.start_date                 AS period_start,
     period.end_date                   AS period_end
 FROM account a
@@ -1012,6 +1005,7 @@ WHERE a.id = $1 AND a.user_id = $3
             inflows: row.inflows,
             outflows: row.outflows,
             net,
+            transaction_count: row.transaction_count,
             period_start: row.period_start,
             period_end: row.period_end,
         })
@@ -1546,9 +1540,12 @@ LIMIT 1
             .fetch_one(&self.pool)
             .await?;
 
-        // If we have a period, use the full metrics query
+        // If we have a period, use the full metrics query (fetch limit+1 for has_more sentinel)
         if let Some(pid) = period_id {
-            let params = CursorParams { cursor, limit: Some(limit) };
+            let params = CursorParams {
+                cursor,
+                limit: Some(limit + 1),
+            };
             let rows = self.list_accounts(&params, pid, user_id).await?;
             return Ok((rows, total_count));
         }
