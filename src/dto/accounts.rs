@@ -10,7 +10,6 @@ use crate::dto::misc::CurrencyResponse;
 // ===== Enums =====
 
 #[derive(Serialize, Debug, Copy, Clone, Eq, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
 pub enum AccountType {
     #[default]
     Checking,
@@ -31,7 +30,7 @@ pub enum AccountStatus {
 // ===== Account Response =====
 
 #[derive(Serialize, Debug)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(tag = "type")]
 pub enum AccountResponse {
     Checking(AccountResponseFields),
     Savings(AccountResponseFields),
@@ -150,7 +149,7 @@ pub type AccountBalanceHistoryResponse = Vec<AccountBalanceHistoryPoint>;
 // ===== Account Requests =====
 
 #[derive(Deserialize, Debug)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(tag = "type")]
 pub enum CreateAccountRequest {
     Checking(AccountRequestFields),
     Savings(AccountRequestFields),
@@ -177,4 +176,98 @@ pub type UpdateAccountRequest = CreateAccountRequest;
 #[serde(rename_all = "camelCase")]
 pub struct AdjustBalanceRequest {
     pub new_balance: i64,
+}
+
+// ===== Conversions from domain models to V2 DTOs =====
+
+use crate::dto::misc::SymbolPosition as DtoSymbolPosition;
+use crate::models::account::{Account, AccountType as ModelAccountType};
+use crate::models::currency::SymbolPosition as ModelSymbolPosition;
+
+impl CreateAccountRequest {
+    pub fn fields(&self) -> &AccountRequestFields {
+        match self {
+            Self::Checking(f) | Self::Savings(f) | Self::CreditCard(f) | Self::Wallet(f) | Self::Allowance(f) => f,
+        }
+    }
+
+    pub fn model_account_type(&self) -> ModelAccountType {
+        match self {
+            Self::Checking(_) => ModelAccountType::Checking,
+            Self::Savings(_) => ModelAccountType::Savings,
+            Self::CreditCard(_) => ModelAccountType::CreditCard,
+            Self::Wallet(_) => ModelAccountType::Wallet,
+            Self::Allowance(_) => ModelAccountType::Allowance,
+        }
+    }
+}
+
+fn convert_symbol_position(pos: ModelSymbolPosition) -> DtoSymbolPosition {
+    match pos {
+        ModelSymbolPosition::Before => DtoSymbolPosition::Before,
+        ModelSymbolPosition::After => DtoSymbolPosition::After,
+    }
+}
+
+fn convert_account_type(t: ModelAccountType) -> AccountType {
+    match t {
+        ModelAccountType::Checking => AccountType::Checking,
+        ModelAccountType::Savings => AccountType::Savings,
+        ModelAccountType::CreditCard => AccountType::CreditCard,
+        ModelAccountType::Wallet => AccountType::Wallet,
+        ModelAccountType::Allowance => AccountType::Allowance,
+    }
+}
+
+impl From<&Account> for AccountResponse {
+    fn from(account: &Account) -> Self {
+        let fields = AccountResponseFields {
+            id: account.id,
+            name: account.name.clone(),
+            color: account.color.clone(),
+            status: if account.is_archived {
+                AccountStatus::Inactive
+            } else {
+                AccountStatus::Active
+            },
+            initial_balance: account.balance,
+            currency: CurrencyResponse {
+                id: account.currency.id,
+                name: account.currency.name.clone(),
+                symbol: account.currency.symbol.clone(),
+                code: account.currency.currency.clone(),
+                decimal_places: account.currency.decimal_places,
+                symbol_position: convert_symbol_position(account.currency.symbol_position),
+            },
+            spend_limit: account.spend_limit.map(|s| s as i64),
+        };
+        match account.account_type {
+            ModelAccountType::Checking => Self::Checking(fields),
+            ModelAccountType::Savings => Self::Savings(fields),
+            ModelAccountType::CreditCard => Self::CreditCard(fields),
+            ModelAccountType::Wallet => Self::Wallet(fields),
+            ModelAccountType::Allowance => Self::Allowance(fields),
+        }
+    }
+}
+
+impl From<&Account> for AccountSummaryResponse {
+    fn from(account: &Account) -> Self {
+        Self {
+            id: account.id,
+            name: account.name.clone(),
+            account_type: convert_account_type(account.account_type),
+            color: account.color.clone(),
+            status: if account.is_archived {
+                AccountStatus::Inactive
+            } else {
+                AccountStatus::Active
+            },
+            current_balance: account.balance,
+            net_change_this_period: 0,
+            next_transfer: None,
+            balance_after_next_transfer: None,
+            number_of_transactions: 0,
+        }
+    }
 }

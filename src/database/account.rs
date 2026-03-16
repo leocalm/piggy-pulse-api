@@ -1355,6 +1355,218 @@ LIMIT 1
             },
         })
     }
+
+    // ===== V2-specific methods =====
+
+    /// Simple paginated list of accounts (no period metrics). Returns (accounts, total_count).
+    pub async fn list_accounts_v2(&self, cursor: Option<Uuid>, limit: i64, user_id: &Uuid) -> Result<(Vec<Account>, i64), AppError> {
+        let total_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM account WHERE user_id = $1 AND is_archived = FALSE")
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
+
+        let fetch_limit = limit + 1;
+        let rows = if let Some(cursor_id) = cursor {
+            sqlx::query_as::<_, AccountRow>(
+                r#"
+                SELECT
+                    a.id, a.name, a.color, a.icon,
+                    a.account_type::text as account_type,
+                    a.balance, a.spend_limit, a.is_archived, a.next_transfer_amount,
+                    c.id as currency_id, c.name as currency_name, c.symbol as currency_symbol,
+                    c.currency as currency_code, c.decimal_places as currency_decimal_places,
+                    c.symbol_position as currency_symbol_position
+                FROM account a
+                JOIN currency c ON c.id = a.currency_id
+                WHERE (a.created_at, a.id) < (SELECT created_at, id FROM account WHERE id = $1)
+                  AND a.user_id = $2 AND a.is_archived = FALSE
+                ORDER BY a.created_at DESC, a.id DESC
+                LIMIT $3
+                "#,
+            )
+            .bind(cursor_id)
+            .bind(user_id)
+            .bind(fetch_limit)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, AccountRow>(
+                r#"
+                SELECT
+                    a.id, a.name, a.color, a.icon,
+                    a.account_type::text as account_type,
+                    a.balance, a.spend_limit, a.is_archived, a.next_transfer_amount,
+                    c.id as currency_id, c.name as currency_name, c.symbol as currency_symbol,
+                    c.currency as currency_code, c.decimal_places as currency_decimal_places,
+                    c.symbol_position as currency_symbol_position
+                FROM account a
+                JOIN currency c ON c.id = a.currency_id
+                WHERE a.user_id = $1 AND a.is_archived = FALSE
+                ORDER BY a.created_at DESC, a.id DESC
+                LIMIT $2
+                "#,
+            )
+            .bind(user_id)
+            .bind(fetch_limit)
+            .fetch_all(&self.pool)
+            .await?
+        };
+
+        Ok((rows.into_iter().map(Account::from).collect(), total_count))
+    }
+
+    /// Get account options for V2 (id, name, color instead of icon).
+    pub async fn get_account_options_v2(&self, user_id: &Uuid) -> Result<Vec<(Uuid, String, String)>, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            id: Uuid,
+            name: String,
+            color: String,
+        }
+
+        let rows = sqlx::query_as::<_, Row>(
+            r#"
+            SELECT id, name, color
+            FROM account
+            WHERE user_id = $1 AND is_archived = FALSE
+            ORDER BY name ASC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|r| (r.id, r.name, r.color)).collect())
+    }
+
+    /// V2 adjust balance: updates the account balance without requiring budget periods.
+    pub async fn adjust_balance_v2(&self, id: &Uuid, new_balance: i64, user_id: &Uuid) -> Result<Account, AppError> {
+        let row = sqlx::query_as::<_, AccountRow>(
+            r#"
+            UPDATE account
+            SET balance = $1
+            WHERE id = $2 AND user_id = $3
+            RETURNING
+                id, name, color, icon,
+                account_type::text as account_type,
+                balance, spend_limit, is_archived, next_transfer_amount,
+                (SELECT cu.id FROM currency cu WHERE cu.id = currency_id) as currency_id,
+                (SELECT cu.name FROM currency cu WHERE cu.id = currency_id) as currency_name,
+                (SELECT cu.symbol FROM currency cu WHERE cu.id = currency_id) as currency_symbol,
+                (SELECT cu.currency FROM currency cu WHERE cu.id = currency_id) as currency_code,
+                (SELECT cu.decimal_places FROM currency cu WHERE cu.id = currency_id) as currency_decimal_places,
+                (SELECT cu.symbol_position FROM currency cu WHERE cu.id = currency_id) as currency_symbol_position
+            "#,
+        )
+        .bind(new_balance)
+        .bind(id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Account not found".to_string()))?;
+
+        Ok(Account::from(row))
+    }
+
+    /// Get the current (active) budget period, or the latest one.
+    pub async fn get_current_period_id(&self, user_id: &Uuid) -> Result<Option<Uuid>, AppError> {
+        let id: Option<Uuid> = sqlx::query_scalar(
+            r#"
+            SELECT id FROM budget_period
+            WHERE user_id = $1
+            ORDER BY
+                CASE WHEN start_date <= CURRENT_DATE AND end_date >= CURRENT_DATE THEN 0 ELSE 1 END,
+                end_date DESC
+            LIMIT 1
+            "#,
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(id)
+    }
+
+    /// Simple paginated list of accounts with summary metrics for V2.
+    pub async fn list_accounts_summary_v2(
+        &self,
+        cursor: Option<Uuid>,
+        limit: i64,
+        period_id: Option<&Uuid>,
+        user_id: &Uuid,
+    ) -> Result<(Vec<AccountWithMetrics>, i64), AppError> {
+        let total_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM account WHERE user_id = $1 AND is_archived = FALSE")
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
+
+        // If we have a period, use the full metrics query
+        if let Some(pid) = period_id {
+            let params = CursorParams { cursor, limit: Some(limit) };
+            let rows = self.list_accounts(&params, pid, user_id).await?;
+            return Ok((rows, total_count));
+        }
+
+        // No period: return accounts with zero metrics
+        let fetch_limit = limit + 1;
+        let rows = if let Some(cursor_id) = cursor {
+            sqlx::query_as::<_, AccountRow>(
+                r#"
+                SELECT
+                    a.id, a.name, a.color, a.icon,
+                    a.account_type::text as account_type,
+                    a.balance, a.spend_limit, a.is_archived, a.next_transfer_amount,
+                    c.id as currency_id, c.name as currency_name, c.symbol as currency_symbol,
+                    c.currency as currency_code, c.decimal_places as currency_decimal_places,
+                    c.symbol_position as currency_symbol_position
+                FROM account a
+                JOIN currency c ON c.id = a.currency_id
+                WHERE (a.created_at, a.id) < (SELECT created_at, id FROM account WHERE id = $1)
+                  AND a.user_id = $2 AND a.is_archived = FALSE
+                ORDER BY a.created_at DESC, a.id DESC
+                LIMIT $3
+                "#,
+            )
+            .bind(cursor_id)
+            .bind(user_id)
+            .bind(fetch_limit)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, AccountRow>(
+                r#"
+                SELECT
+                    a.id, a.name, a.color, a.icon,
+                    a.account_type::text as account_type,
+                    a.balance, a.spend_limit, a.is_archived, a.next_transfer_amount,
+                    c.id as currency_id, c.name as currency_name, c.symbol as currency_symbol,
+                    c.currency as currency_code, c.decimal_places as currency_decimal_places,
+                    c.symbol_position as currency_symbol_position
+                FROM account a
+                JOIN currency c ON c.id = a.currency_id
+                WHERE a.user_id = $1 AND a.is_archived = FALSE
+                ORDER BY a.created_at DESC, a.id DESC
+                LIMIT $2
+                "#,
+            )
+            .bind(user_id)
+            .bind(fetch_limit)
+            .fetch_all(&self.pool)
+            .await?
+        };
+
+        Ok((
+            rows.into_iter()
+                .map(|r| AccountWithMetrics {
+                    account: Account::from(r),
+                    current_balance: 0,
+                    balance_change_this_period: 0,
+                    transaction_count: 0,
+                })
+                .collect(),
+            total_count,
+        ))
+    }
 }
 
 pub fn account_type_from_db<T: AsRef<str>>(value: T) -> AccountType {
