@@ -209,7 +209,7 @@ impl<'a> AccountService<'a> {
                 ctx.category_impact
                     .into_iter()
                     .map(|c| CategoryBreakdownItem {
-                        category_id: Uuid::nil(),
+                        category_id: c.category_id,
                         category_name: c.category_name,
                         value: c.amount,
                     })

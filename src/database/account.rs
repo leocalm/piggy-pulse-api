@@ -283,9 +283,7 @@ impl PostgresRepository {
                     END
                 ), 0))::bigint AS current_balance,
                 0::bigint AS balance_change_this_period,
-                COALESCE(SUM(
-                    CASE WHEN t.from_account_id = a.id THEN 1 ELSE 0 END
-                ), 0)::bigint AS transaction_count
+                COUNT(t.id)::bigint AS transaction_count
             FROM account a
             JOIN currency c ON c.id = a.currency_id
             LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id) AND t.user_id = $2
@@ -1244,6 +1242,7 @@ LIMIT $3
         // --- Category impact: outflows in current period, grouped by category ---
         #[derive(sqlx::FromRow)]
         struct CategoryRow {
+            category_id: Uuid,
             category_name: String,
             amount: i64,
         }
@@ -1254,6 +1253,7 @@ WITH period AS (
     SELECT start_date, end_date FROM budget_period WHERE id = $2 AND user_id = $3
 )
 SELECT
+    cat.id AS category_id,
     cat.name AS category_name,
     SUM(t.amount)::bigint AS amount
 FROM transaction t
@@ -1264,7 +1264,7 @@ WHERE t.from_account_id = $1
   AND cat.category_type = 'Outgoing'
   AND t.occurred_at >= period.start_date
   AND t.occurred_at <= period.end_date
-GROUP BY cat.name
+GROUP BY cat.id, cat.name
 ORDER BY amount DESC
             "#,
         )
@@ -1280,6 +1280,7 @@ ORDER BY amount DESC
             .map(|r| {
                 let pct = if total_outflows > 0 { (r.amount * 100 / total_outflows) as i32 } else { 0 };
                 CategoryImpactItem {
+                    category_id: r.category_id,
                     category_name: r.category_name,
                     amount: r.amount,
                     percentage: pct,
@@ -1574,9 +1575,7 @@ LIMIT 1
                         END
                     ), 0))::bigint AS current_balance,
                     0::bigint AS balance_change_this_period,
-                    COALESCE(SUM(
-                        CASE WHEN t.from_account_id = a.id THEN 1 ELSE 0 END
-                    ), 0)::bigint AS transaction_count
+                    COUNT(t.id)::bigint AS transaction_count
                 FROM account a
                 JOIN currency c ON c.id = a.currency_id
                 LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id) AND t.user_id = $2
@@ -1615,9 +1614,7 @@ LIMIT 1
                         END
                     ), 0))::bigint AS current_balance,
                     0::bigint AS balance_change_this_period,
-                    COALESCE(SUM(
-                        CASE WHEN t.from_account_id = a.id THEN 1 ELSE 0 END
-                    ), 0)::bigint AS transaction_count
+                    COUNT(t.id)::bigint AS transaction_count
                 FROM account a
                 JOIN currency c ON c.id = a.currency_id
                 LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id) AND t.user_id = $1

@@ -198,6 +198,7 @@ pub struct AccountTransactionResponse {
 
 #[derive(Serialize, Debug, JsonSchema)]
 pub struct CategoryImpactItem {
+    pub category_id: Uuid,
     pub category_name: String,
     pub amount: i64,
     pub percentage: i32,

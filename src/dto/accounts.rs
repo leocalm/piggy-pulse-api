@@ -298,24 +298,3 @@ impl From<&Account> for AccountResponse {
         }
     }
 }
-
-impl From<&Account> for AccountSummaryResponse {
-    fn from(account: &Account) -> Self {
-        Self {
-            id: account.id,
-            name: account.name.clone(),
-            account_type: AccountType::from(account.account_type),
-            color: account.color.clone(),
-            status: if account.is_archived {
-                AccountStatus::Inactive
-            } else {
-                AccountStatus::Active
-            },
-            current_balance: account.balance,
-            net_change_this_period: 0,
-            next_transfer: None,
-            balance_after_next_transfer: None,
-            number_of_transactions: 0,
-        }
-    }
-}
