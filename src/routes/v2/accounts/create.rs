@@ -10,6 +10,7 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::dto::accounts::{AccountResponse, CreateAccountRequest};
 use crate::error::app_error::AppError;
 use crate::models::account::AccountRequest;
+use crate::service::account::AccountService;
 
 #[post("/", data = "<payload>")]
 pub async fn create_account(pool: &State<PgPool>, user: CurrentUser, payload: Json<CreateAccountRequest>) -> Result<(Status, Json<AccountResponse>), AppError> {
@@ -27,6 +28,7 @@ pub async fn create_account(pool: &State<PgPool>, user: CurrentUser, payload: Js
     };
 
     let repo = PostgresRepository { pool: pool.inner().clone() };
-    let account = repo.create_account(&v1_request, &user.id).await?;
-    Ok((Status::Created, Json(AccountResponse::from(&account))))
+    let service = AccountService::new(&repo);
+    let response = service.create_account(&v1_request, &user.id).await?;
+    Ok((Status::Created, Json(response)))
 }

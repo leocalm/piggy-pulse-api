@@ -1,11 +1,11 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::dto::accounts::{
     AccountBalanceHistoryPoint, AccountBalanceHistoryResponse, AccountDetailsResponse, AccountListResponse as V2AccountListResponse, AccountResponse,
-    AccountStatus, AccountSummaryListResponse, AccountSummaryResponse, StabilityContext,
+    AccountStatus, AccountSummaryListResponse, AccountSummaryResponse, CategoryBreakdownItem, LargestOutflow, StabilityContext,
 };
 use crate::dto::common::{Date, PaginatedResponse};
 use crate::error::app_error::AppError;
-use crate::models::account::{AccountBalancePerDay, AccountListResponse, AccountType as ModelAccountType, AccountWithMetrics};
+use crate::models::account::{AccountBalancePerDay, AccountListResponse, AccountRequest, AccountWithMetrics};
 use crate::models::currency::CurrencyResponse;
 use crate::models::dashboard::BudgetPerDayResponse;
 use crate::models::pagination::CursorParams;
@@ -82,7 +82,7 @@ impl<'a> AccountService<'a> {
             .map(|m| AccountSummaryResponse {
                 id: m.account.id,
                 name: m.account.name.clone(),
-                account_type: convert_account_type(m.account.account_type),
+                account_type: crate::dto::accounts::AccountType::from(m.account.account_type),
                 color: m.account.color.clone(),
                 status: if m.account.is_archived {
                     AccountStatus::Inactive
@@ -126,14 +126,17 @@ impl<'a> AccountService<'a> {
             let response: Vec<AccountBalanceHistoryPoint> = points
                 .into_iter()
                 .map(|p| {
-                    let date = chrono::NaiveDate::parse_from_str(&p.date, "%Y-%m-%d").unwrap_or_default();
-                    AccountBalanceHistoryPoint {
+                    let date = chrono::NaiveDate::parse_from_str(&p.date, "%Y-%m-%d").map_err(|e| {
+                        tracing::error!(date = %p.date, error = %e, "Malformed date in balance history — possible data integrity issue");
+                        AppError::BadRequest(format!("Invalid date in balance history: {}", p.date))
+                    })?;
+                    Ok(AccountBalanceHistoryPoint {
                         date: Date(date),
                         balance: p.balance,
                         transaction_count: 0,
-                    }
+                    })
                 })
-                .collect();
+                .collect::<Result<Vec<_>, AppError>>()?;
 
             return Ok(response);
         }
@@ -142,9 +145,9 @@ impl<'a> AccountService<'a> {
     }
 
     pub async fn get_account_details(&self, account_id: &Uuid, period_id: Option<Uuid>, user_id: &Uuid) -> Result<AccountDetailsResponse, AppError> {
-        let account = self
+        let metrics = self
             .repository
-            .get_account_by_id(account_id, user_id)
+            .get_account_with_metrics(account_id, user_id)
             .await?
             .ok_or_else(|| AppError::NotFound("Account not found".to_string()))?;
 
@@ -153,56 +156,98 @@ impl<'a> AccountService<'a> {
             None => self.repository.get_current_period_id(user_id).await?,
         };
 
-        let base = AccountSummaryResponse {
-            id: account.id,
-            name: account.name.clone(),
-            account_type: convert_account_type(account.account_type),
-            color: account.color.clone(),
-            status: if account.is_archived {
-                AccountStatus::Inactive
-            } else {
-                AccountStatus::Active
-            },
-            current_balance: account.balance,
-            net_change_this_period: 0,
-            next_transfer: None,
-            balance_after_next_transfer: None,
-            number_of_transactions: 0,
+        // Fetch period-scoped detail (inflow/outflow/balance_change)
+        let detail = if let Some(pid) = &resolved_period_id {
+            Some(self.repository.get_account_detail(account_id, pid, user_id).await?)
+        } else {
+            None
         };
 
-        let (inflow, outflow) = if let Some(pid) = &resolved_period_id {
-            match self.repository.get_account_detail(account_id, pid, user_id).await {
-                Ok(detail) => (detail.inflows, detail.outflows),
-                Err(_) => (0, 0),
+        let inflow = detail.as_ref().map_or(0, |d| d.inflows);
+        let outflow = detail.as_ref().map_or(0, |d| d.outflows);
+        let net_change = detail.as_ref().map_or(0, |d| d.inflows - d.outflows);
+
+        // Fetch context (stability + category impact) when we have a period
+        let context = if let Some(pid) = &resolved_period_id {
+            match self.repository.get_account_context(account_id, pid, user_id).await {
+                Ok(ctx) => Some(ctx),
+                Err(e) => {
+                    tracing::warn!(account_id = %account_id, error = %e, "Failed to fetch account context");
+                    None
+                }
             }
         } else {
-            (0, 0)
+            None
         };
 
-        Ok(AccountDetailsResponse {
-            base,
-            inflow,
-            outflow,
-            stability_context: StabilityContext {
+        let stability_context = context.as_ref().map_or_else(
+            || StabilityContext {
                 periods_on_target: 0,
                 average_closing_balance: 0,
                 highest_closing_balance: 0,
                 lowest_closing_balance: 0,
                 largest_single_outflow: None,
             },
-            categories_breakdown: vec![],
+            |ctx| StabilityContext {
+                periods_on_target: ctx.stability.periods_closed_positive,
+                average_closing_balance: ctx.stability.avg_closing_balance,
+                highest_closing_balance: ctx.stability.highest_closing_balance,
+                lowest_closing_balance: ctx.stability.lowest_closing_balance,
+                largest_single_outflow: if ctx.stability.largest_single_outflow > 0 {
+                    Some(LargestOutflow {
+                        category_name: ctx.stability.largest_single_outflow_category.clone(),
+                        value: ctx.stability.largest_single_outflow,
+                    })
+                } else {
+                    None
+                },
+            },
+        );
+
+        let categories_breakdown = context
+            .map(|ctx| {
+                ctx.category_impact
+                    .into_iter()
+                    .map(|c| CategoryBreakdownItem {
+                        category_id: Uuid::nil(),
+                        category_name: c.category_name,
+                        value: c.amount,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let account = &metrics.account;
+        let base = AccountSummaryResponse {
+            id: account.id,
+            name: account.name.clone(),
+            account_type: crate::dto::accounts::AccountType::from(account.account_type),
+            color: account.color.clone(),
+            status: if account.is_archived {
+                AccountStatus::Inactive
+            } else {
+                AccountStatus::Active
+            },
+            current_balance: metrics.current_balance,
+            net_change_this_period: net_change,
+            next_transfer: None,
+            balance_after_next_transfer: None,
+            number_of_transactions: metrics.transaction_count,
+        };
+
+        Ok(AccountDetailsResponse {
+            base,
+            inflow,
+            outflow,
+            stability_context,
+            categories_breakdown,
             transactions_breakdown: vec![],
         })
     }
-}
 
-fn convert_account_type(t: ModelAccountType) -> crate::dto::accounts::AccountType {
-    match t {
-        ModelAccountType::Checking => crate::dto::accounts::AccountType::Checking,
-        ModelAccountType::Savings => crate::dto::accounts::AccountType::Savings,
-        ModelAccountType::CreditCard => crate::dto::accounts::AccountType::CreditCard,
-        ModelAccountType::Wallet => crate::dto::accounts::AccountType::Wallet,
-        ModelAccountType::Allowance => crate::dto::accounts::AccountType::Allowance,
+    pub async fn create_account(&self, request: &AccountRequest, user_id: &Uuid) -> Result<AccountResponse, AppError> {
+        let account = self.repository.create_account(request, user_id).await?;
+        Ok(AccountResponse::from(&account))
     }
 }
 
