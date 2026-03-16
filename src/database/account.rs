@@ -1030,6 +1030,7 @@ WHERE a.id = $1 AND a.user_id = $3
         struct HistoryRow {
             date: String,
             balance: i64,
+            transaction_count: i64,
         }
 
         let rows = sqlx::query_as::<_, HistoryRow>(
@@ -1068,7 +1069,8 @@ daily_totals AS (
                 WHEN c.category_type = 'Transfer' AND t.to_account_id   = $1  THEN  t.amount::bigint
                 ELSE 0
             END
-        ) AS daily_amount
+        ) AS daily_amount,
+        COUNT(*)::bigint AS tx_count
     FROM transaction t
     JOIN category c ON c.id = t.category_id
     WHERE (t.from_account_id = $1 OR t.to_account_id = $1)
@@ -1082,7 +1084,8 @@ SELECT
     (bb.base_bal + SUM(COALESCE(dt.daily_amount, 0)) OVER (
         ORDER BY d.day
         ROWS UNBOUNDED PRECEDING
-    ))::bigint AS balance
+    ))::bigint AS balance,
+    COALESCE(dt.tx_count, 0)::bigint AS transaction_count
 FROM days d
 CROSS JOIN base_balance bb
 LEFT JOIN daily_totals dt ON dt.day = d.day
@@ -1101,6 +1104,7 @@ ORDER BY d.day
             .map(|r| AccountBalanceHistoryPoint {
                 date: r.date,
                 balance: r.balance,
+                transaction_count: r.transaction_count,
             })
             .collect())
     }

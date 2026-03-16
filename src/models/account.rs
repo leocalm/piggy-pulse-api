@@ -181,6 +181,7 @@ pub struct AccountDetailResponse {
 pub struct AccountBalanceHistoryPoint {
     pub date: String, // "YYYY-MM-DD"
     pub balance: i64, // integer cents
+    pub transaction_count: i64,
 }
 
 #[derive(Serialize, Debug, JsonSchema)]

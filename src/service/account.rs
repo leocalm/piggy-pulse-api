@@ -1,7 +1,7 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::dto::accounts::{
     AccountBalanceHistoryPoint, AccountBalanceHistoryResponse, AccountDetailsResponse, AccountListResponse as V2AccountListResponse, AccountResponse,
-    AccountStatus, AccountSummaryListResponse, AccountSummaryResponse, CategoryBreakdownItem, LargestOutflow, StabilityContext,
+    AccountStatus, AccountSummaryListResponse, AccountSummaryResponse, CategoryBreakdownItem, LargestOutflow, StabilityContext, TransactionBreakdownItem,
 };
 use crate::dto::common::{Date, PaginatedResponse};
 use crate::error::app_error::AppError;
@@ -133,7 +133,7 @@ impl<'a> AccountService<'a> {
                     Ok(AccountBalanceHistoryPoint {
                         date: Date(date),
                         balance: p.balance,
-                        transaction_count: 0,
+                        transaction_count: p.transaction_count,
                     })
                 })
                 .collect::<Result<Vec<_>, AppError>>()?;
@@ -217,6 +217,23 @@ impl<'a> AccountService<'a> {
             })
             .unwrap_or_default();
 
+        // Fetch transactions breakdown when we have a period
+        let transactions_breakdown = if let Some(pid) = &resolved_period_id {
+            let params = CursorParams { cursor: None, limit: Some(50) };
+            let txs = self.repository.get_account_transactions(account_id, pid, None, &params, user_id).await?;
+            txs.into_iter()
+                .map(|tx| TransactionBreakdownItem {
+                    date: Date(tx.occurred_at),
+                    description: tx.description,
+                    category_name: tx.category_name,
+                    amount: tx.amount,
+                    balance: tx.running_balance,
+                })
+                .collect()
+        } else {
+            vec![]
+        };
+
         let account = &metrics.account;
         let base = AccountSummaryResponse {
             id: account.id,
@@ -241,7 +258,7 @@ impl<'a> AccountService<'a> {
             outflow,
             stability_context,
             categories_breakdown,
-            transactions_breakdown: vec![],
+            transactions_breakdown,
         })
     }
 
