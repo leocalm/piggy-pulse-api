@@ -70,6 +70,7 @@ async fn test_create_credit_card_with_spend_limit() {
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
     assert_eq!(body["type"], "CreditCard");
     assert_eq!(body["name"], "Visa Gold");
+    assert_eq!(body["initialBalance"], 0);
     assert_eq!(body["spendLimit"], 200000);
     assert_eq!(body["status"], "active");
 }
@@ -644,6 +645,7 @@ async fn test_summary_user_isolation() {
     assert_eq!(resp.status(), Status::Ok);
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
     assert_eq!(body["data"].as_array().unwrap().len(), 0);
+    assert_eq!(body["totalCount"], 0);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -674,8 +676,12 @@ async fn test_update_account_persists_via_get() {
         .dispatch()
         .await;
     assert_eq!(resp.status(), Status::Ok);
+    let put_body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(put_body["name"], "After Update");
+    assert_eq!(put_body["color"], "#abcdef");
+    assert_eq!(put_body["initialBalance"], 20000);
 
-    // Verify persistence via GET — not just the PUT response
+    // Also verify persistence via GET
     let get_resp = client.get(format!("{}/accounts/{}", V2_BASE, account_id)).dispatch().await;
     assert_eq!(get_resp.status(), Status::Ok);
     let body: Value = serde_json::from_str(&get_resp.into_string().await.unwrap()).unwrap();
@@ -1034,6 +1040,35 @@ async fn test_details_reflects_transactions() {
 
 #[rocket::async_test]
 #[ignore = "requires database"]
+async fn test_details_excludes_out_of_period_transactions() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let account_id = common::entities::create_account(&client, "Period Filter", 100_000).await;
+    let category_id = common::entities::create_category(&client, "Misc", "expense").await;
+    // Period covers March only
+    let period_id = common::entities::create_period(&client, "2026-03-01", "2026-03-31").await;
+    // In-period transaction
+    common::entities::create_transaction(&client, &account_id, &category_id, 25_000, "2026-03-15").await;
+    // Out-of-period transaction (February) — should not affect details aggregates
+    common::entities::create_transaction(&client, &account_id, &category_id, 10_000, "2026-02-15").await;
+
+    let resp = client
+        .get(format!("{}/accounts/{}/details?periodId={}", V2_BASE, account_id, period_id))
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    // Only the in-period transaction should be counted
+    assert_eq!(body["outflow"], 25_000);
+    assert_eq!(body["numberOfTransactions"], 1);
+    // currentBalance reflects ALL transactions (both in and out of period)
+    assert_eq!(body["currentBalance"], 65_000); // 100_000 - 25_000 - 10_000
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
 async fn test_details_no_transactions_zeros() {
     let client = test_client().await;
     create_user_and_login(&client).await;
@@ -1339,6 +1374,7 @@ async fn test_summary_no_transactions_zeros() {
     common::assertions::assert_paginated(&body);
 
     let data = body["data"].as_array().unwrap();
+    assert_eq!(data.len(), 1, "fresh user with one account");
     let acct = data
         .iter()
         .find(|a| a["id"].as_str() == Some(&account_id))
@@ -1346,6 +1382,22 @@ async fn test_summary_no_transactions_zeros() {
     assert_eq!(acct["currentBalance"], 80_000);
     assert_eq!(acct["netChangeThisPeriod"], 0);
     assert_eq!(acct["numberOfTransactions"], 0);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_summary_empty_state() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+    let period_id = common::entities::create_period(&client, "2026-03-01", "2026-03-31").await;
+
+    let resp = client.get(format!("{}/accounts/summary?periodId={}", V2_BASE, period_id)).dispatch().await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    common::assertions::assert_paginated(&body);
+    assert_eq!(body["data"].as_array().unwrap().len(), 0);
+    assert_eq!(body["totalCount"], 0);
 }
 
 #[rocket::async_test]
