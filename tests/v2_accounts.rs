@@ -41,6 +41,7 @@ async fn test_create_checking_with_initial_balance() {
     assert_eq!(body["color"], "#1a2b3c");
     assert_eq!(body["initialBalance"], 50000);
     assert_eq!(body["status"], "active");
+    assert_eq!(body["currencyId"], eur_id);
 }
 
 #[rocket::async_test]
@@ -680,6 +681,7 @@ async fn test_update_account_persists_via_get() {
     assert_eq!(put_body["name"], "After Update");
     assert_eq!(put_body["color"], "#abcdef");
     assert_eq!(put_body["initialBalance"], 20000);
+    assert_eq!(put_body["type"], "Checking");
 
     // Also verify persistence via GET
     let get_resp = client.get(format!("{}/accounts/{}", V2_BASE, account_id)).dispatch().await;
@@ -688,6 +690,7 @@ async fn test_update_account_persists_via_get() {
     assert_eq!(body["name"], "After Update");
     assert_eq!(body["color"], "#abcdef");
     assert_eq!(body["initialBalance"], 20000);
+    assert_eq!(body["type"], "Checking");
 }
 
 #[rocket::async_test]
@@ -973,6 +976,29 @@ async fn test_adjust_balance_persists_via_get() {
 
 #[rocket::async_test]
 #[ignore = "requires database"]
+async fn test_adjust_balance_downward() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+    let account_id = common::entities::create_account(&client, "Shrink Me", 50000).await;
+
+    let payload = json!({ "newBalance": 5000 });
+
+    let resp = client
+        .post(format!("{}/accounts/{}/adjust-balance", V2_BASE, account_id))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Ok);
+
+    let get_resp = client.get(format!("{}/accounts/{}", V2_BASE, account_id)).dispatch().await;
+    assert_eq!(get_resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&get_resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["initialBalance"], 5000);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
 async fn test_adjust_balance_not_found() {
     let client = test_client().await;
     create_user_and_login(&client).await;
@@ -1062,6 +1088,7 @@ async fn test_details_excludes_out_of_period_transactions() {
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
     // Only the in-period transaction should be counted
     assert_eq!(body["outflow"], 25_000);
+    assert_eq!(body["inflow"], 0);
     assert_eq!(body["numberOfTransactions"], 1);
     // currentBalance reflects ALL transactions (both in and out of period)
     assert_eq!(body["currentBalance"], 65_000); // 100_000 - 25_000 - 10_000
@@ -1348,6 +1375,7 @@ async fn test_summary_reflects_transactions() {
 
     let data = body["data"].as_array().unwrap();
     assert_eq!(data.len(), 1, "fresh user with one account");
+    assert_eq!(body["totalCount"].as_i64().unwrap(), 1);
     let acct = data
         .iter()
         .find(|a| a["id"].as_str() == Some(&account_id))
@@ -1375,6 +1403,7 @@ async fn test_summary_no_transactions_zeros() {
 
     let data = body["data"].as_array().unwrap();
     assert_eq!(data.len(), 1, "fresh user with one account");
+    assert_eq!(body["totalCount"].as_i64().unwrap(), 1);
     let acct = data
         .iter()
         .find(|a| a["id"].as_str() == Some(&account_id))
