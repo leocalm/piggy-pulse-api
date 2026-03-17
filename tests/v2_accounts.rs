@@ -74,6 +74,7 @@ async fn test_create_credit_card_with_spend_limit() {
     assert_eq!(body["initialBalance"], 0);
     assert_eq!(body["spendLimit"], 200000);
     assert_eq!(body["status"], "active");
+    assert_eq!(body["currencyId"], eur_id);
 }
 
 #[rocket::async_test]
@@ -105,6 +106,7 @@ async fn test_create_allowance_with_null_spend_limit() {
     assert_eq!(body["initialBalance"], 20000);
     assert!(body["spendLimit"].is_null(), "expected spendLimit to be null for allowance");
     assert_eq!(body["status"], "active");
+    assert_eq!(body["currencyId"], eur_id);
 }
 
 #[rocket::async_test]
@@ -310,6 +312,7 @@ async fn test_get_account_returns_created_values() {
     assert_eq!(body["initialBalance"], 75000);
     assert_eq!(body["type"], "Checking");
     assert_eq!(body["status"], "active");
+    assert_eq!(body["currencyId"], eur_id);
 }
 
 #[rocket::async_test]
@@ -1031,6 +1034,33 @@ async fn test_adjust_balance_missing_field() {
         "expected 400 or 422, got {}",
         resp.status()
     );
+
+    // Verify account unchanged
+    let get_resp = client.get(format!("{}/accounts/{}", V2_BASE, account_id)).dispatch().await;
+    assert_eq!(get_resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&get_resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["initialBalance"], 10000);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_adjust_balance_invalid_type() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+    let account_id = common::entities::create_account(&client, "Bad Type", 10000).await;
+
+    let resp = client
+        .post(format!("{}/accounts/{}/adjust-balance", V2_BASE, account_id))
+        .header(ContentType::JSON)
+        .body(json!({ "newBalance": "not-a-number" }).to_string())
+        .dispatch()
+        .await;
+
+    assert!(
+        resp.status() == Status::BadRequest || resp.status() == Status::UnprocessableEntity,
+        "expected 400 or 422, got {}",
+        resp.status()
+    );
 }
 
 #[rocket::async_test]
@@ -1442,7 +1472,11 @@ async fn test_summary_excludes_out_of_period_transactions() {
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
     let data = body["data"].as_array().unwrap();
     assert_eq!(data.len(), 1);
-    let acct = &data[0];
+    assert_eq!(body["totalCount"].as_i64().unwrap(), 1);
+    let acct = data
+        .iter()
+        .find(|a| a["id"].as_str() == Some(&account_id))
+        .expect("account not found in summary");
     // Only the March transaction affects period-scoped aggregates
     assert_eq!(acct["netChangeThisPeriod"], -25_000);
     assert_eq!(acct["numberOfTransactions"], 1);
