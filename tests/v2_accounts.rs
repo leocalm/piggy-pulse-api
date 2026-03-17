@@ -208,6 +208,26 @@ async fn test_create_account_missing_fields() {
 
 #[rocket::async_test]
 #[ignore = "requires database"]
+async fn test_create_account_malformed_json() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let resp = client
+        .post(format!("{}/accounts", V2_BASE))
+        .header(ContentType::JSON)
+        .body("{invalid json")
+        .dispatch()
+        .await;
+
+    assert!(
+        resp.status() == Status::BadRequest || resp.status() == Status::UnprocessableEntity,
+        "expected 400 or 422, got {}",
+        resp.status()
+    );
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
 async fn test_create_account_no_auth() {
     let client = test_client().await;
 
@@ -366,7 +386,7 @@ async fn test_list_accounts_pagination_and_cursor() {
         assert_eq!(resp.status(), Status::Ok);
         let page: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
         let page_data = page["data"].as_array().unwrap();
-        assert!(!page_data.is_empty(), "non-final page returned empty data");
+        assert!(!page_data.is_empty(), "page returned empty data");
         collected.extend(page_data.iter().cloned());
 
         if page["hasMore"] == true {
@@ -387,6 +407,106 @@ async fn test_list_accounts_no_auth() {
     let resp = client.get(format!("{}/accounts", V2_BASE)).dispatch().await;
 
     assert_eq!(resp.status(), Status::Unauthorized);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// User isolation — write operations
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_update_account_user_isolation() {
+    let client_a = test_client().await;
+    create_user_and_login(&client_a).await;
+    let account_id = common::entities::create_account(&client_a, "User A Only", 10000).await;
+
+    let client_b = test_client().await;
+    create_user_and_login(&client_b).await;
+    let eur_id = common::auth::get_eur_currency_id(&client_b).await;
+
+    let payload = json!({
+        "type": "Checking",
+        "name": "Hijacked",
+        "color": "#000000",
+        "initialBalance": 99999,
+        "currencyId": eur_id,
+        "spendLimit": null
+    });
+    let resp = client_b
+        .put(format!("{}/accounts/{}", V2_BASE, account_id))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::NotFound);
+
+    // Verify User A's account is unchanged
+    let get_resp = client_a.get(format!("{}/accounts/{}", V2_BASE, account_id)).dispatch().await;
+    let body: Value = serde_json::from_str(&get_resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["name"], "User A Only");
+    assert_eq!(body["initialBalance"], 10000);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_delete_account_user_isolation() {
+    let client_a = test_client().await;
+    create_user_and_login(&client_a).await;
+    let account_id = common::entities::create_account(&client_a, "Protected", 10000).await;
+
+    let client_b = test_client().await;
+    create_user_and_login(&client_b).await;
+
+    let resp = client_b.delete(format!("{}/accounts/{}", V2_BASE, account_id)).dispatch().await;
+    assert_eq!(resp.status(), Status::NotFound);
+
+    // Verify User A's account still exists
+    let get_resp = client_a.get(format!("{}/accounts/{}", V2_BASE, account_id)).dispatch().await;
+    assert_eq!(get_resp.status(), Status::Ok);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_archive_account_user_isolation() {
+    let client_a = test_client().await;
+    create_user_and_login(&client_a).await;
+    let account_id = common::entities::create_account(&client_a, "No Archive", 10000).await;
+
+    let client_b = test_client().await;
+    create_user_and_login(&client_b).await;
+
+    let resp = client_b.post(format!("{}/accounts/{}/archive", V2_BASE, account_id)).dispatch().await;
+    assert_eq!(resp.status(), Status::NotFound);
+
+    // Verify still active
+    let get_resp = client_a.get(format!("{}/accounts/{}", V2_BASE, account_id)).dispatch().await;
+    let body: Value = serde_json::from_str(&get_resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["status"], "active");
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_adjust_balance_user_isolation() {
+    let client_a = test_client().await;
+    create_user_and_login(&client_a).await;
+    let account_id = common::entities::create_account(&client_a, "Stable Balance", 10000).await;
+
+    let client_b = test_client().await;
+    create_user_and_login(&client_b).await;
+
+    let payload = json!({ "newBalance": 99999 });
+    let resp = client_b
+        .post(format!("{}/accounts/{}/adjust-balance", V2_BASE, account_id))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::NotFound);
+
+    // Verify balance unchanged
+    let get_resp = client_a.get(format!("{}/accounts/{}", V2_BASE, account_id)).dispatch().await;
+    let body: Value = serde_json::from_str(&get_resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["initialBalance"], 10000);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -679,6 +799,7 @@ async fn test_adjust_balance_persists_via_get() {
     assert_eq!(resp.status(), Status::Ok);
 
     // Verify persistence via GET
+    // adjust-balance updates the account's initialBalance (the stored balance field)
     let get_resp = client.get(format!("{}/accounts/{}", V2_BASE, account_id)).dispatch().await;
     assert_eq!(get_resp.status(), Status::Ok);
     let body: Value = serde_json::from_str(&get_resp.into_string().await.unwrap()).unwrap();
@@ -838,16 +959,17 @@ async fn test_balance_history_reflects_transactions() {
     let entries = body.as_array().unwrap();
     assert!(!entries.is_empty(), "balance history should contain entries");
 
-    // Find entries on transaction dates and verify balances
+    // Find entries on transaction dates — use starts_with to handle both
+    // bare date strings ("2026-03-10") and ISO datetimes ("2026-03-10T00:00:00Z")
     let entry_mar10 = entries
         .iter()
-        .find(|e| e["date"].as_str() == Some("2026-03-10"))
+        .find(|e| e["date"].as_str().is_some_and(|d| d.starts_with("2026-03-10")))
         .expect("should have entry for 2026-03-10");
     assert_eq!(entry_mar10["balance"], 70_000); // 100_000 - 30_000
 
     let entry_mar20 = entries
         .iter()
-        .find(|e| e["date"].as_str() == Some("2026-03-20"))
+        .find(|e| e["date"].as_str().is_some_and(|d| d.starts_with("2026-03-20")))
         .expect("should have entry for 2026-03-20");
     assert_eq!(entry_mar20["balance"], 50_000); // 70_000 - 20_000
 }
@@ -990,6 +1112,7 @@ async fn test_summary_reflects_transactions() {
         .find(|a| a["id"].as_str() == Some(&account_id))
         .expect("account not found in summary");
     assert_eq!(acct["currentBalance"], 60_000); // 100_000 - 40_000
+    // Negative netChange = net outflow (expense exceeded income this period)
     assert_eq!(acct["netChangeThisPeriod"], -40_000);
 }
 
