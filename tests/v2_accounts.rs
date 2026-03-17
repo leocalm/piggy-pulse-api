@@ -419,6 +419,9 @@ async fn test_list_accounts_pagination_and_cursor() {
     }
 
     assert_eq!(collected.len(), 3, "expected 3 total items after paginating");
+
+    let ids: std::collections::HashSet<&str> = collected.iter().filter_map(|a| a["id"].as_str()).collect();
+    assert_eq!(ids.len(), 3, "cursor pagination returned duplicate items");
 }
 
 #[rocket::async_test]
@@ -525,10 +528,11 @@ async fn test_adjust_balance_user_isolation() {
         .await;
     assert_eq!(resp.status(), Status::NotFound);
 
-    // Verify balance unchanged
+    // Verify balance and status unchanged
     let get_resp = client_a.get(format!("{}/accounts/{}", V2_BASE, account_id)).dispatch().await;
     let body: Value = serde_json::from_str(&get_resp.into_string().await.unwrap()).unwrap();
     assert_eq!(body["initialBalance"], 10000);
+    assert_eq!(body["status"], "active");
 }
 
 #[rocket::async_test]
@@ -560,13 +564,14 @@ async fn test_details_user_isolation() {
     let client_a = test_client().await;
     create_user_and_login(&client_a).await;
     let account_id = common::entities::create_account(&client_a, "Secret Details", 10000).await;
-    let period_id = common::entities::create_period(&client_a, "2026-03-01", "2026-03-31").await;
 
+    // Use User B's own period so the 404 is strictly about account isolation
     let client_b = test_client().await;
     create_user_and_login(&client_b).await;
+    let period_id_b = common::entities::create_period(&client_b, "2026-03-01", "2026-03-31").await;
 
     let resp = client_b
-        .get(format!("{}/accounts/{}/details?periodId={}", V2_BASE, account_id, period_id))
+        .get(format!("{}/accounts/{}/details?periodId={}", V2_BASE, account_id, period_id_b))
         .dispatch()
         .await;
     assert_eq!(resp.status(), Status::NotFound);
@@ -578,16 +583,67 @@ async fn test_balance_history_user_isolation() {
     let client_a = test_client().await;
     create_user_and_login(&client_a).await;
     let account_id = common::entities::create_account(&client_a, "Secret History", 10000).await;
-    let period_id = common::entities::create_period(&client_a, "2026-03-01", "2026-03-31").await;
+
+    // Use User B's own period so the 404 is strictly about account isolation
+    let client_b = test_client().await;
+    create_user_and_login(&client_b).await;
+    let period_id_b = common::entities::create_period(&client_b, "2026-03-01", "2026-03-31").await;
+
+    let resp = client_b
+        .get(format!("{}/accounts/{}/balance-history?periodId={}", V2_BASE, account_id, period_id_b))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::NotFound);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_list_accounts_user_isolation() {
+    let client_a = test_client().await;
+    create_user_and_login(&client_a).await;
+    common::entities::create_account(&client_a, "User A Account", 10000).await;
 
     let client_b = test_client().await;
     create_user_and_login(&client_b).await;
 
-    let resp = client_b
-        .get(format!("{}/accounts/{}/balance-history?periodId={}", V2_BASE, account_id, period_id))
-        .dispatch()
-        .await;
-    assert_eq!(resp.status(), Status::NotFound);
+    let resp = client_b.get(format!("{}/accounts", V2_BASE)).dispatch().await;
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["data"].as_array().unwrap().len(), 0);
+    assert_eq!(body["totalCount"], 0);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_options_user_isolation() {
+    let client_a = test_client().await;
+    create_user_and_login(&client_a).await;
+    common::entities::create_account(&client_a, "User A Option", 10000).await;
+
+    let client_b = test_client().await;
+    create_user_and_login(&client_b).await;
+
+    let resp = client_b.get(format!("{}/accounts/options", V2_BASE)).dispatch().await;
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    assert!(body.as_array().unwrap().is_empty(), "User B should see no options from User A");
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_summary_user_isolation() {
+    let client_a = test_client().await;
+    create_user_and_login(&client_a).await;
+    common::entities::create_account(&client_a, "User A Summary", 10000).await;
+
+    let client_b = test_client().await;
+    create_user_and_login(&client_b).await;
+    let period_id_b = common::entities::create_period(&client_b, "2026-03-01", "2026-03-31").await;
+
+    let resp = client_b.get(format!("{}/accounts/summary?periodId={}", V2_BASE, period_id_b)).dispatch().await;
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["data"].as_array().unwrap().len(), 0);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -880,6 +936,7 @@ async fn test_adjust_balance_persists_via_get() {
     let client = test_client().await;
     create_user_and_login(&client).await;
     let account_id = common::entities::create_account(&client, "Adjust Me", 10000).await;
+    let period_id = common::entities::create_period(&client, "2026-03-01", "2026-03-31").await;
 
     let payload = json!({ "newBalance": 50000 });
 
@@ -897,6 +954,15 @@ async fn test_adjust_balance_persists_via_get() {
     assert_eq!(get_resp.status(), Status::Ok);
     let body: Value = serde_json::from_str(&get_resp.into_string().await.unwrap()).unwrap();
     assert_eq!(body["initialBalance"], 50000);
+
+    // Also verify the computed currentBalance reflects the adjustment (no transactions)
+    let details_resp = client
+        .get(format!("{}/accounts/{}/details?periodId={}", V2_BASE, account_id, period_id))
+        .dispatch()
+        .await;
+    assert_eq!(details_resp.status(), Status::Ok);
+    let details: Value = serde_json::from_str(&details_resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(details["currentBalance"], 50_000);
 }
 
 #[rocket::async_test]
@@ -1246,6 +1312,7 @@ async fn test_summary_reflects_transactions() {
     common::assertions::assert_paginated(&body);
 
     let data = body["data"].as_array().unwrap();
+    assert_eq!(data.len(), 1, "fresh user with one account");
     let acct = data
         .iter()
         .find(|a| a["id"].as_str() == Some(&account_id))
