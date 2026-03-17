@@ -62,23 +62,30 @@ pub type TransactionListResponse = PaginatedResponse<TransactionResponse>;
 /// validator 0.20 does not support #[derive(Validate)] on enums; range/length validation for
 /// shared fields must be enforced explicitly by the route layer.
 #[derive(Deserialize, Debug)]
-#[serde(tag = "transactionType", rename_all = "camelCase")]
+#[serde(tag = "transactionType")]
 pub enum CreateTransactionRequest {
     Regular {
         date: Date,
         description: String,
         amount: i64, // INVARIANT: amount >= 0, validated in route layer
+        #[serde(rename = "fromAccountId")]
         from_account_id: Uuid,
+        #[serde(rename = "categoryId")]
         category_id: Uuid,
+        #[serde(rename = "vendorId")]
         vendor_id: Option<Uuid>,
     },
     Transfer {
         date: Date,
         description: String,
         amount: i64, // INVARIANT: amount >= 0, validated in route layer
+        #[serde(rename = "fromAccountId")]
         from_account_id: Uuid,
+        #[serde(rename = "categoryId")]
         category_id: Uuid,
+        #[serde(rename = "vendorId")]
         vendor_id: Option<Uuid>,
+        #[serde(rename = "toAccountId")]
         to_account_id: Uuid,
     },
 }

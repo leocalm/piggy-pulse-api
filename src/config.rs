@@ -4,7 +4,7 @@ use rocket::figment::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[derive(Deserialize, Serialize, Clone, Default)]
 pub struct TwoFactorConfig {
     /// Hex-encoded 32-byte encryption key for TOTP secrets (generate with: openssl rand -hex 32)
     #[serde(default = "default_encryption_key")]
@@ -52,7 +52,7 @@ impl TwoFactorConfig {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[derive(Deserialize, Serialize, Clone, Default)]
 pub struct Config {
     pub database: DatabaseConfig,
     pub server: ServerConfig,
@@ -68,7 +68,7 @@ pub struct Config {
     pub login_rate_limit: LoginRateLimitConfig,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct DatabaseConfig {
     pub url: String,
     pub max_connections: u32,
@@ -97,7 +97,7 @@ pub struct CorsConfig {
     pub allow_credentials: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct RateLimitConfig {
     pub read_limit: u32,
     pub mutation_limit: u32,
@@ -137,7 +137,7 @@ pub struct ApiConfig {
     pub expose_swagger_ui: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct EmailConfig {
     pub smtp_host: String,
     pub smtp_port: u16,

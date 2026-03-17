@@ -75,6 +75,9 @@ pub enum AppError {
 
     #[error("Two-factor authentication token required")]
     TwoFactorTokenRequired { two_factor_token: String },
+
+    #[error("Conflict: {0}")]
+    Conflict(String),
 }
 
 impl AppError {
@@ -136,6 +139,7 @@ impl From<&AppError> for Status {
             AppError::TooManyAttempts { .. } => Status::TooManyRequests,
             AppError::AccountLocked { .. } => Status { code: 423 },
             AppError::TwoFactorTokenRequired { .. } => Status::Forbidden,
+            AppError::Conflict(_) => Status::Conflict,
         }
     }
 }

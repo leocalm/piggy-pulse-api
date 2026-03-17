@@ -41,7 +41,7 @@ async fn test_create_checking_with_initial_balance() {
     assert_eq!(body["color"], "#1a2b3c");
     assert_eq!(body["initialBalance"], 50000);
     assert_eq!(body["status"], "active");
-    assert_eq!(body["currencyId"], eur_id);
+    assert_eq!(body["currency"]["id"], eur_id);
     assert!(body["spendLimit"].is_null(), "checking accounts should have null spendLimit");
 }
 
@@ -76,7 +76,7 @@ async fn test_create_credit_card_with_spend_limit() {
     assert_eq!(body["initialBalance"], 0);
     assert_eq!(body["spendLimit"], 200000);
     assert_eq!(body["status"], "active");
-    assert_eq!(body["currencyId"], eur_id);
+    assert_eq!(body["currency"]["id"], eur_id);
 }
 
 #[rocket::async_test]
@@ -110,7 +110,7 @@ async fn test_create_allowance_with_null_spend_limit() {
     assert_eq!(body["initialBalance"], 20000);
     assert!(body["spendLimit"].is_null(), "expected spendLimit to be null for allowance");
     assert_eq!(body["status"], "active");
-    assert_eq!(body["currencyId"], eur_id);
+    assert_eq!(body["currency"]["id"], eur_id);
 }
 
 #[rocket::async_test]
@@ -316,7 +316,7 @@ async fn test_get_account_returns_created_values() {
     assert_eq!(body["initialBalance"], 75000);
     assert_eq!(body["type"], "Checking");
     assert_eq!(body["status"], "active");
-    assert_eq!(body["currencyId"], eur_id);
+    assert_eq!(body["currency"]["id"], eur_id);
 }
 
 #[rocket::async_test]
@@ -692,7 +692,7 @@ async fn test_update_account_persists_via_get() {
     assert_eq!(put_body["color"], "#abcdef");
     assert_eq!(put_body["initialBalance"], 20000);
     assert_eq!(put_body["type"], "Checking");
-    assert_eq!(put_body["currencyId"], eur_id);
+    assert_eq!(put_body["currency"]["id"], eur_id);
 
     // Also verify persistence via GET
     let get_resp = client.get(format!("{}/accounts/{}", V2_BASE, account_id)).dispatch().await;
@@ -702,7 +702,7 @@ async fn test_update_account_persists_via_get() {
     assert_eq!(body["color"], "#abcdef");
     assert_eq!(body["initialBalance"], 20000);
     assert_eq!(body["type"], "Checking");
-    assert_eq!(body["currencyId"], eur_id);
+    assert_eq!(body["currency"]["id"], eur_id);
 }
 
 #[rocket::async_test]

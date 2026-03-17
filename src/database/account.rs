@@ -262,6 +262,46 @@ impl PostgresRepository {
         Ok(row.map(Account::from))
     }
 
+    /// Get a single account with its computed current_balance from all transactions.
+    pub async fn get_account_with_metrics(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<AccountWithMetrics>, AppError> {
+        let row = sqlx::query_as::<_, AccountMetricsRow>(
+            r#"
+            SELECT
+                a.id, a.name, a.color, a.icon,
+                a.account_type::text as account_type,
+                a.balance, a.spend_limit, a.is_archived, a.next_transfer_amount,
+                c.id as currency_id, c.name as currency_name, c.symbol as currency_symbol,
+                c.currency as currency_code, c.decimal_places as currency_decimal_places,
+                c.symbol_position as currency_symbol_position,
+                (a.balance + COALESCE(SUM(
+                    CASE
+                        WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
+                        WHEN cat.category_type = 'Outgoing'                              THEN -t.amount::bigint
+                        WHEN cat.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
+                        WHEN cat.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
+                        ELSE 0
+                    END
+                ), 0))::bigint AS current_balance,
+                0::bigint AS balance_change_this_period,
+                COUNT(t.id)::bigint AS transaction_count
+            FROM account a
+            JOIN currency c ON c.id = a.currency_id
+            LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id) AND t.user_id = $2
+            LEFT JOIN category cat ON t.category_id = cat.id
+            WHERE a.id = $1 AND a.user_id = $2
+            GROUP BY a.id, a.name, a.color, a.icon, a.account_type, a.balance,
+                     a.spend_limit, a.is_archived, a.next_transfer_amount,
+                     c.id, c.name, c.symbol, c.currency, c.decimal_places, c.symbol_position
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(AccountWithMetrics::from))
+    }
+
     pub async fn list_accounts(&self, params: &CursorParams, budget_period_id: &Uuid, user_id: &Uuid) -> Result<Vec<AccountWithMetrics>, AppError> {
         let rows = if let Some(cursor) = params.cursor {
             sqlx::query_as::<_, AccountMetricsRow>(
@@ -311,12 +351,7 @@ impl PostgresRepository {
                             ELSE 0
                         END
                     ), 0)::bigint AS balance_change_this_period,
-                    COALESCE(SUM(
-                        CASE
-                            WHEN t.from_account_id = a.id THEN 1
-                            ELSE 0
-                        END
-                    ), 0)::bigint AS transaction_count
+                    COUNT(t.id) FILTER (WHERE p.start_date IS NOT NULL AND t.occurred_at >= p.start_date AND t.occurred_at <= p.end_date)::bigint AS transaction_count
                 FROM account a
                 JOIN currency c ON c.id = a.currency_id
                 LEFT JOIN period p ON true
@@ -401,12 +436,7 @@ impl PostgresRepository {
                             ELSE 0
                         END
                     ), 0)::bigint AS balance_change_this_period,
-                    COALESCE(SUM(
-                        CASE
-                            WHEN t.from_account_id = a.id THEN 1
-                            ELSE 0
-                        END
-                    ), 0)::bigint AS transaction_count
+                    COUNT(t.id) FILTER (WHERE p.start_date IS NOT NULL AND t.occurred_at >= p.start_date AND t.occurred_at <= p.end_date)::bigint AS transaction_count
                 FROM account a
                 JOIN currency c ON c.id = a.currency_id
                 LEFT JOIN period p ON true
@@ -524,31 +554,45 @@ impl PostgresRepository {
     }
 
     pub async fn archive_account(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
-        let affected = sqlx::query("UPDATE account SET is_archived = TRUE WHERE id = $1 AND user_id = $2 AND is_archived = FALSE")
+        let is_archived: Option<bool> = sqlx::query_scalar("SELECT is_archived FROM account WHERE id = $1 AND user_id = $2")
+            .bind(id)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        match is_archived {
+            None => return Err(AppError::NotFound("Account not found".to_string())),
+            Some(true) => return Err(AppError::Conflict("Account is already archived".to_string())),
+            Some(false) => {}
+        }
+
+        sqlx::query("UPDATE account SET is_archived = TRUE WHERE id = $1 AND user_id = $2")
             .bind(id)
             .bind(user_id)
             .execute(&self.pool)
-            .await?
-            .rows_affected();
-
-        if affected == 0 {
-            return Err(AppError::NotFound("Account not found or already archived".to_string()));
-        }
+            .await?;
 
         Ok(())
     }
 
     pub async fn restore_account(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
-        let affected = sqlx::query("UPDATE account SET is_archived = FALSE WHERE id = $1 AND user_id = $2 AND is_archived = TRUE")
+        let is_archived: Option<bool> = sqlx::query_scalar("SELECT is_archived FROM account WHERE id = $1 AND user_id = $2")
+            .bind(id)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        match is_archived {
+            None => return Err(AppError::NotFound("Account not found".to_string())),
+            Some(false) => return Err(AppError::Conflict("Account is already active".to_string())),
+            Some(true) => {}
+        }
+
+        sqlx::query("UPDATE account SET is_archived = FALSE WHERE id = $1 AND user_id = $2")
             .bind(id)
             .bind(user_id)
             .execute(&self.pool)
-            .await?
-            .rows_affected();
-
-        if affected == 0 {
-            return Err(AppError::NotFound("Account not found or not archived".to_string()));
-        }
+            .await?;
 
         Ok(())
     }
@@ -853,8 +897,8 @@ ORDER BY a.id, d.day
         let row = sqlx::query_as::<_, UpdateAccountRow>(
             r#"
             UPDATE account
-            SET name = $1, color = $2, icon = $3, account_type = $4::text::account_type, spend_limit = $5, next_transfer_amount = $6
-            WHERE id = $7 AND user_id = $8
+            SET name = $1, color = $2, icon = $3, account_type = $4::text::account_type, balance = $5, spend_limit = $6, next_transfer_amount = $7
+            WHERE id = $8 AND user_id = $9
             RETURNING
                 id,
                 name,
@@ -871,6 +915,7 @@ ORDER BY a.id, d.day
         .bind(&request.color)
         .bind(&request.icon)
         .bind(&account_type_str)
+        .bind(request.balance)
         .bind(request.spend_limit)
         .bind(request.next_transfer_amount)
         .bind(id)
@@ -906,6 +951,7 @@ ORDER BY a.id, d.day
             balance: i64,
             inflows: i64,
             outflows: i64,
+            transaction_count: i64,
             period_start: NaiveDate,
             period_end: NaiveDate,
         }
@@ -942,13 +988,15 @@ flow AS (
             WHEN category_type = 'Outgoing' THEN amount
             WHEN category_type = 'Transfer' AND from_account_id = $1 THEN amount
             ELSE 0
-        END), 0) AS outflows
+        END), 0) AS outflows,
+        COUNT(*)::bigint AS transaction_count
     FROM period_txs
 )
 SELECT
     a.balance                         AS balance,
     flow.inflows::bigint              AS inflows,
     flow.outflows::bigint             AS outflows,
+    flow.transaction_count::bigint    AS transaction_count,
     period.start_date                 AS period_start,
     period.end_date                   AS period_end
 FROM account a
@@ -972,6 +1020,7 @@ WHERE a.id = $1 AND a.user_id = $3
             inflows: row.inflows,
             outflows: row.outflows,
             net,
+            transaction_count: row.transaction_count,
             period_start: row.period_start,
             period_end: row.period_end,
         })
@@ -988,6 +1037,7 @@ WHERE a.id = $1 AND a.user_id = $3
         struct HistoryRow {
             date: String,
             balance: i64,
+            transaction_count: i64,
         }
 
         let rows = sqlx::query_as::<_, HistoryRow>(
@@ -1026,7 +1076,8 @@ daily_totals AS (
                 WHEN c.category_type = 'Transfer' AND t.to_account_id   = $1  THEN  t.amount::bigint
                 ELSE 0
             END
-        ) AS daily_amount
+        ) AS daily_amount,
+        COUNT(*)::bigint AS tx_count
     FROM transaction t
     JOIN category c ON c.id = t.category_id
     WHERE (t.from_account_id = $1 OR t.to_account_id = $1)
@@ -1040,7 +1091,8 @@ SELECT
     (bb.base_bal + SUM(COALESCE(dt.daily_amount, 0)) OVER (
         ORDER BY d.day
         ROWS UNBOUNDED PRECEDING
-    ))::bigint AS balance
+    ))::bigint AS balance,
+    COALESCE(dt.tx_count, 0)::bigint AS transaction_count
 FROM days d
 CROSS JOIN base_balance bb
 LEFT JOIN daily_totals dt ON dt.day = d.day
@@ -1059,6 +1111,7 @@ ORDER BY d.day
             .map(|r| AccountBalanceHistoryPoint {
                 date: r.date,
                 balance: r.balance,
+                transaction_count: r.transaction_count,
             })
             .collect())
     }
@@ -1198,6 +1251,7 @@ LIMIT $3
         // --- Category impact: outflows in current period, grouped by category ---
         #[derive(sqlx::FromRow)]
         struct CategoryRow {
+            category_id: Uuid,
             category_name: String,
             amount: i64,
         }
@@ -1208,6 +1262,7 @@ WITH period AS (
     SELECT start_date, end_date FROM budget_period WHERE id = $2 AND user_id = $3
 )
 SELECT
+    cat.id AS category_id,
     cat.name AS category_name,
     SUM(t.amount)::bigint AS amount
 FROM transaction t
@@ -1218,7 +1273,7 @@ WHERE t.from_account_id = $1
   AND cat.category_type = 'Outgoing'
   AND t.occurred_at >= period.start_date
   AND t.occurred_at <= period.end_date
-GROUP BY cat.name
+GROUP BY cat.id, cat.name
 ORDER BY amount DESC
             "#,
         )
@@ -1234,6 +1289,7 @@ ORDER BY amount DESC
             .map(|r| {
                 let pct = if total_outflows > 0 { (r.amount * 100 / total_outflows) as i32 } else { 0 };
                 CategoryImpactItem {
+                    category_id: r.category_id,
                     category_name: r.category_name,
                     amount: r.amount,
                     percentage: pct,
@@ -1354,6 +1410,242 @@ LIMIT 1
                 largest_single_outflow_category: largest_outflow_cat,
             },
         })
+    }
+
+    // ===== V2-specific methods =====
+
+    /// Simple paginated list of accounts (no period metrics). Returns (accounts, total_count).
+    pub async fn list_accounts_v2(&self, cursor: Option<Uuid>, limit: i64, user_id: &Uuid) -> Result<(Vec<Account>, i64), AppError> {
+        let total_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM account WHERE user_id = $1 AND is_archived = FALSE")
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
+
+        let fetch_limit = limit + 1;
+        let rows = if let Some(cursor_id) = cursor {
+            sqlx::query_as::<_, AccountRow>(
+                r#"
+                SELECT
+                    a.id, a.name, a.color, a.icon,
+                    a.account_type::text as account_type,
+                    a.balance, a.spend_limit, a.is_archived, a.next_transfer_amount,
+                    c.id as currency_id, c.name as currency_name, c.symbol as currency_symbol,
+                    c.currency as currency_code, c.decimal_places as currency_decimal_places,
+                    c.symbol_position as currency_symbol_position
+                FROM account a
+                JOIN currency c ON c.id = a.currency_id
+                WHERE (a.created_at, a.id) < (SELECT created_at, id FROM account WHERE id = $1)
+                  AND a.user_id = $2 AND a.is_archived = FALSE
+                ORDER BY a.created_at DESC, a.id DESC
+                LIMIT $3
+                "#,
+            )
+            .bind(cursor_id)
+            .bind(user_id)
+            .bind(fetch_limit)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, AccountRow>(
+                r#"
+                SELECT
+                    a.id, a.name, a.color, a.icon,
+                    a.account_type::text as account_type,
+                    a.balance, a.spend_limit, a.is_archived, a.next_transfer_amount,
+                    c.id as currency_id, c.name as currency_name, c.symbol as currency_symbol,
+                    c.currency as currency_code, c.decimal_places as currency_decimal_places,
+                    c.symbol_position as currency_symbol_position
+                FROM account a
+                JOIN currency c ON c.id = a.currency_id
+                WHERE a.user_id = $1 AND a.is_archived = FALSE
+                ORDER BY a.created_at DESC, a.id DESC
+                LIMIT $2
+                "#,
+            )
+            .bind(user_id)
+            .bind(fetch_limit)
+            .fetch_all(&self.pool)
+            .await?
+        };
+
+        Ok((rows.into_iter().map(Account::from).collect(), total_count))
+    }
+
+    /// Get account options for V2 (id, name, color instead of icon).
+    pub async fn get_account_options_v2(&self, user_id: &Uuid) -> Result<Vec<(Uuid, String, String)>, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            id: Uuid,
+            name: String,
+            color: String,
+        }
+
+        let rows = sqlx::query_as::<_, Row>(
+            r#"
+            SELECT id, name, color
+            FROM account
+            WHERE user_id = $1 AND is_archived = FALSE
+            ORDER BY name ASC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|r| (r.id, r.name, r.color)).collect())
+    }
+
+    /// V2 adjust balance: updates the account balance without requiring budget periods.
+    pub async fn adjust_balance_v2(&self, id: &Uuid, new_balance: i64, user_id: &Uuid) -> Result<Account, AppError> {
+        let row = sqlx::query_as::<_, AccountRow>(
+            r#"
+            UPDATE account a
+            SET balance = $1
+            FROM currency c
+            WHERE c.id = a.currency_id
+              AND a.id = $2 AND a.user_id = $3
+            RETURNING
+                a.id, a.name, a.color, a.icon,
+                a.account_type::text as account_type,
+                a.balance, a.spend_limit, a.is_archived, a.next_transfer_amount,
+                c.id as currency_id, c.name as currency_name, c.symbol as currency_symbol,
+                c.currency as currency_code, c.decimal_places as currency_decimal_places,
+                c.symbol_position as currency_symbol_position
+            "#,
+        )
+        .bind(new_balance)
+        .bind(id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Account not found".to_string()))?;
+
+        Ok(Account::from(row))
+    }
+
+    /// Get the current (active) budget period, or the latest one.
+    pub async fn get_current_period_id(&self, user_id: &Uuid) -> Result<Option<Uuid>, AppError> {
+        let id: Option<Uuid> = sqlx::query_scalar(
+            r#"
+            SELECT id FROM budget_period
+            WHERE user_id = $1
+            ORDER BY
+                CASE WHEN start_date <= CURRENT_DATE AND end_date >= CURRENT_DATE THEN 0 ELSE 1 END,
+                end_date DESC
+            LIMIT 1
+            "#,
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(id)
+    }
+
+    /// Simple paginated list of accounts with summary metrics for V2.
+    pub async fn list_accounts_summary_v2(
+        &self,
+        cursor: Option<Uuid>,
+        limit: i64,
+        period_id: Option<&Uuid>,
+        user_id: &Uuid,
+    ) -> Result<(Vec<AccountWithMetrics>, i64), AppError> {
+        let total_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM account WHERE user_id = $1 AND is_archived = FALSE")
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
+
+        // If we have a period, use the full metrics query (fetch limit+1 for has_more sentinel)
+        if let Some(pid) = period_id {
+            let params = CursorParams {
+                cursor,
+                limit: Some(limit + 1),
+            };
+            let rows = self.list_accounts(&params, pid, user_id).await?;
+            return Ok((rows, total_count));
+        }
+
+        // No period: compute current_balance and transaction_count from all transactions
+        let fetch_limit = limit + 1;
+        let rows = if let Some(cursor_id) = cursor {
+            sqlx::query_as::<_, AccountMetricsRow>(
+                r#"
+                SELECT
+                    a.id, a.name, a.color, a.icon,
+                    a.account_type::text as account_type,
+                    a.balance, a.spend_limit, a.is_archived, a.next_transfer_amount,
+                    c.id as currency_id, c.name as currency_name, c.symbol as currency_symbol,
+                    c.currency as currency_code, c.decimal_places as currency_decimal_places,
+                    c.symbol_position as currency_symbol_position,
+                    (a.balance + COALESCE(SUM(
+                        CASE
+                            WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
+                            WHEN cat.category_type = 'Outgoing'                              THEN -t.amount::bigint
+                            WHEN cat.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
+                            WHEN cat.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
+                            ELSE 0
+                        END
+                    ), 0))::bigint AS current_balance,
+                    0::bigint AS balance_change_this_period,
+                    COUNT(t.id)::bigint AS transaction_count
+                FROM account a
+                JOIN currency c ON c.id = a.currency_id
+                LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id) AND t.user_id = $2
+                LEFT JOIN category cat ON t.category_id = cat.id
+                WHERE (a.created_at, a.id) < (SELECT created_at, id FROM account WHERE id = $1)
+                  AND a.user_id = $2 AND a.is_archived = FALSE
+                GROUP BY a.id, a.name, a.color, a.icon, a.account_type, a.balance,
+                         a.spend_limit, a.is_archived, a.next_transfer_amount, a.created_at,
+                         c.id, c.name, c.symbol, c.currency, c.decimal_places, c.symbol_position
+                ORDER BY a.created_at DESC, a.id DESC
+                LIMIT $3
+                "#,
+            )
+            .bind(cursor_id)
+            .bind(user_id)
+            .bind(fetch_limit)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, AccountMetricsRow>(
+                r#"
+                SELECT
+                    a.id, a.name, a.color, a.icon,
+                    a.account_type::text as account_type,
+                    a.balance, a.spend_limit, a.is_archived, a.next_transfer_amount,
+                    c.id as currency_id, c.name as currency_name, c.symbol as currency_symbol,
+                    c.currency as currency_code, c.decimal_places as currency_decimal_places,
+                    c.symbol_position as currency_symbol_position,
+                    (a.balance + COALESCE(SUM(
+                        CASE
+                            WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
+                            WHEN cat.category_type = 'Outgoing'                              THEN -t.amount::bigint
+                            WHEN cat.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
+                            WHEN cat.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
+                            ELSE 0
+                        END
+                    ), 0))::bigint AS current_balance,
+                    0::bigint AS balance_change_this_period,
+                    COUNT(t.id)::bigint AS transaction_count
+                FROM account a
+                JOIN currency c ON c.id = a.currency_id
+                LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id) AND t.user_id = $1
+                LEFT JOIN category cat ON t.category_id = cat.id
+                WHERE a.user_id = $1 AND a.is_archived = FALSE
+                GROUP BY a.id, a.name, a.color, a.icon, a.account_type, a.balance,
+                         a.spend_limit, a.is_archived, a.next_transfer_amount, a.created_at,
+                         c.id, c.name, c.symbol, c.currency, c.decimal_places, c.symbol_position
+                ORDER BY a.created_at DESC, a.id DESC
+                LIMIT $2
+                "#,
+            )
+            .bind(user_id)
+            .bind(fetch_limit)
+            .fetch_all(&self.pool)
+            .await?
+        };
+
+        Ok((rows.into_iter().map(AccountWithMetrics::from).collect(), total_count))
     }
 }
 

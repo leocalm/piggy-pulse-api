@@ -24,7 +24,7 @@ AccountBase:
     type:
       type: string
       description: Account type
-      enum: ["checking", "savings", "creditCard", "allowance", "wallet"]
+      enum: ["Checking", "Savings", "CreditCard", "Allowance", "Wallet"]
     status:
       type: string
       enum: ["active", "inactive"]
@@ -90,7 +90,7 @@ CreateAccountRequest:
       example: "123e4567-e89b-12d3-a456-426655440000"
     type:
       type: string
-      enum: ["checking", "savings", "creditCard", "allowance", "wallet"]
+      enum: ["Checking", "Savings", "CreditCard", "Allowance", "Wallet"]
     spendLimit:
       type: [integer, "null"]
       description: Optional spend limit in cents. Only meaningful for creditCard and allowance accounts.

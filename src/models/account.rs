@@ -16,7 +16,7 @@ pub enum AccountType {
     Allowance,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct Account {
     pub id: Uuid,
     pub name: String,
@@ -28,6 +28,19 @@ pub struct Account {
     pub spend_limit: Option<i32>,
     pub is_archived: bool,
     pub next_transfer_amount: Option<i64>,
+}
+
+impl std::fmt::Debug for Account {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Account")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("account_type", &self.account_type)
+            .field("balance", &"[redacted]")
+            .field("spend_limit", &"[redacted]")
+            .field("next_transfer_amount", &"[redacted]")
+            .finish()
+    }
 }
 
 #[derive(Deserialize, Debug, Validate, JsonSchema)]
@@ -53,6 +66,7 @@ pub struct AccountUpdateRequest {
     #[validate(length(min = 1))]
     pub icon: String,
     pub account_type: AccountType,
+    pub balance: i64,
     pub spend_limit: Option<i32>,
     pub next_transfer_amount: Option<i64>,
 }
@@ -173,6 +187,7 @@ pub struct AccountDetailResponse {
     pub inflows: i64,
     pub outflows: i64,
     pub net: i64,
+    pub transaction_count: i64,
     pub period_start: NaiveDate,
     pub period_end: NaiveDate,
 }
@@ -181,6 +196,7 @@ pub struct AccountDetailResponse {
 pub struct AccountBalanceHistoryPoint {
     pub date: String, // "YYYY-MM-DD"
     pub balance: i64, // integer cents
+    pub transaction_count: i64,
 }
 
 #[derive(Serialize, Debug, JsonSchema)]
@@ -197,6 +213,7 @@ pub struct AccountTransactionResponse {
 
 #[derive(Serialize, Debug, JsonSchema)]
 pub struct CategoryImpactItem {
+    pub category_id: Uuid,
     pub category_name: String,
     pub amount: i64,
     pub percentage: i32,

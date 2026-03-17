@@ -4,7 +4,7 @@ use schemars::JsonSchema;
 use uuid::Uuid;
 
 /// Database model for two-factor authentication
-#[derive(Debug, sqlx::FromRow)]
+#[derive(sqlx::FromRow)]
 pub struct TwoFactorAuth {
     pub encrypted_secret: String,
     pub encryption_nonce: String,

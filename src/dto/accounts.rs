@@ -1,16 +1,16 @@
-#![allow(dead_code)]
+use std::fmt;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
 use crate::dto::common::{Date, HEX_COLOR_REGEX, PaginatedResponse};
-use crate::dto::misc::CurrencyResponse;
+use crate::dto::misc::{CurrencyResponse, SymbolPosition as DtoSymbolPosition};
+use crate::models::currency::SymbolPosition as ModelSymbolPosition;
 
 // ===== Enums =====
 
 #[derive(Serialize, Debug, Copy, Clone, Eq, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
 pub enum AccountType {
     #[default]
     Checking,
@@ -31,7 +31,7 @@ pub enum AccountStatus {
 // ===== Account Response =====
 
 #[derive(Serialize, Debug)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(tag = "type")]
 pub enum AccountResponse {
     Checking(AccountResponseFields),
     Savings(AccountResponseFields),
@@ -40,7 +40,7 @@ pub enum AccountResponse {
     Allowance(AccountResponseFields),
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountResponseFields {
     pub id: Uuid,
@@ -50,6 +50,17 @@ pub struct AccountResponseFields {
     pub initial_balance: i64,
     pub currency: CurrencyResponse,
     pub spend_limit: Option<i64>,
+}
+
+impl fmt::Debug for AccountResponseFields {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AccountResponseFields")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("initial_balance", &"[redacted]")
+            .field("spend_limit", &"[redacted]")
+            .finish()
+    }
 }
 
 pub type AccountListResponse = PaginatedResponse<AccountResponse>;
@@ -68,7 +79,7 @@ pub type AccountOptionListResponse = Vec<AccountOptionResponse>;
 
 // ===== Account Summary =====
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountSummaryResponse {
     pub id: Uuid,
@@ -84,6 +95,18 @@ pub struct AccountSummaryResponse {
     pub number_of_transactions: i64,
 }
 
+impl fmt::Debug for AccountSummaryResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AccountSummaryResponse")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("account_type", &self.account_type)
+            .field("current_balance", &"[redacted]")
+            .field("net_change_this_period", &"[redacted]")
+            .finish()
+    }
+}
+
 pub type AccountSummaryListResponse = PaginatedResponse<AccountSummaryResponse>;
 
 // ===== Account Details =====
@@ -95,7 +118,7 @@ pub struct LargestOutflow {
     pub value: i64,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StabilityContext {
     pub periods_on_target: i64,
@@ -103,6 +126,18 @@ pub struct StabilityContext {
     pub highest_closing_balance: i64,
     pub lowest_closing_balance: i64,
     pub largest_single_outflow: Option<LargestOutflow>,
+}
+
+impl fmt::Debug for StabilityContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("StabilityContext")
+            .field("periods_on_target", &self.periods_on_target)
+            .field("average_closing_balance", &"[redacted]")
+            .field("highest_closing_balance", &"[redacted]")
+            .field("lowest_closing_balance", &"[redacted]")
+            .field("largest_single_outflow", &"[redacted]")
+            .finish()
+    }
 }
 
 #[derive(Serialize, Debug)]
@@ -123,7 +158,7 @@ pub struct TransactionBreakdownItem {
     pub balance: i64,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountDetailsResponse {
     #[serde(flatten)]
@@ -133,6 +168,16 @@ pub struct AccountDetailsResponse {
     pub stability_context: StabilityContext,
     pub categories_breakdown: Vec<CategoryBreakdownItem>,
     pub transactions_breakdown: Vec<TransactionBreakdownItem>,
+}
+
+impl fmt::Debug for AccountDetailsResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AccountDetailsResponse")
+            .field("base", &self.base)
+            .field("inflow", &"[redacted]")
+            .field("outflow", &"[redacted]")
+            .finish()
+    }
 }
 
 // ===== Account Balance History =====
@@ -150,7 +195,7 @@ pub type AccountBalanceHistoryResponse = Vec<AccountBalanceHistoryPoint>;
 // ===== Account Requests =====
 
 #[derive(Deserialize, Debug)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(tag = "type")]
 pub enum CreateAccountRequest {
     Checking(AccountRequestFields),
     Savings(AccountRequestFields),
@@ -167,6 +212,7 @@ pub struct AccountRequestFields {
     #[validate(regex(path = *HEX_COLOR_REGEX))]
     pub color: String,
     pub initial_balance: i64,
+    #[allow(dead_code)]
     pub currency_id: Uuid,
     pub spend_limit: Option<i64>,
 }
@@ -177,4 +223,77 @@ pub type UpdateAccountRequest = CreateAccountRequest;
 #[serde(rename_all = "camelCase")]
 pub struct AdjustBalanceRequest {
     pub new_balance: i64,
+}
+
+// ===== Conversions from domain models to V2 DTOs =====
+
+use crate::models::account::{Account, AccountType as ModelAccountType};
+
+impl CreateAccountRequest {
+    pub fn fields(&self) -> &AccountRequestFields {
+        match self {
+            Self::Checking(f) | Self::Savings(f) | Self::CreditCard(f) | Self::Wallet(f) | Self::Allowance(f) => f,
+        }
+    }
+
+    pub fn model_account_type(&self) -> ModelAccountType {
+        match self {
+            Self::Checking(_) => ModelAccountType::Checking,
+            Self::Savings(_) => ModelAccountType::Savings,
+            Self::CreditCard(_) => ModelAccountType::CreditCard,
+            Self::Wallet(_) => ModelAccountType::Wallet,
+            Self::Allowance(_) => ModelAccountType::Allowance,
+        }
+    }
+}
+
+impl From<ModelAccountType> for AccountType {
+    fn from(t: ModelAccountType) -> Self {
+        match t {
+            ModelAccountType::Checking => AccountType::Checking,
+            ModelAccountType::Savings => AccountType::Savings,
+            ModelAccountType::CreditCard => AccountType::CreditCard,
+            ModelAccountType::Wallet => AccountType::Wallet,
+            ModelAccountType::Allowance => AccountType::Allowance,
+        }
+    }
+}
+
+fn convert_symbol_position(pos: ModelSymbolPosition) -> DtoSymbolPosition {
+    match pos {
+        ModelSymbolPosition::Before => DtoSymbolPosition::Before,
+        ModelSymbolPosition::After => DtoSymbolPosition::After,
+    }
+}
+
+impl From<&Account> for AccountResponse {
+    fn from(account: &Account) -> Self {
+        let fields = AccountResponseFields {
+            id: account.id,
+            name: account.name.clone(),
+            color: account.color.clone(),
+            status: if account.is_archived {
+                AccountStatus::Inactive
+            } else {
+                AccountStatus::Active
+            },
+            initial_balance: account.balance,
+            currency: CurrencyResponse {
+                id: account.currency.id,
+                name: account.currency.name.clone(),
+                symbol: account.currency.symbol.clone(),
+                code: account.currency.currency.clone(),
+                decimal_places: account.currency.decimal_places,
+                symbol_position: convert_symbol_position(account.currency.symbol_position),
+            },
+            spend_limit: account.spend_limit.map(|s| s as i64),
+        };
+        match account.account_type {
+            ModelAccountType::Checking => Self::Checking(fields),
+            ModelAccountType::Savings => Self::Savings(fields),
+            ModelAccountType::CreditCard => Self::CreditCard(fields),
+            ModelAccountType::Wallet => Self::Wallet(fields),
+            ModelAccountType::Allowance => Self::Allowance(fields),
+        }
+    }
 }
