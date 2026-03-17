@@ -351,7 +351,7 @@ impl PostgresRepository {
                             ELSE 0
                         END
                     ), 0)::bigint AS balance_change_this_period,
-                    COUNT(t.id)::bigint AS transaction_count
+                    COUNT(t.id) FILTER (WHERE p.start_date IS NOT NULL AND t.occurred_at >= p.start_date AND t.occurred_at <= p.end_date)::bigint AS transaction_count
                 FROM account a
                 JOIN currency c ON c.id = a.currency_id
                 LEFT JOIN period p ON true
@@ -436,7 +436,7 @@ impl PostgresRepository {
                             ELSE 0
                         END
                     ), 0)::bigint AS balance_change_this_period,
-                    COUNT(t.id)::bigint AS transaction_count
+                    COUNT(t.id) FILTER (WHERE p.start_date IS NOT NULL AND t.occurred_at >= p.start_date AND t.occurred_at <= p.end_date)::bigint AS transaction_count
                 FROM account a
                 JOIN currency c ON c.id = a.currency_id
                 LEFT JOIN period p ON true
@@ -554,31 +554,45 @@ impl PostgresRepository {
     }
 
     pub async fn archive_account(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
-        let affected = sqlx::query("UPDATE account SET is_archived = TRUE WHERE id = $1 AND user_id = $2 AND is_archived = FALSE")
+        let is_archived: Option<bool> = sqlx::query_scalar("SELECT is_archived FROM account WHERE id = $1 AND user_id = $2")
+            .bind(id)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        match is_archived {
+            None => return Err(AppError::NotFound("Account not found".to_string())),
+            Some(true) => return Err(AppError::Conflict("Account is already archived".to_string())),
+            Some(false) => {}
+        }
+
+        sqlx::query("UPDATE account SET is_archived = TRUE WHERE id = $1 AND user_id = $2")
             .bind(id)
             .bind(user_id)
             .execute(&self.pool)
-            .await?
-            .rows_affected();
-
-        if affected == 0 {
-            return Err(AppError::NotFound("Account not found or already archived".to_string()));
-        }
+            .await?;
 
         Ok(())
     }
 
     pub async fn restore_account(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
-        let affected = sqlx::query("UPDATE account SET is_archived = FALSE WHERE id = $1 AND user_id = $2 AND is_archived = TRUE")
+        let is_archived: Option<bool> = sqlx::query_scalar("SELECT is_archived FROM account WHERE id = $1 AND user_id = $2")
+            .bind(id)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        match is_archived {
+            None => return Err(AppError::NotFound("Account not found".to_string())),
+            Some(false) => return Err(AppError::Conflict("Account is already active".to_string())),
+            Some(true) => {}
+        }
+
+        sqlx::query("UPDATE account SET is_archived = FALSE WHERE id = $1 AND user_id = $2")
             .bind(id)
             .bind(user_id)
             .execute(&self.pool)
-            .await?
-            .rows_affected();
-
-        if affected == 0 {
-            return Err(AppError::NotFound("Account not found or not archived".to_string()));
-        }
+            .await?;
 
         Ok(())
     }
@@ -883,8 +897,8 @@ ORDER BY a.id, d.day
         let row = sqlx::query_as::<_, UpdateAccountRow>(
             r#"
             UPDATE account
-            SET name = $1, color = $2, icon = $3, account_type = $4::text::account_type, spend_limit = $5, next_transfer_amount = $6
-            WHERE id = $7 AND user_id = $8
+            SET name = $1, color = $2, icon = $3, account_type = $4::text::account_type, balance = $5, spend_limit = $6, next_transfer_amount = $7
+            WHERE id = $8 AND user_id = $9
             RETURNING
                 id,
                 name,
@@ -901,6 +915,7 @@ ORDER BY a.id, d.day
         .bind(&request.color)
         .bind(&request.icon)
         .bind(&account_type_str)
+        .bind(request.balance)
         .bind(request.spend_limit)
         .bind(request.next_transfer_amount)
         .bind(id)

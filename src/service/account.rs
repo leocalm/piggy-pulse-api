@@ -125,6 +125,7 @@ impl<'a> AccountService<'a> {
 
             let response: Vec<AccountBalanceHistoryPoint> = points
                 .into_iter()
+                .filter(|p| p.transaction_count > 0)
                 .map(|p| {
                     let date = chrono::NaiveDate::parse_from_str(&p.date, "%Y-%m-%d").map_err(|e| {
                         tracing::error!(date = %p.date, error = %e, "Malformed date in balance history — possible data integrity issue");

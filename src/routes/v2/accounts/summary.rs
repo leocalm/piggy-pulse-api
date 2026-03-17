@@ -10,11 +10,11 @@ use crate::dto::accounts::AccountSummaryListResponse;
 use crate::error::app_error::AppError;
 use crate::service::account::AccountService;
 
-#[get("/summary?<period_id>&<cursor>&<limit>")]
+#[get("/summary?<periodId>&<cursor>&<limit>")]
 pub async fn list_account_summaries(
     pool: &State<PgPool>,
     user: CurrentUser,
-    period_id: Option<String>,
+    #[allow(non_snake_case)] periodId: Option<String>,
     cursor: Option<String>,
     limit: Option<u32>,
 ) -> Result<Json<AccountSummaryListResponse>, AppError> {
@@ -23,9 +23,9 @@ pub async fn list_account_summaries(
         _ => None,
     };
     let effective_limit = limit.unwrap_or(50).min(200) as i64;
-    let period_uuid = match period_id {
+    let period_uuid = match periodId {
         Some(ref s) => Some(Uuid::parse_str(s).map_err(|e| AppError::uuid("Invalid period id", e))?),
-        None => None,
+        None => return Err(AppError::BadRequest("periodId is required".to_string())),
     };
 
     let repo = PostgresRepository { pool: pool.inner().clone() };

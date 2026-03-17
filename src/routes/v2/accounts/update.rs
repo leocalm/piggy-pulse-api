@@ -24,6 +24,7 @@ pub async fn update_account(pool: &State<PgPool>, user: CurrentUser, id: &str, p
         color: fields.color.clone(),
         icon: "wallet".to_string(),
         account_type: payload.model_account_type(),
+        balance: fields.initial_balance,
         spend_limit: fields.spend_limit.map(|s| s as i32),
         next_transfer_amount: None,
     };

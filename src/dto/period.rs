@@ -78,10 +78,21 @@ pub type PeriodListResponse = PaginatedResponse<PeriodResponse>;
 /// validator 0.20 does not support #[derive(Validate)] on enums; field-level validation on
 /// PeriodDuration is enforced via its own Validate impl when called explicitly by the route layer.
 #[derive(Deserialize, Debug)]
-#[serde(tag = "periodType", rename_all = "camelCase")]
+#[serde(tag = "periodType")]
 pub enum CreatePeriodRequest {
-    Duration { start_date: Date, name: String, duration: PeriodDuration },
-    ManualEndDate { start_date: Date, name: String, manual_end_date: Date },
+    Duration {
+        #[serde(rename = "startDate")]
+        start_date: Date,
+        name: String,
+        duration: PeriodDuration,
+    },
+    ManualEndDate {
+        #[serde(rename = "startDate")]
+        start_date: Date,
+        name: String,
+        #[serde(rename = "manualEndDate")]
+        manual_end_date: Date,
+    },
 }
 
 pub type UpdatePeriodRequest = CreatePeriodRequest;

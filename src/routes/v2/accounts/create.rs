@@ -17,6 +17,13 @@ pub async fn create_account(pool: &State<PgPool>, user: CurrentUser, payload: Js
     let fields = payload.fields();
     fields.validate()?;
 
+    // spend_limit is only valid for CreditCard and Allowance types
+    if fields.spend_limit.is_some() && !matches!(&*payload, CreateAccountRequest::CreditCard(_) | CreateAccountRequest::Allowance(_)) {
+        return Err(AppError::BadRequest(
+            "spendLimit is only allowed for CreditCard and Allowance account types".to_string(),
+        ));
+    }
+
     let v1_request = AccountRequest {
         name: fields.name.clone(),
         color: fields.color.clone(),

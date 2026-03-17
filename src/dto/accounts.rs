@@ -5,7 +5,6 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::dto::common::{Date, HEX_COLOR_REGEX, PaginatedResponse};
-use crate::dto::misc::CurrencyResponse;
 
 // ===== Enums =====
 
@@ -47,7 +46,7 @@ pub struct AccountResponseFields {
     pub color: String,
     pub status: AccountStatus,
     pub initial_balance: i64,
-    pub currency: CurrencyResponse,
+    pub currency_id: Uuid,
     pub spend_limit: Option<i64>,
 }
 
@@ -226,9 +225,7 @@ pub struct AdjustBalanceRequest {
 
 // ===== Conversions from domain models to V2 DTOs =====
 
-use crate::dto::misc::SymbolPosition as DtoSymbolPosition;
 use crate::models::account::{Account, AccountType as ModelAccountType};
-use crate::models::currency::SymbolPosition as ModelSymbolPosition;
 
 impl CreateAccountRequest {
     pub fn fields(&self) -> &AccountRequestFields {
@@ -245,13 +242,6 @@ impl CreateAccountRequest {
             Self::Wallet(_) => ModelAccountType::Wallet,
             Self::Allowance(_) => ModelAccountType::Allowance,
         }
-    }
-}
-
-fn convert_symbol_position(pos: ModelSymbolPosition) -> DtoSymbolPosition {
-    match pos {
-        ModelSymbolPosition::Before => DtoSymbolPosition::Before,
-        ModelSymbolPosition::After => DtoSymbolPosition::After,
     }
 }
 
@@ -279,14 +269,7 @@ impl From<&Account> for AccountResponse {
                 AccountStatus::Active
             },
             initial_balance: account.balance,
-            currency: CurrencyResponse {
-                id: account.currency.id,
-                name: account.currency.name.clone(),
-                symbol: account.currency.symbol.clone(),
-                code: account.currency.currency.clone(),
-                decimal_places: account.currency.decimal_places,
-                symbol_position: convert_symbol_position(account.currency.symbol_position),
-            },
+            currency_id: account.currency.id,
             spend_limit: account.spend_limit.map(|s| s as i64),
         };
         match account.account_type {
