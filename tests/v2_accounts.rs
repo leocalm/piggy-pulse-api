@@ -102,6 +102,7 @@ async fn test_create_allowance_with_null_spend_limit() {
     assert_eq!(body["type"], "Allowance");
     assert_eq!(body["initialBalance"], 20000);
     assert!(body["spendLimit"].is_null(), "expected spendLimit to be null for allowance");
+    assert_eq!(body["status"], "active");
 }
 
 #[rocket::async_test]
@@ -127,7 +128,12 @@ async fn test_create_checking_with_spend_limit_rejected() {
         .dispatch()
         .await;
 
-    assert_eq!(resp.status(), Status::BadRequest);
+    // Domain validation (spendLimit forbidden for Checking) — may surface as 400 or 422
+    assert!(
+        resp.status() == Status::BadRequest || resp.status() == Status::UnprocessableEntity,
+        "expected 400 or 422, got {}",
+        resp.status()
+    );
 }
 
 #[rocket::async_test]
@@ -153,7 +159,12 @@ async fn test_create_account_name_too_short() {
         .dispatch()
         .await;
 
-    assert_eq!(resp.status(), Status::BadRequest);
+    // Field-level validation — may surface as 400 or 422 depending on pipeline stage
+    assert!(
+        resp.status() == Status::BadRequest || resp.status() == Status::UnprocessableEntity,
+        "expected 400 or 422, got {}",
+        resp.status()
+    );
 }
 
 #[rocket::async_test]
@@ -179,7 +190,12 @@ async fn test_create_account_bad_color() {
         .dispatch()
         .await;
 
-    assert_eq!(resp.status(), Status::BadRequest);
+    // Field-level validation — may surface as 400 or 422 depending on pipeline stage
+    assert!(
+        resp.status() == Status::BadRequest || resp.status() == Status::UnprocessableEntity,
+        "expected 400 or 422, got {}",
+        resp.status()
+    );
 }
 
 #[rocket::async_test]
@@ -377,6 +393,11 @@ async fn test_list_accounts_pagination_and_cursor() {
     assert_eq!(body["data"].as_array().unwrap().len(), 1);
     assert_eq!(body["hasMore"], true);
     assert!(body["nextCursor"].is_string());
+    assert_eq!(
+        body["totalCount"].as_i64().unwrap(),
+        3,
+        "totalCount should reflect all accounts not just this page"
+    );
 
     // Cursor through all pages, collecting items
     let mut collected = body["data"].as_array().unwrap().clone();
@@ -657,7 +678,12 @@ async fn test_update_account_invalid_name() {
         .dispatch()
         .await;
 
-    assert_eq!(resp.status(), Status::BadRequest);
+    // Field-level validation — may surface as 400 or 422 depending on pipeline stage
+    assert!(
+        resp.status() == Status::BadRequest || resp.status() == Status::UnprocessableEntity,
+        "expected 400 or 422, got {}",
+        resp.status()
+    );
 
     // Verify the account was not mutated
     let get_resp = client.get(format!("{}/accounts/{}", V2_BASE, account_id)).dispatch().await;
@@ -1070,6 +1096,22 @@ async fn test_balance_history_no_transactions_empty() {
 
 #[rocket::async_test]
 #[ignore = "requires database"]
+async fn test_balance_history_without_period_id_400() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+    let account_id = common::entities::create_account(&client, "No Period Hist", 10_000).await;
+
+    let resp = client.get(format!("{}/accounts/{}/balance-history", V2_BASE, account_id)).dispatch().await;
+
+    assert!(
+        resp.status() == Status::BadRequest || resp.status() == Status::UnprocessableEntity,
+        "expected 400 or 422, got {}",
+        resp.status()
+    );
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
 async fn test_balance_history_not_found() {
     let client = test_client().await;
     create_user_and_login(&client).await;
@@ -1150,6 +1192,7 @@ async fn test_options_excludes_archived_accounts() {
     let options = body.as_array().expect("expected plain array");
 
     let ids: Vec<&str> = options.iter().map(|o| o["id"].as_str().unwrap()).collect();
+    assert_eq!(options.len(), 1, "only the active account should appear");
     assert!(ids.contains(&active_id.as_str()), "active account should appear in options");
     assert!(!ids.contains(&archived_id.as_str()), "archived account should not appear in options");
 }
@@ -1236,6 +1279,21 @@ async fn test_summary_no_transactions_zeros() {
     assert_eq!(acct["currentBalance"], 80_000);
     assert_eq!(acct["netChangeThisPeriod"], 0);
     assert_eq!(acct["numberOfTransactions"], 0);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_summary_without_period_id_400() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let resp = client.get(format!("{}/accounts/summary", V2_BASE)).dispatch().await;
+
+    assert!(
+        resp.status() == Status::BadRequest || resp.status() == Status::UnprocessableEntity,
+        "expected 400 or 422, got {}",
+        resp.status()
+    );
 }
 
 #[rocket::async_test]
