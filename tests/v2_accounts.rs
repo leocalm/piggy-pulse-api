@@ -71,6 +71,7 @@ async fn test_create_credit_card_with_spend_limit() {
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
     assert_eq!(body["type"], "CreditCard");
     assert_eq!(body["name"], "Visa Gold");
+    assert_eq!(body["color"], "#ffd700");
     assert_eq!(body["initialBalance"], 0);
     assert_eq!(body["spendLimit"], 200000);
     assert_eq!(body["status"], "active");
@@ -103,6 +104,8 @@ async fn test_create_allowance_with_null_spend_limit() {
     assert_eq!(resp.status(), Status::Created);
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
     assert_eq!(body["type"], "Allowance");
+    assert_eq!(body["name"], "Fun Money");
+    assert_eq!(body["color"], "#ff00ff");
     assert_eq!(body["initialBalance"], 20000);
     assert!(body["spendLimit"].is_null(), "expected spendLimit to be null for allowance");
     assert_eq!(body["status"], "active");
@@ -763,6 +766,36 @@ async fn test_update_account_invalid_name() {
     assert_eq!(get_resp.status(), Status::Ok);
     let body: Value = serde_json::from_str(&get_resp.into_string().await.unwrap()).unwrap();
     assert_eq!(body["name"], "Valid Name");
+    assert_eq!(body["color"], "#1a2b3c"); // original color from create_account helper
+    assert_eq!(body["initialBalance"], 10000);
+    assert_eq!(body["type"], "Checking");
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_update_account_missing_body() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+    let account_id = common::entities::create_account(&client, "No Body Update", 10000).await;
+
+    let resp = client
+        .put(format!("{}/accounts/{}", V2_BASE, account_id))
+        .header(ContentType::JSON)
+        .body(json!({}).to_string())
+        .dispatch()
+        .await;
+
+    assert!(
+        resp.status() == Status::BadRequest || resp.status() == Status::UnprocessableEntity,
+        "expected 400 or 422, got {}",
+        resp.status()
+    );
+
+    // Verify account unchanged
+    let get_resp = client.get(format!("{}/accounts/{}", V2_BASE, account_id)).dispatch().await;
+    assert_eq!(get_resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&get_resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["name"], "No Body Update");
     assert_eq!(body["initialBalance"], 10000);
 }
 
@@ -1061,6 +1094,12 @@ async fn test_adjust_balance_invalid_type() {
         "expected 400 or 422, got {}",
         resp.status()
     );
+
+    // Verify account unchanged
+    let get_resp = client.get(format!("{}/accounts/{}", V2_BASE, account_id)).dispatch().await;
+    assert_eq!(get_resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&get_resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["initialBalance"], 10000);
 }
 
 #[rocket::async_test]
