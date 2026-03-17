@@ -42,6 +42,7 @@ async fn test_create_checking_with_initial_balance() {
     assert_eq!(body["initialBalance"], 50000);
     assert_eq!(body["status"], "active");
     assert_eq!(body["currencyId"], eur_id);
+    assert!(body["spendLimit"].is_null(), "checking accounts should have null spendLimit");
 }
 
 #[rocket::async_test]
