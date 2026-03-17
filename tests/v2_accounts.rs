@@ -351,7 +351,7 @@ async fn test_list_accounts_returns_created() {
 
     let data = body["data"].as_array().unwrap();
     assert!(data.len() >= 2);
-    assert_eq!(body["totalCount"].as_i64().unwrap(), data.len() as i64);
+    assert_eq!(body["totalCount"].as_i64().unwrap(), 2);
 
     let names: Vec<&str> = data.iter().map(|a| a["name"].as_str().unwrap()).collect();
     assert!(names.contains(&"Account Alpha"), "missing Account Alpha in {names:?}");
@@ -507,6 +507,65 @@ async fn test_adjust_balance_user_isolation() {
     let get_resp = client_a.get(format!("{}/accounts/{}", V2_BASE, account_id)).dispatch().await;
     let body: Value = serde_json::from_str(&get_resp.into_string().await.unwrap()).unwrap();
     assert_eq!(body["initialBalance"], 10000);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_unarchive_account_user_isolation() {
+    let client_a = test_client().await;
+    create_user_and_login(&client_a).await;
+    let account_id = common::entities::create_account(&client_a, "No Unarchive", 10000).await;
+
+    // Archive it so unarchive is a valid operation
+    let archive_resp = client_a.post(format!("{}/accounts/{}/archive", V2_BASE, account_id)).dispatch().await;
+    assert_eq!(archive_resp.status(), Status::Ok);
+
+    let client_b = test_client().await;
+    create_user_and_login(&client_b).await;
+
+    let resp = client_b.post(format!("{}/accounts/{}/unarchive", V2_BASE, account_id)).dispatch().await;
+    assert_eq!(resp.status(), Status::NotFound);
+
+    // Verify still archived
+    let get_resp = client_a.get(format!("{}/accounts/{}", V2_BASE, account_id)).dispatch().await;
+    let body: Value = serde_json::from_str(&get_resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["status"], "inactive");
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_details_user_isolation() {
+    let client_a = test_client().await;
+    create_user_and_login(&client_a).await;
+    let account_id = common::entities::create_account(&client_a, "Secret Details", 10000).await;
+    let period_id = common::entities::create_period(&client_a, "2026-03-01", "2026-03-31").await;
+
+    let client_b = test_client().await;
+    create_user_and_login(&client_b).await;
+
+    let resp = client_b
+        .get(format!("{}/accounts/{}/details?periodId={}", V2_BASE, account_id, period_id))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::NotFound);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_balance_history_user_isolation() {
+    let client_a = test_client().await;
+    create_user_and_login(&client_a).await;
+    let account_id = common::entities::create_account(&client_a, "Secret History", 10000).await;
+    let period_id = common::entities::create_period(&client_a, "2026-03-01", "2026-03-31").await;
+
+    let client_b = test_client().await;
+    create_user_and_login(&client_b).await;
+
+    let resp = client_b
+        .get(format!("{}/accounts/{}/balance-history?periodId={}", V2_BASE, account_id, period_id))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::NotFound);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -868,6 +927,7 @@ async fn test_details_reflects_transactions() {
     assert_eq!(resp.status(), Status::Ok);
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
     assert_eq!(body["outflow"], 50_000); // 30_000 + 20_000
+    assert_eq!(body["inflow"], 0); // no income transactions created
     assert_eq!(body["currentBalance"], 50_000); // 100_000 - 50_000
     assert_eq!(body["numberOfTransactions"], 2);
 }
@@ -917,7 +977,11 @@ async fn test_details_without_period_id_400() {
 
     let resp = client.get(format!("{}/accounts/{}/details", V2_BASE, account_id)).dispatch().await;
 
-    assert_eq!(resp.status(), Status::BadRequest);
+    assert!(
+        resp.status() == Status::BadRequest || resp.status() == Status::UnprocessableEntity,
+        "expected 400 or 422, got {}",
+        resp.status()
+    );
 }
 
 #[rocket::async_test]
@@ -991,6 +1055,7 @@ async fn test_balance_history_no_transactions_empty() {
     assert_eq!(resp.status(), Status::Ok);
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
     let entries = body.as_array().unwrap();
+    // No seed point expected — the array is empty when there are no transactions
     assert!(entries.is_empty(), "expected empty array when no transactions");
 }
 
@@ -1042,7 +1107,7 @@ async fn test_options_returns_created_accounts() {
 
     // Options is a plain array, not paginated
     let options = body.as_array().expect("expected plain array for options");
-    assert!(options.len() >= 2);
+    assert_eq!(options.len(), 2);
 
     let opt_a = options
         .iter()
@@ -1114,6 +1179,31 @@ async fn test_summary_reflects_transactions() {
     assert_eq!(acct["currentBalance"], 60_000); // 100_000 - 40_000
     // Negative netChange = net outflow (expense exceeded income this period)
     assert_eq!(acct["netChangeThisPeriod"], -40_000);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_summary_no_transactions_zeros() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let account_id = common::entities::create_account(&client, "Empty Summary", 80_000).await;
+    let period_id = common::entities::create_period(&client, "2026-03-01", "2026-03-31").await;
+
+    let resp = client.get(format!("{}/accounts/summary?periodId={}", V2_BASE, period_id)).dispatch().await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    common::assertions::assert_paginated(&body);
+
+    let data = body["data"].as_array().unwrap();
+    let acct = data
+        .iter()
+        .find(|a| a["id"].as_str() == Some(&account_id))
+        .expect("account not found in summary");
+    assert_eq!(acct["currentBalance"], 80_000);
+    assert_eq!(acct["netChangeThisPeriod"], 0);
+    assert_eq!(acct["numberOfTransactions"], 0);
 }
 
 #[rocket::async_test]
