@@ -16,7 +16,7 @@ pub enum AccountType {
     Allowance,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct Account {
     pub id: Uuid,
     pub name: String,
@@ -28,6 +28,19 @@ pub struct Account {
     pub spend_limit: Option<i32>,
     pub is_archived: bool,
     pub next_transfer_amount: Option<i64>,
+}
+
+impl std::fmt::Debug for Account {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Account")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("account_type", &self.account_type)
+            .field("balance", &"[redacted]")
+            .field("spend_limit", &"[redacted]")
+            .field("next_transfer_amount", &"[redacted]")
+            .finish()
+    }
 }
 
 #[derive(Deserialize, Debug, Validate, JsonSchema)]
