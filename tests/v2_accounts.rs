@@ -71,6 +71,7 @@ async fn test_create_credit_card_with_spend_limit() {
     assert_eq!(body["type"], "CreditCard");
     assert_eq!(body["name"], "Visa Gold");
     assert_eq!(body["spendLimit"], 200000);
+    assert_eq!(body["status"], "active");
 }
 
 #[rocket::async_test]
@@ -350,7 +351,7 @@ async fn test_list_accounts_returns_created() {
     common::assertions::assert_paginated(&body);
 
     let data = body["data"].as_array().unwrap();
-    assert!(data.len() >= 2);
+    assert_eq!(data.len(), 2);
     assert_eq!(body["totalCount"].as_i64().unwrap(), 2);
 
     let names: Vec<&str> = data.iter().map(|a| a["name"].as_str().unwrap()).collect();
@@ -657,6 +658,13 @@ async fn test_update_account_invalid_name() {
         .await;
 
     assert_eq!(resp.status(), Status::BadRequest);
+
+    // Verify the account was not mutated
+    let get_resp = client.get(format!("{}/accounts/{}", V2_BASE, account_id)).dispatch().await;
+    assert_eq!(get_resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&get_resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["name"], "Valid Name");
+    assert_eq!(body["initialBalance"], 10000);
 }
 
 #[rocket::async_test]
@@ -951,6 +959,7 @@ async fn test_details_no_transactions_zeros() {
     assert_eq!(body["outflow"], 0);
     assert_eq!(body["inflow"], 0);
     assert_eq!(body["numberOfTransactions"], 0);
+    assert_eq!(body["currentBalance"], 80_000);
 }
 
 #[rocket::async_test]
@@ -1021,7 +1030,7 @@ async fn test_balance_history_reflects_transactions() {
     assert_eq!(resp.status(), Status::Ok);
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
     let entries = body.as_array().unwrap();
-    assert!(!entries.is_empty(), "balance history should contain entries");
+    assert_eq!(entries.len(), 2, "expected exactly 2 balance history entries (one per transaction date)");
 
     // Find entries on transaction dates — use starts_with to handle both
     // bare date strings ("2026-03-10") and ISO datetimes ("2026-03-10T00:00:00Z")
@@ -1125,6 +1134,28 @@ async fn test_options_returns_created_accounts() {
 
 #[rocket::async_test]
 #[ignore = "requires database"]
+async fn test_options_excludes_archived_accounts() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let active_id = common::entities::create_account(&client, "Still Active", 10000).await;
+    let archived_id = common::entities::create_account(&client, "Now Archived", 20000).await;
+
+    let archive_resp = client.post(format!("{}/accounts/{}/archive", V2_BASE, archived_id)).dispatch().await;
+    assert_eq!(archive_resp.status(), Status::Ok);
+
+    let resp = client.get(format!("{}/accounts/options", V2_BASE)).dispatch().await;
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    let options = body.as_array().expect("expected plain array");
+
+    let ids: Vec<&str> = options.iter().map(|o| o["id"].as_str().unwrap()).collect();
+    assert!(ids.contains(&active_id.as_str()), "active account should appear in options");
+    assert!(!ids.contains(&archived_id.as_str()), "archived account should not appear in options");
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
 async fn test_options_empty_state() {
     let client = test_client().await;
     create_user_and_login(&client).await;
@@ -1179,6 +1210,7 @@ async fn test_summary_reflects_transactions() {
     assert_eq!(acct["currentBalance"], 60_000); // 100_000 - 40_000
     // Negative netChange = net outflow (expense exceeded income this period)
     assert_eq!(acct["netChangeThisPeriod"], -40_000);
+    assert_eq!(acct["numberOfTransactions"], 1);
 }
 
 #[rocket::async_test]
