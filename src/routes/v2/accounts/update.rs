@@ -16,6 +16,13 @@ pub async fn update_account(pool: &State<PgPool>, user: CurrentUser, id: &str, p
     let fields = payload.fields();
     fields.validate()?;
 
+    // spend_limit is only valid for CreditCard and Allowance types
+    if fields.spend_limit.is_some() && !matches!(&*payload, UpdateAccountRequest::CreditCard(_) | UpdateAccountRequest::Allowance(_)) {
+        return Err(AppError::BadRequest(
+            "spendLimit is only allowed for CreditCard and Allowance account types".to_string(),
+        ));
+    }
+
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
     let repo = PostgresRepository { pool: pool.inner().clone() };
 

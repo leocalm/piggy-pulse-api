@@ -129,7 +129,10 @@ impl<'a> AccountService<'a> {
                 .map(|p| {
                     let date = chrono::NaiveDate::parse_from_str(&p.date, "%Y-%m-%d").map_err(|e| {
                         tracing::error!(date = %p.date, error = %e, "Malformed date in balance history — possible data integrity issue");
-                        AppError::BadRequest(format!("Invalid date in balance history: {}", p.date))
+                        AppError::Db {
+                            message: format!("Invalid date in balance history: {}", p.date),
+                            source: sqlx::Error::Protocol(e.to_string()),
+                        }
                     })?;
                     Ok(AccountBalanceHistoryPoint {
                         date: Date(date),
