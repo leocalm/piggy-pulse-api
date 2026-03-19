@@ -282,7 +282,8 @@ impl PostgresRepository {
                 parent_id,
                 category_type::text as category_type,
                 is_archived,
-                description
+                description,
+                is_system
             FROM category
             WHERE id = $1 AND user_id = $2
             "#,

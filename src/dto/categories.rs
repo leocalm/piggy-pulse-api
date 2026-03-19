@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -154,6 +152,57 @@ pub struct CreateCategoryRequest {
 
 pub type UpdateCategoryRequest = CreateCategoryRequest;
 
+// ===== Type conversion helpers =====
+
+use crate::models::category::CategoryType as V1CategoryType;
+
+impl CategoryType {
+    pub fn to_v1(self) -> V1CategoryType {
+        match self {
+            CategoryType::Income => V1CategoryType::Incoming,
+            CategoryType::Expense => V1CategoryType::Outgoing,
+            CategoryType::Transfer => V1CategoryType::Transfer,
+        }
+    }
+
+    pub fn from_v1(ct: V1CategoryType) -> Self {
+        match ct {
+            V1CategoryType::Incoming => CategoryType::Income,
+            V1CategoryType::Outgoing => CategoryType::Expense,
+            V1CategoryType::Transfer => CategoryType::Transfer,
+        }
+    }
+}
+
+impl CategoryStatus {
+    pub fn from_archived(is_archived: bool) -> Self {
+        if is_archived { CategoryStatus::Inactive } else { CategoryStatus::Active }
+    }
+}
+
+impl CategoryBase {
+    pub fn from_model(c: &crate::models::category::Category) -> Self {
+        CategoryBase {
+            id: c.id,
+            name: c.name.clone(),
+            category_type: CategoryType::from_v1(c.category_type),
+            icon: c.icon.clone(),
+            color: c.color.clone(),
+            parent_id: c.parent_id,
+            status: CategoryStatus::from_archived(c.is_archived),
+        }
+    }
+}
+
+impl CategoryResponse {
+    pub fn from_model(c: &crate::models::category::Category) -> Self {
+        CategoryResponse {
+            base: CategoryBase::from_model(c),
+            description: c.description.clone(),
+        }
+    }
+}
+
 // ===== TargetItem =====
 
 #[derive(Serialize, Debug)]
@@ -210,4 +259,9 @@ pub struct CreateTargetRequest {
     pub value: i64,
 }
 
-pub type UpdateTargetRequest = CreateTargetRequest;
+#[derive(Deserialize, Debug, Validate)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateTargetRequest {
+    #[validate(range(min = 0))]
+    pub value: i64,
+}
