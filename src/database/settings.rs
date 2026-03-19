@@ -1,9 +1,63 @@
 use crate::database::postgres_repository::PostgresRepository;
+use crate::dto::settings::{DateFormat, NumberFormat, Theme};
 use crate::error::app_error::AppError;
 use crate::models::settings::{
     PeriodModelRequest, PeriodModelResponse, PeriodSchedule, ProfileData, ProfileRequest, ScheduleConfigResponse, Settings, SettingsRequest, UserPreferences,
 };
 use uuid::Uuid;
+
+// ── V2 helper types ──────────────────────────────────────────────────────────
+
+#[derive(sqlx::FromRow)]
+struct ProfileV2Row {
+    name: String,
+    currency: String,
+}
+
+#[derive(sqlx::FromRow)]
+struct PreferencesV2Row {
+    theme: String,
+    date_format: String,
+    number_format: String,
+    language: String,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct ExportTransactionRow {
+    pub date: String,
+    pub description: String,
+    pub amount: i64,
+    pub currency: String,
+    pub category: String,
+    pub tx_type: String,
+    pub from_account: String,
+    pub to_account: String,
+    pub vendor: String,
+}
+
+fn parse_theme(s: &str) -> Theme {
+    match s {
+        "dark" => Theme::Dark,
+        "system" => Theme::System,
+        _ => Theme::Light,
+    }
+}
+
+fn parse_date_format(s: &str) -> DateFormat {
+    match s {
+        "MM/DD/YYYY" => DateFormat::MmDdYyyy,
+        "YYYY-MM-DD" => DateFormat::YyyyMmDd,
+        _ => DateFormat::DdMmYyyy,
+    }
+}
+
+fn parse_number_format(s: &str) -> NumberFormat {
+    match s {
+        "1.234,56" => NumberFormat::PeriodComma,
+        "1 234,56" => NumberFormat::SpaceComma,
+        _ => NumberFormat::CommaPeriod,
+    }
+}
 
 impl PostgresRepository {
     pub async fn get_settings(&self, user_id: &Uuid) -> Result<Settings, AppError> {
@@ -288,6 +342,232 @@ impl PostgresRepository {
         self.get_period_model(user_id).await
     }
 
+    // ── V2 Profile ─────────────────────────────────────────────────────────
+
+    pub async fn get_profile_v2(&self, user_id: &Uuid) -> Result<crate::dto::settings::ProfileResponse, AppError> {
+        let row = sqlx::query_as::<_, ProfileV2Row>(
+            r#"
+            SELECT u.name,
+                   COALESCE(c.currency, '') AS currency
+            FROM users u
+            LEFT JOIN settings s ON s.user_id = u.id
+            LEFT JOIN currency c ON c.id = s.default_currency_id
+            WHERE u.id = $1
+            "#,
+        )
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(crate::dto::settings::ProfileResponse {
+            name: row.name,
+            currency: row.currency,
+        })
+    }
+
+    pub async fn update_profile_v2(&self, user_id: &Uuid, name: &str, currency_code: &str) -> Result<crate::dto::settings::ProfileResponse, AppError> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query("UPDATE users SET name = $1 WHERE id = $2")
+            .bind(name)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+        // Resolve currency code to id
+        let currency_id: Option<Uuid> = if currency_code.is_empty() {
+            None
+        } else {
+            let id = sqlx::query_scalar::<_, Uuid>("SELECT id FROM currency WHERE currency = $1 LIMIT 1")
+                .bind(currency_code)
+                .fetch_optional(&mut *tx)
+                .await?;
+
+            if id.is_none() {
+                return Err(AppError::BadRequest(format!("Currency '{}' not found", currency_code)));
+            }
+            id
+        };
+
+        sqlx::query("UPDATE settings SET default_currency_id = $1, updated_at = now() WHERE user_id = $2")
+            .bind(currency_id)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+
+        self.get_profile_v2(user_id).await
+    }
+
+    // ── V2 Preferences ───────────────────────────────────────────────────────
+
+    pub async fn get_preferences_v2(&self, user_id: &Uuid) -> Result<crate::dto::settings::PreferencesResponse, AppError> {
+        let row = sqlx::query_as::<_, PreferencesV2Row>(
+            r#"
+            SELECT theme, date_format, number_format, language
+            FROM settings
+            WHERE user_id = $1
+            "#,
+        )
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(crate::dto::settings::PreferencesResponse {
+            theme: parse_theme(&row.theme),
+            date_format: parse_date_format(&row.date_format),
+            number_format: parse_number_format(&row.number_format),
+            language: row.language,
+        })
+    }
+
+    pub async fn update_preferences_v2(
+        &self,
+        user_id: &Uuid,
+        theme: &str,
+        date_format: &str,
+        number_format: &str,
+        language: &str,
+    ) -> Result<crate::dto::settings::PreferencesResponse, AppError> {
+        sqlx::query(
+            r#"
+            UPDATE settings
+            SET theme = $1, date_format = $2, number_format = $3, language = $4, updated_at = now()
+            WHERE user_id = $5
+            "#,
+        )
+        .bind(theme)
+        .bind(date_format)
+        .bind(number_format)
+        .bind(language)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_preferences_v2(user_id).await
+    }
+
+    // ── V2 Export ─────────────────────────────────────────────────────────────
+
+    pub async fn export_transactions_v2(&self, user_id: &Uuid) -> Result<Vec<ExportTransactionRow>, AppError> {
+        let rows = sqlx::query_as::<_, ExportTransactionRow>(
+            r#"
+            SELECT t.occurred_at::text AS date,
+                   t.description,
+                   t.amount,
+                   COALESCE(cur.currency, '') AS currency,
+                   COALESCE(cat.name, '') AS category,
+                   CASE
+                       WHEN t.to_account_id IS NOT NULL THEN 'transfer'
+                       WHEN cat.category_type = 'Incoming' THEN 'incoming'
+                       ELSE 'outgoing'
+                   END AS tx_type,
+                   COALESCE(fa.name, '') AS from_account,
+                   COALESCE(ta.name, '') AS to_account,
+                   COALESCE(v.name, '') AS vendor
+            FROM transaction t
+            LEFT JOIN account fa ON fa.id = t.from_account_id
+            LEFT JOIN account ta ON ta.id = t.to_account_id
+            LEFT JOIN currency cur ON cur.id = fa.currency_id
+            LEFT JOIN category cat ON cat.id = t.category_id
+            LEFT JOIN vendor v ON v.id = t.vendor_id
+            WHERE t.user_id = $1
+            ORDER BY t.occurred_at DESC, t.created_at DESC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows)
+    }
+
+    pub async fn export_all_data_v2(&self, user_id: &Uuid) -> Result<serde_json::Value, AppError> {
+        let accounts = sqlx::query_scalar::<_, serde_json::Value>(
+            r#"
+            SELECT COALESCE(json_agg(row_to_json(a)), '[]'::json) FROM (
+                SELECT id, name, account_type, color, is_archived, created_at
+                FROM account WHERE user_id = $1 ORDER BY created_at
+            ) a
+            "#,
+        )
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await
+        .unwrap_or(serde_json::Value::Array(vec![]));
+
+        let categories = sqlx::query_scalar::<_, serde_json::Value>(
+            r#"
+            SELECT COALESCE(json_agg(row_to_json(c)), '[]'::json) FROM (
+                SELECT id, name, category_type, color, icon, is_system, created_at
+                FROM category WHERE user_id = $1 ORDER BY created_at
+            ) c
+            "#,
+        )
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await
+        .unwrap_or(serde_json::Value::Array(vec![]));
+
+        let transactions = sqlx::query_scalar::<_, serde_json::Value>(
+            r#"
+            SELECT COALESCE(json_agg(row_to_json(t)), '[]'::json) FROM (
+                SELECT id, description, amount, occurred_at, from_account_id, to_account_id, category_id, vendor_id, created_at
+                FROM transaction WHERE user_id = $1 ORDER BY occurred_at DESC
+            ) t
+            "#,
+        )
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await
+        .unwrap_or(serde_json::Value::Array(vec![]));
+
+        Ok(serde_json::json!({
+            "accounts": accounts,
+            "categories": categories,
+            "transactions": transactions,
+        }))
+    }
+
+    // ── V2 Reset Structure ───────────────────────────────────────────────────
+
+    /// V2 reset: also deletes vendors (unlike V1)
+    pub async fn reset_structure_v2(&self, user_id: &Uuid) -> Result<(), AppError> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query("DELETE FROM period_schedule WHERE user_id = $1")
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+        sqlx::query("DELETE FROM budget_period WHERE user_id = $1")
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+        sqlx::query("DELETE FROM account WHERE user_id = $1").bind(user_id).execute(&mut *tx).await?;
+
+        sqlx::query("DELETE FROM category WHERE user_id = $1").bind(user_id).execute(&mut *tx).await?;
+
+        sqlx::query("DELETE FROM vendor WHERE user_id = $1").bind(user_id).execute(&mut *tx).await?;
+
+        // Re-create the system Transfer category
+        sqlx::query(
+            r#"
+            INSERT INTO category (user_id, name, color, icon, category_type, is_system)
+            VALUES ($1, 'Transfer', '#868E96', '↔', 'Transfer'::category_type, TRUE)
+            "#,
+        )
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        Ok(())
+    }
+
     // ── Danger zone ───────────────────────────────────────────────────────────
 
     /// Removes the user's financial structure: accounts, categories, budget periods,
@@ -320,6 +600,28 @@ impl PostgresRepository {
         .bind(user_id)
         .execute(&mut *tx)
         .await?;
+
+        tx.commit().await?;
+
+        Ok(())
+    }
+
+    /// Deletes all user data (for account deletion). Unlike reset_structure,
+    /// this does NOT re-create the system Transfer category.
+    pub async fn delete_all_user_data(&self, user_id: &Uuid) -> Result<(), AppError> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query("DELETE FROM period_schedule WHERE user_id = $1")
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM budget_period WHERE user_id = $1")
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM account WHERE user_id = $1").bind(user_id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM category WHERE user_id = $1").bind(user_id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM vendor WHERE user_id = $1").bind(user_id).execute(&mut *tx).await?;
 
         tx.commit().await?;
 

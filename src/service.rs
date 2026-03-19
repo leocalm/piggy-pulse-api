@@ -8,6 +8,7 @@ pub mod onboarding;
 pub mod overlay;
 pub mod period;
 mod service_util;
+pub mod settings;
 pub mod transaction;
 pub mod two_factor;
 pub mod unlock;
