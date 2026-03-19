@@ -34,7 +34,7 @@ pub use crate::dto::common::VendorMinimal as VendorRef;
 /// Discriminated variant flattened into TransactionResponse.
 /// The `transactionType` tag acts as the discriminator.
 #[derive(Serialize, Debug)]
-#[serde(tag = "transactionType", rename_all = "camelCase")]
+#[serde(tag = "transactionType", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum TransactionKind {
     Regular { to_account: Option<AccountRef> },
     Transfer { to_account: AccountRef },
