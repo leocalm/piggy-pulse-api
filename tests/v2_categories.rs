@@ -717,6 +717,21 @@ async fn test_archive_category_user_isolation() {
 
 #[rocket::async_test]
 #[ignore = "requires database"]
+async fn test_unarchive_category_user_isolation() {
+    let client_a = test_client().await;
+    create_user_and_login(&client_a).await;
+    let cat_id = common::entities::create_category(&client_a, "No Unarchive For B", "expense").await;
+    client_a.post(format!("{}/categories/{}/archive", V2_BASE, cat_id)).dispatch().await;
+
+    let client_b = test_client().await;
+    create_user_and_login(&client_b).await;
+
+    let resp = client_b.post(format!("{}/categories/{}/unarchive", V2_BASE, cat_id)).dispatch().await;
+    assert_eq!(resp.status(), Status::NotFound);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
 async fn test_options_user_isolation() {
     let client_a = test_client().await;
     create_user_and_login(&client_a).await;
