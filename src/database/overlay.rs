@@ -419,6 +419,68 @@ impl PostgresRepository {
         Ok(())
     }
 
+    // ===== V2: Check Manual Include/Exclude Status =====
+
+    pub async fn is_transaction_manually_included(&self, overlay_id: &Uuid, transaction_id: &Uuid) -> Result<bool, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            is_included: bool,
+        }
+
+        let row = sqlx::query_as::<_, Row>(
+            r#"
+            SELECT is_included
+            FROM overlay_transaction_inclusions
+            WHERE overlay_id = $1 AND transaction_id = $2
+            "#,
+        )
+        .bind(overlay_id)
+        .bind(transaction_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.is_some_and(|r| r.is_included))
+    }
+
+    pub async fn is_transaction_manually_excluded(&self, overlay_id: &Uuid, transaction_id: &Uuid) -> Result<bool, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            is_included: bool,
+        }
+
+        let row = sqlx::query_as::<_, Row>(
+            r#"
+            SELECT is_included
+            FROM overlay_transaction_inclusions
+            WHERE overlay_id = $1 AND transaction_id = $2
+            "#,
+        )
+        .bind(overlay_id)
+        .bind(transaction_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.is_some_and(|r| !r.is_included))
+    }
+
+    /// V2 exclude: inserts a row with is_included=false (or updates existing to false)
+    pub async fn exclude_transaction_v2(&self, overlay_id: &Uuid, transaction_id: &Uuid, _user_id: &Uuid) -> Result<(), AppError> {
+        sqlx::query(
+            r#"
+            INSERT INTO overlay_transaction_inclusions (overlay_id, transaction_id, is_included)
+            VALUES ($1, $2, false)
+            ON CONFLICT (overlay_id, transaction_id)
+            DO UPDATE SET is_included = false
+            "#,
+        )
+        .bind(overlay_id)
+        .bind(transaction_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
     // ===== Helper Methods =====
 
     async fn calculate_overlay_metrics(
@@ -685,7 +747,7 @@ impl PostgresRepository {
 
         let account_row = sqlx::query_as::<_, AccountRow>(
             r#"
-            SELECT id, name, color, icon, account_type, currency_id, spend_limit
+            SELECT id, name, color, icon, account_type::TEXT, currency_id, spend_limit
             FROM account
             WHERE id = $1 AND user_id = $2
             "#,
@@ -698,7 +760,7 @@ impl PostgresRepository {
         // Fetch currency
         let currency = sqlx::query_as::<_, crate::models::currency::Currency>(
             r#"
-            SELECT id, name, symbol, currency, decimal_places
+            SELECT id, name, symbol, currency, decimal_places, symbol_position::TEXT
             FROM currency
             WHERE id = $1
             "#,

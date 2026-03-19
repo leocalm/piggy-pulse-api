@@ -5,6 +5,7 @@ pub mod currency;
 pub mod dashboard;
 pub mod email;
 pub mod onboarding;
+pub mod overlay;
 pub mod period;
 mod service_util;
 pub mod transaction;
