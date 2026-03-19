@@ -115,6 +115,25 @@ pub async fn create_transaction(client: &Client, from_account_id: &str, category
     body["id"].as_str().expect("transaction id").to_string()
 }
 
+/// Creates a target via V2 POST /targets. Returns the target ID.
+pub async fn create_target(client: &Client, category_id: &str, value: i64) -> String {
+    let payload = serde_json::json!({
+        "categoryId": category_id,
+        "value": value
+    });
+
+    let resp = client
+        .post(format!("{}/targets", super::V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Created, "create_target failed");
+
+    let body: Value = serde_json::from_str(&resp.into_string().await.expect("target body")).expect("valid json");
+    body["id"].as_str().expect("target id").to_string()
+}
+
 /// Creates an overlay via V2 POST /overlays. Returns the overlay ID.
 pub async fn create_overlay(client: &Client, name: &str, start: &str, end: &str) -> String {
     let payload = serde_json::json!({
