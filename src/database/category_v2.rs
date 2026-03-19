@@ -222,24 +222,13 @@ impl PostgresRepository {
             category_type: String,
             parent_id: Option<Uuid>,
             current_target: Option<i64>,
-            previous_target: Option<i64>,
             is_excluded: bool,
             spent_in_period: i64,
         }
 
-        let previous_period_id: Option<Uuid> = sqlx::query_scalar(
-            r#"
-            SELECT id FROM budget_period
-            WHERE user_id = $1 AND end_date <= $2
-            ORDER BY end_date DESC
-            LIMIT 1
-            "#,
-        )
-        .bind(user_id)
-        .bind(start_date)
-        .fetch_optional(&self.pool)
-        .await?;
-
+        // Note: budget_category has no period dimension, so previousTarget is
+        // not available from this table. The field is always NULL until a
+        // target-history mechanism is added.
         let rows = sqlx::query_as::<_, RawRow>(
             r#"
             WITH period_spend AS (
@@ -251,12 +240,6 @@ impl PostgresRepository {
                   AND t.occurred_at >= $2
                   AND t.occurred_at <= $3
                 GROUP BY t.category_id
-            ),
-            prev_targets AS (
-                SELECT bc.category_id, bc.budgeted_value::bigint AS prev_value
-                FROM budget_category bc
-                WHERE bc.user_id = $1
-                  AND $4::uuid IS NOT NULL
             )
             SELECT
                 bc.id AS target_id,
@@ -265,13 +248,11 @@ impl PostgresRepository {
                 c.category_type::text AS category_type,
                 c.parent_id,
                 CASE WHEN bc.is_excluded = FALSE THEN bc.budgeted_value::bigint ELSE NULL END AS current_target,
-                pt.prev_value AS previous_target,
                 bc.is_excluded,
                 COALESCE(ps.spent, 0) AS spent_in_period
             FROM budget_category bc
             JOIN category c ON c.id = bc.category_id AND c.user_id = $1
             LEFT JOIN period_spend ps ON ps.category_id = bc.category_id
-            LEFT JOIN prev_targets pt ON pt.category_id = bc.category_id
             WHERE bc.user_id = $1
               AND c.category_type != 'Transfer'
             ORDER BY c.name ASC
@@ -280,7 +261,6 @@ impl PostgresRepository {
         .bind(user_id)
         .bind(start_date)
         .bind(end_date)
-        .bind(previous_period_id)
         .fetch_all(&self.pool)
         .await?;
 
@@ -293,7 +273,7 @@ impl PostgresRepository {
                 category_type: category_type_from_db(&row.category_type),
                 parent_id: row.parent_id,
                 current_target: row.current_target,
-                previous_target: row.previous_target,
+                previous_target: None,
                 is_excluded: row.is_excluded,
                 spent_in_period: row.spent_in_period,
             })

@@ -1,47 +1,16 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::dto::categories::{
     CategoriesWithTargets, CategoryBase, CategoryManagementListItem, CategoryManagementListResponse, CategoryOptionListResponse, CategoryOptionResponse,
-    CategoryOverviewResponse, CategoryOverviewSummary, CategoryResponse, CategoryStatus, CategorySummaryItem, CategoryTargetsResponse, CategoryType,
-    CreateTargetRequest, TargetItem, TargetStatus, TargetSummary,
+    CategoryOverviewResponse, CategoryOverviewSummary, CategoryResponse, CategorySummaryItem, CategoryTargetsResponse, CategoryType, CreateCategoryRequest,
+    CreateTargetRequest, TargetItem, TargetStatus, TargetSummary, UpdateTargetRequest,
 };
 use crate::dto::common::{Date, PaginatedResponse};
 use crate::error::app_error::AppError;
-use crate::models::category::{Category, CategoryType as V1CategoryType};
+use crate::models::category::{CategoryRequest, CategoryType as V1CategoryType};
 use uuid::Uuid;
 
 pub struct CategoryService<'a> {
     repository: &'a PostgresRepository,
-}
-
-fn to_v2_category_type(ct: V1CategoryType) -> CategoryType {
-    match ct {
-        V1CategoryType::Incoming => CategoryType::Income,
-        V1CategoryType::Outgoing => CategoryType::Expense,
-        V1CategoryType::Transfer => CategoryType::Transfer,
-    }
-}
-
-fn to_v2_status(is_archived: bool) -> CategoryStatus {
-    if is_archived { CategoryStatus::Inactive } else { CategoryStatus::Active }
-}
-
-fn category_to_base(c: &Category) -> CategoryBase {
-    CategoryBase {
-        id: c.id,
-        name: c.name.clone(),
-        category_type: to_v2_category_type(c.category_type),
-        icon: c.icon.clone(),
-        color: c.color.clone(),
-        parent_id: c.parent_id,
-        status: to_v2_status(c.is_archived),
-    }
-}
-
-fn category_to_response(c: &Category) -> CategoryResponse {
-    CategoryResponse {
-        base: category_to_base(c),
-        description: c.description.clone(),
-    }
 }
 
 impl<'a> CategoryService<'a> {
@@ -63,7 +32,7 @@ impl<'a> CategoryService<'a> {
         let data: Vec<CategoryManagementListItem> = rows
             .iter()
             .map(|(cat, tx_count)| CategoryManagementListItem {
-                base: category_to_base(cat),
+                base: CategoryBase::from_model(cat),
                 description: cat.description.clone(),
                 number_of_transactions: *tx_count,
             })
@@ -77,14 +46,27 @@ impl<'a> CategoryService<'a> {
         })
     }
 
-    #[allow(dead_code)]
-    pub async fn get_category_response(&self, id: &Uuid, user_id: &Uuid) -> Result<CategoryResponse, AppError> {
-        let cat = self
-            .repository
+    pub async fn update_category(&self, id: &Uuid, request: &CreateCategoryRequest, user_id: &Uuid) -> Result<CategoryResponse, AppError> {
+        let v1_request = CategoryRequest {
+            name: request.name.clone(),
+            color: request.color.clone(),
+            icon: request.icon.clone(),
+            parent_id: request.parent_id,
+            category_type: request.category_type.to_v1(),
+            description: request.description.clone(),
+        };
+
+        let category = self.repository.update_category(id, &v1_request, user_id).await?;
+        Ok(CategoryResponse::from_model(&category))
+    }
+
+    pub async fn delete_category(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
+        self.repository
             .get_category_by_id(id, user_id)
             .await?
             .ok_or_else(|| AppError::NotFound("Category not found".to_string()))?;
-        Ok(category_to_response(&cat))
+
+        self.repository.delete_category(id, user_id).await
     }
 
     pub async fn list_category_options(&self, user_id: &Uuid) -> Result<CategoryOptionListResponse, AppError> {
@@ -123,7 +105,6 @@ impl<'a> CategoryService<'a> {
                 let actual = row.actual;
                 let budgeted = row.budgeted;
 
-                // Only count expense categories toward totals
                 if row.category.category_type == V1CategoryType::Outgoing {
                     total_spent += actual;
                     if let Some(b) = budgeted {
@@ -136,11 +117,10 @@ impl<'a> CategoryService<'a> {
                 } else {
                     0
                 };
-
                 let variance = budgeted.map_or(0, |b| b - actual);
 
                 CategorySummaryItem {
-                    base: category_to_base(&row.category),
+                    base: CategoryBase::from_model(&row.category),
                     actual,
                     projected,
                     budgeted,
@@ -164,7 +144,6 @@ impl<'a> CategoryService<'a> {
     }
 
     pub async fn archive_category(&self, id: &Uuid, user_id: &Uuid) -> Result<CategoryResponse, AppError> {
-        // Check current state first
         let cat = self
             .repository
             .get_category_by_id(id, user_id)
@@ -176,7 +155,7 @@ impl<'a> CategoryService<'a> {
         }
 
         let archived = self.repository.archive_category(id, user_id).await?;
-        Ok(category_to_response(&archived))
+        Ok(CategoryResponse::from_model(&archived))
     }
 
     pub async fn unarchive_category(&self, id: &Uuid, user_id: &Uuid) -> Result<CategoryResponse, AppError> {
@@ -191,10 +170,21 @@ impl<'a> CategoryService<'a> {
         }
 
         let restored = self.repository.restore_category(id, user_id).await?;
-        Ok(category_to_response(&restored))
+        Ok(CategoryResponse::from_model(&restored))
     }
 
     // ===== Targets =====
+
+    fn validate_target_value(value: i64) -> Result<(), AppError> {
+        if value > i32::MAX as i64 {
+            return Err(AppError::BadRequest(format!(
+                "Target value {} exceeds maximum allowed value of {}",
+                value,
+                i32::MAX
+            )));
+        }
+        Ok(())
+    }
 
     pub async fn list_targets(&self, period_id: &Uuid, user_id: &Uuid) -> Result<CategoryTargetsResponse, AppError> {
         let period = self.repository.get_budget_period(period_id, user_id).await?;
@@ -238,7 +228,7 @@ impl<'a> CategoryService<'a> {
                 TargetItem {
                     id: row.target_id,
                     name: row.category_name.clone(),
-                    category_type: to_v2_category_type(row.category_type),
+                    category_type: CategoryType::from_v1(row.category_type),
                     parent_id: row.parent_id,
                     previous_target: row.previous_target,
                     current_target,
@@ -263,14 +253,14 @@ impl<'a> CategoryService<'a> {
     }
 
     pub async fn create_target(&self, request: &CreateTargetRequest, user_id: &Uuid) -> Result<TargetItem, AppError> {
-        // Verify category exists and belongs to user
+        Self::validate_target_value(request.value)?;
+
         let cat = self
             .repository
             .get_category_by_id(&request.category_id, user_id)
             .await?
             .ok_or_else(|| AppError::NotFound("Category not found".to_string()))?;
 
-        // Check if target already exists
         let existing = self.repository.get_target_for_category(&request.category_id, user_id).await?;
         if existing.is_some() {
             return Err(AppError::Conflict("Target already exists for this category".to_string()));
@@ -281,7 +271,7 @@ impl<'a> CategoryService<'a> {
         Ok(TargetItem {
             id: target_id,
             name: cat.name,
-            category_type: to_v2_category_type(cat.category_type),
+            category_type: CategoryType::from_v1(cat.category_type),
             parent_id: cat.parent_id,
             previous_target: None,
             current_target: Some(request.value),
@@ -291,7 +281,9 @@ impl<'a> CategoryService<'a> {
         })
     }
 
-    pub async fn update_target(&self, target_id: &Uuid, request: &CreateTargetRequest, user_id: &Uuid) -> Result<TargetItem, AppError> {
+    pub async fn update_target(&self, target_id: &Uuid, request: &UpdateTargetRequest, user_id: &Uuid) -> Result<TargetItem, AppError> {
+        Self::validate_target_value(request.value)?;
+
         self.repository.update_target(target_id, request.value, user_id).await?;
 
         let target_row = self
@@ -309,7 +301,7 @@ impl<'a> CategoryService<'a> {
         Ok(TargetItem {
             id: target_row.id,
             name: cat.name,
-            category_type: to_v2_category_type(cat.category_type),
+            category_type: CategoryType::from_v1(cat.category_type),
             parent_id: cat.parent_id,
             previous_target: None,
             current_target: Some(target_row.budgeted_value),
@@ -345,7 +337,7 @@ impl<'a> CategoryService<'a> {
         Ok(TargetItem {
             id: target_row.id,
             name: cat.name,
-            category_type: to_v2_category_type(cat.category_type),
+            category_type: CategoryType::from_v1(cat.category_type),
             parent_id: cat.parent_id,
             previous_target: None,
             current_target: Some(target_row.budgeted_value),
