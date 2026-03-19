@@ -8,6 +8,26 @@ use crate::models::pagination::CursorParams;
 use chrono::{Datelike, Days, Months, NaiveDate, Weekday};
 use uuid::Uuid;
 
+#[derive(sqlx::FromRow, Debug)]
+pub struct V2PeriodRow {
+    pub id: Uuid,
+    pub name: String,
+    pub start_date: NaiveDate,
+    pub end_date: NaiveDate,
+    pub transaction_count: Option<i64>,
+}
+
+pub struct V2ScheduleParams<'a> {
+    pub schedule_type: &'a str,
+    pub start_day: Option<i32>,
+    pub duration_value: Option<i32>,
+    pub duration_unit: Option<&'a str>,
+    pub saturday_adjustment: Option<&'a str>,
+    pub sunday_adjustment: Option<&'a str>,
+    pub name_pattern: Option<&'a str>,
+    pub generate_ahead: Option<i32>,
+}
+
 impl PostgresRepository {
     pub async fn create_budget_period(&self, request: &BudgetPeriodRequest, user_id: &Uuid) -> Result<Uuid, AppError> {
         let name_exists: bool = sqlx::query_scalar(
@@ -137,11 +157,11 @@ impl PostgresRepository {
         let schedule = sqlx::query_as::<_, PeriodSchedule>(
             r#"
             INSERT INTO period_schedule (
-                user_id, start_day, duration_value, duration_unit,
+                user_id, schedule_type, start_day, duration_value, duration_unit,
                 saturday_adjustment, sunday_adjustment, name_pattern, generate_ahead
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id, user_id, start_day, duration_value, duration_unit,
+            VALUES ($1, 'automatic', $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id, user_id, schedule_type, start_day, duration_value, duration_unit,
                       saturday_adjustment, sunday_adjustment, name_pattern,
                       generate_ahead, created_at, updated_at
             "#,
@@ -163,7 +183,7 @@ impl PostgresRepository {
     pub async fn get_period_schedule(&self, user_id: &Uuid) -> Result<PeriodSchedule, AppError> {
         let schedule = sqlx::query_as::<_, PeriodSchedule>(
             r#"
-            SELECT id, user_id, start_day, duration_value, duration_unit,
+            SELECT id, user_id, schedule_type, start_day, duration_value, duration_unit,
                    saturday_adjustment, sunday_adjustment, name_pattern,
                    generate_ahead, created_at, updated_at
             FROM period_schedule
@@ -181,7 +201,8 @@ impl PostgresRepository {
         let schedule = sqlx::query_as::<_, PeriodSchedule>(
             r#"
             UPDATE period_schedule
-            SET start_day = $1,
+            SET schedule_type = 'automatic',
+                start_day = $1,
                 duration_value = $2,
                 duration_unit = $3,
                 saturday_adjustment = $4,
@@ -190,7 +211,7 @@ impl PostgresRepository {
                 generate_ahead = $7,
                 updated_at = now()
             WHERE user_id = $8
-            RETURNING id, user_id, start_day, duration_value, duration_unit,
+            RETURNING id, user_id, schedule_type, start_day, duration_value, duration_unit,
                       saturday_adjustment, sunday_adjustment, name_pattern,
                       generate_ahead, created_at, updated_at
             "#,
@@ -218,6 +239,164 @@ impl PostgresRepository {
         Ok(())
     }
 
+    // ===== V2 Period Schedule Methods =====
+
+    pub async fn create_period_schedule_v2(&self, params: &V2ScheduleParams<'_>, user_id: &Uuid) -> Result<PeriodSchedule, AppError> {
+        let schedule = sqlx::query_as::<_, PeriodSchedule>(
+            r#"
+            INSERT INTO period_schedule (
+                user_id, schedule_type, start_day, duration_value, duration_unit,
+                saturday_adjustment, sunday_adjustment, name_pattern, generate_ahead
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id, user_id, schedule_type, start_day, duration_value, duration_unit,
+                      saturday_adjustment, sunday_adjustment, name_pattern,
+                      generate_ahead, created_at, updated_at
+            "#,
+        )
+        .bind(user_id)
+        .bind(params.schedule_type)
+        .bind(params.start_day)
+        .bind(params.duration_value)
+        .bind(params.duration_unit)
+        .bind(params.saturday_adjustment)
+        .bind(params.sunday_adjustment)
+        .bind(params.name_pattern)
+        .bind(params.generate_ahead)
+        .fetch_one(&self.pool)
+        .await;
+
+        match schedule {
+            Ok(s) => Ok(s),
+            Err(err) if is_unique_violation(&err) => Err(AppError::Conflict("Schedule already exists".to_string())),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    pub async fn update_period_schedule_v2(&self, params: &V2ScheduleParams<'_>, user_id: &Uuid) -> Result<PeriodSchedule, AppError> {
+        let schedule = sqlx::query_as::<_, PeriodSchedule>(
+            r#"
+            UPDATE period_schedule
+            SET schedule_type = $1,
+                start_day = $2,
+                duration_value = $3,
+                duration_unit = $4,
+                saturday_adjustment = $5,
+                sunday_adjustment = $6,
+                name_pattern = $7,
+                generate_ahead = $8,
+                updated_at = now()
+            WHERE user_id = $9
+            RETURNING id, user_id, schedule_type, start_day, duration_value, duration_unit,
+                      saturday_adjustment, sunday_adjustment, name_pattern,
+                      generate_ahead, created_at, updated_at
+            "#,
+        )
+        .bind(params.schedule_type)
+        .bind(params.start_day)
+        .bind(params.duration_value)
+        .bind(params.duration_unit)
+        .bind(params.saturday_adjustment)
+        .bind(params.sunday_adjustment)
+        .bind(params.name_pattern)
+        .bind(params.generate_ahead)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(schedule)
+    }
+
+    /// Delete the schedule, returning true if a row was deleted, false if none existed.
+    pub async fn delete_period_schedule_v2(&self, user_id: &Uuid) -> Result<bool, AppError> {
+        let result = sqlx::query("DELETE FROM period_schedule WHERE user_id = $1")
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    // ===== V2 Period Methods =====
+
+    /// Get a single period with its transaction count, scoped to user.
+    /// Returns None if not found.
+    pub async fn get_budget_period_v2(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<V2PeriodRow>, AppError> {
+        let row = sqlx::query_as::<_, V2PeriodRow>(
+            r#"
+            SELECT bp.id, bp.name, bp.start_date, bp.end_date,
+                   COUNT(DISTINCT t.id)::INT8 as transaction_count
+            FROM budget_period bp
+            LEFT JOIN transaction t ON t.user_id = bp.user_id
+                AND t.occurred_at >= bp.start_date
+                AND t.occurred_at <= bp.end_date
+            WHERE bp.id = $1 AND bp.user_id = $2
+            GROUP BY bp.id, bp.name, bp.start_date, bp.end_date
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row)
+    }
+
+    /// List periods with transaction count, cursor-based pagination.
+    pub async fn list_budget_periods_v2(&self, cursor: Option<Uuid>, limit: i64, user_id: &Uuid) -> Result<(Vec<V2PeriodRow>, i64), AppError> {
+        let total_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM budget_period WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
+
+        let fetch = limit + 1; // fetch one extra to detect hasMore
+        let rows = if let Some(cursor_id) = cursor {
+            sqlx::query_as::<_, V2PeriodRow>(
+                r#"
+                SELECT bp.id, bp.name, bp.start_date, bp.end_date,
+                       COUNT(DISTINCT t.id)::INT8 as transaction_count
+                FROM budget_period bp
+                LEFT JOIN transaction t ON t.user_id = bp.user_id
+                    AND t.occurred_at >= bp.start_date
+                    AND t.occurred_at <= bp.end_date
+                WHERE bp.user_id = $1
+                    AND (bp.start_date, bp.id) > (
+                        SELECT start_date, id FROM budget_period WHERE id = $2 AND user_id = $1
+                    )
+                GROUP BY bp.id, bp.name, bp.start_date, bp.end_date
+                ORDER BY bp.start_date ASC, bp.id ASC
+                LIMIT $3
+                "#,
+            )
+            .bind(user_id)
+            .bind(cursor_id)
+            .bind(fetch)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, V2PeriodRow>(
+                r#"
+                SELECT bp.id, bp.name, bp.start_date, bp.end_date,
+                       COUNT(DISTINCT t.id)::INT8 as transaction_count
+                FROM budget_period bp
+                LEFT JOIN transaction t ON t.user_id = bp.user_id
+                    AND t.occurred_at >= bp.start_date
+                    AND t.occurred_at <= bp.end_date
+                WHERE bp.user_id = $1
+                GROUP BY bp.id, bp.name, bp.start_date, bp.end_date
+                ORDER BY bp.start_date ASC, bp.id ASC
+                LIMIT $2
+                "#,
+            )
+            .bind(user_id)
+            .bind(fetch)
+            .fetch_all(&self.pool)
+            .await?
+        };
+
+        Ok((rows, total_count))
+    }
+
     pub async fn generate_automatic_budget_periods(&self) -> Result<AutoPeriodGenerationResponse, AppError> {
         #[derive(sqlx::FromRow)]
         struct ScheduleRow {
@@ -236,6 +415,7 @@ impl PostgresRepository {
             SELECT user_id, start_day, duration_value, duration_unit,
                    saturday_adjustment, sunday_adjustment, name_pattern, generate_ahead
             FROM period_schedule
+            WHERE schedule_type = 'automatic'
             "#,
         )
         .fetch_all(&self.pool)

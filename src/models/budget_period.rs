@@ -124,13 +124,14 @@ impl From<&BudgetPeriodWithMetrics> for BudgetPeriodResponse {
 pub struct PeriodSchedule {
     pub id: Uuid,
     pub user_id: Uuid,
-    pub start_day: i32,
-    pub duration_value: i32,
-    pub duration_unit: DurationUnit,
-    pub saturday_adjustment: WeekendAdjustment,
-    pub sunday_adjustment: WeekendAdjustment,
-    pub name_pattern: String,
-    pub generate_ahead: i32,
+    pub schedule_type: String,
+    pub start_day: Option<i32>,
+    pub duration_value: Option<i32>,
+    pub duration_unit: Option<DurationUnit>,
+    pub saturday_adjustment: Option<WeekendAdjustment>,
+    pub sunday_adjustment: Option<WeekendAdjustment>,
+    pub name_pattern: Option<String>,
+    pub generate_ahead: Option<i32>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -164,15 +165,16 @@ pub struct PeriodScheduleResponse {
 
 impl From<&PeriodSchedule> for PeriodScheduleResponse {
     fn from(schedule: &PeriodSchedule) -> Self {
+        // V1 schedules are always automatic, so these Options are guaranteed to be Some.
         Self {
             id: schedule.id,
-            start_day: schedule.start_day,
-            duration_value: schedule.duration_value,
-            duration_unit: schedule.duration_unit,
-            saturday_adjustment: schedule.saturday_adjustment,
-            sunday_adjustment: schedule.sunday_adjustment,
-            name_pattern: schedule.name_pattern.clone(),
-            generate_ahead: schedule.generate_ahead,
+            start_day: schedule.start_day.unwrap_or(1),
+            duration_value: schedule.duration_value.unwrap_or(1),
+            duration_unit: schedule.duration_unit.unwrap_or(DurationUnit::Days),
+            saturday_adjustment: schedule.saturday_adjustment.unwrap_or(WeekendAdjustment::Keep),
+            sunday_adjustment: schedule.sunday_adjustment.unwrap_or(WeekendAdjustment::Keep),
+            name_pattern: schedule.name_pattern.clone().unwrap_or_default(),
+            generate_ahead: schedule.generate_ahead.unwrap_or(0),
         }
     }
 }
