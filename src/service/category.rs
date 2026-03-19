@@ -103,7 +103,7 @@ impl<'a> CategoryService<'a> {
         let today = chrono::Utc::now().date_naive();
         let total_days = (period.end_date - period.start_date).num_days().max(1);
         let elapsed_days = (today - period.start_date).num_days().clamp(0, total_days);
-        let period_elapsed_percent = ((elapsed_days * 100) / total_days) as i64;
+        let period_elapsed_percent = (elapsed_days * 100) / total_days;
 
         let category_data = self
             .repository
@@ -195,7 +195,7 @@ impl<'a> CategoryService<'a> {
         let today = chrono::Utc::now().date_naive();
         let total_days = (period.end_date - period.start_date).num_days().max(1);
         let elapsed_days = (today - period.start_date).num_days().clamp(0, total_days);
-        let period_progress = ((elapsed_days * 100) / total_days) as i64;
+        let period_progress = (elapsed_days * 100) / total_days;
 
         let target_rows = self.repository.list_targets_v2(&period.start_date, &period.end_date, user_id).await?;
 
