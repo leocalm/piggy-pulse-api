@@ -1,10 +1,13 @@
 pub mod account;
 pub mod auth;
 pub mod category;
+pub mod currency;
 pub mod dashboard;
 pub mod email;
+pub mod onboarding;
 pub mod period;
 mod service_util;
 pub mod transaction;
 pub mod two_factor;
+pub mod unlock;
 pub mod vendor;

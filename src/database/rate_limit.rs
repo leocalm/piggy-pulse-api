@@ -271,6 +271,33 @@ impl PostgresRepository {
 
         Ok(is_valid)
     }
+
+    /// Verify an unlock token (without requiring the user ID upfront) and clear
+    /// rate limit records. Used by the V2 unlock endpoint where only the token
+    /// is passed as a query param.
+    pub async fn verify_and_apply_unlock_token_v2(&self, token: &str, ip_address: &str) -> Result<bool, AppError> {
+        // Look up the rate-limit row that owns this token
+        let row = sqlx::query_as::<_, (String,)>(
+            "SELECT identifier_value FROM login_rate_limits
+             WHERE identifier_type = 'user_id'
+               AND unlock_token = $1
+               AND unlock_token_expires_at > $2
+             LIMIT 1",
+        )
+        .bind(token)
+        .bind(Utc::now())
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let Some((user_id_str,)) = row else {
+            return Ok(false);
+        };
+
+        let user_id = Uuid::parse_str(&user_id_str).map_err(|e| AppError::uuid("Invalid user ID in rate limit row", e))?;
+
+        // Delegate to the existing method which handles deletion + audit log
+        self.verify_and_apply_unlock_token(&user_id, token, ip_address).await
+    }
 }
 
 /// Compute next_attempt_at and locked_until given the new attempt count and config.
