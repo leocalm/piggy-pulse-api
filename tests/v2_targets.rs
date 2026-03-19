@@ -149,6 +149,29 @@ async fn test_create_target_duplicate_conflict() {
 
 #[rocket::async_test]
 #[ignore = "requires database"]
+async fn test_create_target_negative_value() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let cat_id = common::entities::create_category(&client, "NegTargetCat", "expense").await;
+
+    let payload = json!({
+        "categoryId": cat_id,
+        "value": -100
+    });
+
+    let resp = client
+        .post(format!("{}/targets", V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::BadRequest);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
 async fn test_create_target_nonexistent_category() {
     let client = test_client().await;
     create_user_and_login(&client).await;

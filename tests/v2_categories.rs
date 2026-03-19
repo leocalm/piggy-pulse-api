@@ -100,6 +100,31 @@ async fn test_create_category_name_too_short() {
 
 #[rocket::async_test]
 #[ignore = "requires database"]
+async fn test_create_category_bad_color() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let payload = json!({
+        "name": "Bad Color",
+        "type": "expense",
+        "icon": "🛒",
+        "color": "not-hex",
+        "description": null,
+        "parentId": null
+    });
+
+    let resp = client
+        .post(format!("{}/categories", V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::BadRequest);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
 async fn test_create_category_missing_required_fields() {
     let client = test_client().await;
     create_user_and_login(&client).await;
