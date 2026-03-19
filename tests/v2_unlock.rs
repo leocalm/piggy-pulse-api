@@ -2,6 +2,7 @@ mod common;
 
 use common::{V2_BASE, test_client};
 use rocket::http::Status;
+use serde_json::Value;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /unlock?token=...
@@ -9,46 +10,51 @@ use rocket::http::Status;
 
 #[rocket::async_test]
 #[ignore = "requires database"]
-async fn test_unlock_valid_token() {
+async fn test_unlock_invalid_token_returns_400() {
     let client = test_client().await;
 
-    // We can't easily generate a valid token without triggering the lockout flow,
-    // so this test validates the endpoint exists and handles a plausible token format.
-    let resp = client.get(format!("{}/unlock?token=some-valid-looking-token-value", V2_BASE)).dispatch().await;
+    let resp = client.get(format!("{}/unlock?token=invalid-token-value-12345", V2_BASE)).dispatch().await;
 
-    // Should return 400 (invalid token) or 200 (if somehow valid)
-    assert!(
-        resp.status() == Status::Ok || resp.status() == Status::BadRequest || resp.status() == Status::NotFound,
-        "expected 200, 400, or 404, got {}",
-        resp.status()
-    );
+    // Invalid token should return 400
+    assert_eq!(resp.status(), Status::BadRequest);
+
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    assert!(body["message"].is_string(), "error response must have message field");
 }
 
 #[rocket::async_test]
 #[ignore = "requires database"]
-async fn test_unlock_missing_token() {
+async fn test_unlock_missing_token_returns_400() {
     let client = test_client().await;
 
+    // Missing required query param — should return 400
     let resp = client.get(format!("{}/unlock", V2_BASE)).dispatch().await;
 
-    // Missing required query param
-    assert!(
-        resp.status() == Status::BadRequest || resp.status() == Status::NotFound,
-        "expected 400 or 404, got {}",
-        resp.status()
-    );
+    assert_eq!(resp.status(), Status::BadRequest);
+
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    assert!(body["message"].is_string(), "error response must have message field");
 }
 
 #[rocket::async_test]
 #[ignore = "requires database"]
-async fn test_unlock_invalid_token() {
+async fn test_unlock_is_public_endpoint() {
+    // No authentication — should still process (return 400 for invalid token, not 401)
     let client = test_client().await;
 
-    let resp = client.get(format!("{}/unlock?token=invalid", V2_BASE)).dispatch().await;
+    let resp = client.get(format!("{}/unlock?token=no-auth-needed-test", V2_BASE)).dispatch().await;
 
-    assert!(
-        resp.status() == Status::BadRequest || resp.status() == Status::NotFound,
-        "expected 400 or 404, got {}",
-        resp.status()
-    );
+    // Should return 400 (bad token), NOT 401 (unauthorized)
+    assert_eq!(resp.status(), Status::BadRequest);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_unlock_empty_token_returns_400() {
+    let client = test_client().await;
+
+    // Empty token should be rejected
+    let resp = client.get(format!("{}/unlock?token=", V2_BASE)).dispatch().await;
+
+    assert_eq!(resp.status(), Status::BadRequest);
 }
