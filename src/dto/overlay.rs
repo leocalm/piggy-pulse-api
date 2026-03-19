@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
@@ -85,6 +83,7 @@ pub type OverlayTransactionListResponse = PaginatedResponse<OverlayTransactionRe
 
 #[derive(Deserialize, Debug, Validate)]
 #[serde(rename_all = "camelCase")]
+#[validate(schema(function = "validate_overlay_date_range"))]
 pub struct CreateOverlayRequest {
     #[validate(length(min = 1))]
     pub name: String,
@@ -98,6 +97,13 @@ pub struct CreateOverlayRequest {
     #[validate(nested)]
     pub category_caps: Vec<OverlayCategoryCap>,
     pub rules: Option<OverlayRules>,
+}
+
+fn validate_overlay_date_range(request: &CreateOverlayRequest) -> Result<(), validator::ValidationError> {
+    if request.start_date.0 >= request.end_date.0 {
+        return Err(validator::ValidationError::new("start_date_must_be_before_end_date"));
+    }
+    Ok(())
 }
 
 pub type UpdateOverlayRequest = CreateOverlayRequest;
