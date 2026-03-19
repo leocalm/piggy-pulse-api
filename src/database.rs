@@ -5,6 +5,7 @@ pub mod budget_category;
 pub mod budget_period;
 pub mod category;
 pub mod category_target;
+pub mod category_v2;
 pub mod currency;
 pub mod dashboard;
 pub mod overlay;

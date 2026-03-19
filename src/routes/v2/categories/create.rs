@@ -12,7 +12,7 @@ use crate::error::app_error::AppError;
 use crate::models::category::{CategoryRequest, CategoryType as V1CategoryType};
 
 /// Map the V2 DTO CategoryType to the V1 model CategoryType.
-fn to_v1_category_type(ct: CategoryType) -> V1CategoryType {
+pub(super) fn to_v1_category_type(ct: CategoryType) -> V1CategoryType {
     match ct {
         CategoryType::Income => V1CategoryType::Incoming,
         CategoryType::Expense => V1CategoryType::Outgoing,
@@ -21,7 +21,7 @@ fn to_v1_category_type(ct: CategoryType) -> V1CategoryType {
 }
 
 /// Map the V1 model CategoryType to the V2 DTO CategoryType.
-fn to_v2_category_type(ct: V1CategoryType) -> CategoryType {
+pub(super) fn to_v2_category_type(ct: V1CategoryType) -> CategoryType {
     match ct {
         V1CategoryType::Incoming => CategoryType::Income,
         V1CategoryType::Outgoing => CategoryType::Expense,
