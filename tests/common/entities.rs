@@ -115,6 +115,30 @@ pub async fn create_transaction(client: &Client, from_account_id: &str, category
     body["id"].as_str().expect("transaction id").to_string()
 }
 
+/// Creates a transaction with a vendor via V2 POST /transactions. Returns the transaction ID.
+pub async fn create_transaction_with_vendor(client: &Client, from_account_id: &str, category_id: &str, amount: i64, date: &str, vendor_id: &str) -> String {
+    let payload = serde_json::json!({
+        "transactionType": "Regular",
+        "date": date,
+        "description": "Test transaction",
+        "amount": amount,
+        "fromAccountId": from_account_id,
+        "categoryId": category_id,
+        "vendorId": vendor_id
+    });
+
+    let resp = client
+        .post(format!("{}/transactions", super::V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Created, "create_transaction_with_vendor failed");
+
+    let body: Value = serde_json::from_str(&resp.into_string().await.expect("transaction body")).expect("valid json");
+    body["id"].as_str().expect("transaction id").to_string()
+}
+
 /// Creates a target via V2 POST /targets. Returns the target ID.
 pub async fn create_target(client: &Client, category_id: &str, value: i64) -> String {
     let payload = serde_json::json!({

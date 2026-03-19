@@ -333,6 +333,87 @@ LIMIT $5
         vendor.ok_or_else(|| AppError::NotFound("Vendor not found".to_string()))
     }
 
+    /// Lists vendors with all-time transaction count for V2 paginated list.
+    /// Returns `(rows, total_count)`. Fetches `limit + 1` rows so the caller can detect `has_more`.
+    pub async fn list_vendors_v2(&self, cursor: Option<Uuid>, limit: i64, user_id: &Uuid) -> Result<(Vec<(Vendor, i64)>, i64), AppError> {
+        let total_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM vendor WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
+
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            id: Uuid,
+            name: String,
+            description: Option<String>,
+            archived: bool,
+            transaction_count: i64,
+        }
+
+        let fetch_limit = limit + 1;
+
+        let rows = if let Some(cursor_id) = cursor {
+            sqlx::query_as::<_, Row>(
+                r#"
+SELECT v.id,
+       v.name,
+       v.description,
+       v.archived,
+       COUNT(t.id)::bigint AS transaction_count
+FROM vendor v
+LEFT JOIN transaction t ON v.id = t.vendor_id AND t.user_id = $1
+WHERE v.user_id = $1
+  AND (v.created_at, v.id) < (SELECT created_at, id FROM vendor WHERE id = $2 AND user_id = $1)
+GROUP BY v.id, v.name, v.description, v.archived, v.created_at
+ORDER BY v.created_at DESC, v.id DESC
+LIMIT $3
+                "#,
+            )
+            .bind(user_id)
+            .bind(cursor_id)
+            .bind(fetch_limit)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, Row>(
+                r#"
+SELECT v.id,
+       v.name,
+       v.description,
+       v.archived,
+       COUNT(t.id)::bigint AS transaction_count
+FROM vendor v
+LEFT JOIN transaction t ON v.id = t.vendor_id AND t.user_id = $1
+WHERE v.user_id = $1
+GROUP BY v.id, v.name, v.description, v.archived, v.created_at
+ORDER BY v.created_at DESC, v.id DESC
+LIMIT $2
+                "#,
+            )
+            .bind(user_id)
+            .bind(fetch_limit)
+            .fetch_all(&self.pool)
+            .await?
+        };
+
+        Ok((
+            rows.into_iter()
+                .map(|r| {
+                    (
+                        Vendor {
+                            id: r.id,
+                            name: r.name,
+                            description: r.description,
+                            archived: r.archived,
+                        },
+                        r.transaction_count,
+                    )
+                })
+                .collect(),
+            total_count,
+        ))
+    }
+
     pub async fn restore_vendor(&self, id: &Uuid, user_id: &Uuid) -> Result<Vendor, AppError> {
         let vendor = sqlx::query_as::<_, Vendor>(
             r#"
