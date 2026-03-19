@@ -5,5 +5,6 @@ pub mod dashboard;
 pub mod email;
 pub mod period;
 mod service_util;
+pub mod transaction;
 pub mod two_factor;
 pub mod vendor;
