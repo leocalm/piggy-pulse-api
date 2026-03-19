@@ -46,6 +46,20 @@ impl<'a> CategoryService<'a> {
         })
     }
 
+    pub async fn create_category(&self, request: &CreateCategoryRequest, user_id: &Uuid) -> Result<CategoryResponse, AppError> {
+        let v1_request = CategoryRequest {
+            name: request.name.clone(),
+            color: request.color.clone(),
+            icon: request.icon.clone(),
+            parent_id: request.parent_id,
+            category_type: request.category_type.to_v1(),
+            description: request.description.clone(),
+        };
+
+        let category = self.repository.create_category(&v1_request, user_id).await?;
+        Ok(CategoryResponse::from_model(&category))
+    }
+
     pub async fn update_category(&self, id: &Uuid, request: &CreateCategoryRequest, user_id: &Uuid) -> Result<CategoryResponse, AppError> {
         let v1_request = CategoryRequest {
             name: request.name.clone(),
@@ -93,7 +107,7 @@ impl<'a> CategoryService<'a> {
 
         let category_data = self
             .repository
-            .get_category_overview_data(period_id, &period.start_date, &period.end_date, user_id)
+            .get_category_overview_data(&period.start_date, &period.end_date, user_id)
             .await?;
 
         let mut total_spent: i64 = 0;
@@ -175,17 +189,6 @@ impl<'a> CategoryService<'a> {
 
     // ===== Targets =====
 
-    fn validate_target_value(value: i64) -> Result<(), AppError> {
-        if value > i32::MAX as i64 {
-            return Err(AppError::BadRequest(format!(
-                "Target value {} exceeds maximum allowed value of {}",
-                value,
-                i32::MAX
-            )));
-        }
-        Ok(())
-    }
-
     pub async fn list_targets(&self, period_id: &Uuid, user_id: &Uuid) -> Result<CategoryTargetsResponse, AppError> {
         let period = self.repository.get_budget_period(period_id, user_id).await?;
 
@@ -194,10 +197,7 @@ impl<'a> CategoryService<'a> {
         let elapsed_days = (today - period.start_date).num_days().clamp(0, total_days);
         let period_progress = ((elapsed_days * 100) / total_days) as i64;
 
-        let target_rows = self
-            .repository
-            .list_targets_v2(period_id, &period.start_date, &period.end_date, user_id)
-            .await?;
+        let target_rows = self.repository.list_targets_v2(&period.start_date, &period.end_date, user_id).await?;
 
         let mut with_targets: i64 = 0;
         let total = target_rows.len() as i64;
@@ -253,8 +253,6 @@ impl<'a> CategoryService<'a> {
     }
 
     pub async fn create_target(&self, request: &CreateTargetRequest, user_id: &Uuid) -> Result<TargetItem, AppError> {
-        Self::validate_target_value(request.value)?;
-
         let cat = self
             .repository
             .get_category_by_id(&request.category_id, user_id)
@@ -282,8 +280,6 @@ impl<'a> CategoryService<'a> {
     }
 
     pub async fn update_target(&self, target_id: &Uuid, request: &UpdateTargetRequest, user_id: &Uuid) -> Result<TargetItem, AppError> {
-        Self::validate_target_value(request.value)?;
-
         self.repository.update_target(target_id, request.value, user_id).await?;
 
         let target_row = self

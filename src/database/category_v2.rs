@@ -60,7 +60,7 @@ impl PostgresRepository {
                 LEFT JOIN transaction_counts tc ON c.id = tc.category_id
                 WHERE c.user_id = $1
                   AND c.is_system = FALSE
-                  AND (c.created_at, c.id) < (SELECT created_at, id FROM category WHERE id = $2)
+                  AND (c.created_at, c.id) < (SELECT created_at, id FROM category WHERE id = $2 AND user_id = $1)
                 ORDER BY c.created_at DESC, c.id DESC
                 LIMIT $3
                 "#,
@@ -126,7 +126,6 @@ impl PostgresRepository {
 
     pub async fn get_category_overview_data(
         &self,
-        _period_id: &Uuid,
         start_date: &chrono::NaiveDate,
         end_date: &chrono::NaiveDate,
         user_id: &Uuid,
@@ -207,13 +206,7 @@ impl PostgresRepository {
 
     // ===== V2 Targets =====
 
-    pub async fn list_targets_v2(
-        &self,
-        _period_id: &Uuid,
-        start_date: &chrono::NaiveDate,
-        end_date: &chrono::NaiveDate,
-        user_id: &Uuid,
-    ) -> Result<Vec<TargetListRow>, AppError> {
+    pub async fn list_targets_v2(&self, start_date: &chrono::NaiveDate, end_date: &chrono::NaiveDate, user_id: &Uuid) -> Result<Vec<TargetListRow>, AppError> {
         #[derive(Debug, sqlx::FromRow)]
         struct RawRow {
             target_id: Uuid,
@@ -313,7 +306,7 @@ impl PostgresRepository {
         )
         .bind(user_id)
         .bind(category_id)
-        .bind(value as i32)
+        .bind(i32::try_from(value).map_err(|_| AppError::BadRequest("Target value out of range".to_string()))?)
         .fetch_one(&self.pool)
         .await?;
 
@@ -329,7 +322,7 @@ impl PostgresRepository {
             WHERE id = $2 AND user_id = $3
             "#,
         )
-        .bind(value as i32)
+        .bind(i32::try_from(value).map_err(|_| AppError::BadRequest("Target value out of range".to_string()))?)
         .bind(target_id)
         .bind(user_id)
         .execute(&self.pool)
@@ -396,9 +389,9 @@ pub struct CategoryOverviewRow {
     pub budgeted: Option<i64>,
 }
 
-#[allow(dead_code)]
 pub struct TargetListRow {
     pub target_id: Uuid,
+    #[allow(dead_code)]
     pub category_id: Uuid,
     pub category_name: String,
     pub category_type: CategoryType,

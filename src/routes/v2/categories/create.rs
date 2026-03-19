@@ -9,7 +9,7 @@ use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::dto::categories::{CategoryResponse, CreateCategoryRequest};
 use crate::error::app_error::AppError;
-use crate::models::category::CategoryRequest;
+use crate::service::category::CategoryService;
 
 #[post("/", data = "<payload>")]
 pub async fn create_category(
@@ -19,17 +19,9 @@ pub async fn create_category(
 ) -> Result<(Status, Json<CategoryResponse>), AppError> {
     payload.validate()?;
 
-    let v1_request = CategoryRequest {
-        name: payload.name.clone(),
-        color: payload.color.clone(),
-        icon: payload.icon.clone(),
-        parent_id: payload.parent_id,
-        category_type: payload.category_type.to_v1(),
-        description: payload.description.clone(),
-    };
-
     let repo = PostgresRepository { pool: pool.inner().clone() };
-    let category = repo.create_category(&v1_request, &user.id).await?;
+    let service = CategoryService::new(&repo);
 
-    Ok((Status::Created, Json(CategoryResponse::from_model(&category))))
+    let response = service.create_category(&payload, &user.id).await?;
+    Ok((Status::Created, Json(response)))
 }
