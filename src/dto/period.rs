@@ -47,8 +47,13 @@ pub struct PeriodDuration {
 #[derive(Serialize, Debug)]
 #[serde(tag = "periodType", rename_all = "camelCase")]
 pub enum PeriodKind {
-    Duration { duration: PeriodDuration },
-    ManualEndDate { manual_end_date: Date },
+    Duration {
+        duration: PeriodDuration,
+    },
+    ManualEndDate {
+        #[serde(rename = "manualEndDate")]
+        manual_end_date: Date,
+    },
 }
 
 // ===== PeriodResponse =====
@@ -104,12 +109,19 @@ pub type UpdatePeriodRequest = CreatePeriodRequest;
 pub enum ScheduleKind {
     Manual,
     Automatic {
+        #[serde(rename = "startDayOfTheMonth")]
         start_day_of_the_month: i64,
+        #[serde(rename = "periodDuration")]
         period_duration: i64,
+        #[serde(rename = "generateAhead")]
         generate_ahead: i64,
+        #[serde(rename = "durationUnit")]
         duration_unit: DurationUnit,
+        #[serde(rename = "saturdayPolicy")]
         saturday_policy: WeekendPolicy,
+        #[serde(rename = "sundayPolicy")]
         sunday_policy: WeekendPolicy,
+        #[serde(rename = "namePattern")]
         name_pattern: String,
     },
 }
@@ -134,12 +146,19 @@ pub struct PeriodScheduleResponse {
 pub enum CreatePeriodScheduleRequest {
     Manual,
     Automatic {
+        #[serde(rename = "startDayOfTheMonth")]
         start_day_of_the_month: i64,
+        #[serde(rename = "periodDuration")]
         period_duration: i64,
+        #[serde(rename = "generateAhead")]
         generate_ahead: i64,
+        #[serde(rename = "durationUnit")]
         duration_unit: DurationUnit,
+        #[serde(rename = "saturdayPolicy")]
         saturday_policy: WeekendPolicy,
+        #[serde(rename = "sundayPolicy")]
         sunday_policy: WeekendPolicy,
+        #[serde(rename = "namePattern")]
         name_pattern: String,
     },
 }
