@@ -58,6 +58,7 @@ pub async fn verify_two_factor_login(
     set_session_cookie(cookies, config, session_id, user.id);
 
     let auth = AuthService::new(&repo, config);
+    let (access_token, _) = auth.issue_bearer_token(&user.id).await?;
     let user_response = auth.build_user_response(user).await?;
-    Ok(Json(AuthenticatedResponse::new(user_response, None)))
+    Ok(Json(AuthenticatedResponse::new(user_response, Some(access_token))))
 }

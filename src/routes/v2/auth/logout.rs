@@ -3,7 +3,7 @@ use rocket::http::{Cookie, Status};
 use rocket::post;
 use sqlx::PgPool;
 
-use crate::auth::CurrentUser;
+use crate::auth::{AuthMethod, CurrentUser};
 use crate::config::Config;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
@@ -21,6 +21,13 @@ pub async fn logout(
 ) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let auth = AuthService::new(&repo, config);
+
+    // Revoke the bearer token if authenticated via Bearer
+    if user.auth_method == AuthMethod::Bearer
+        && let Some(token_id) = user.api_token_id
+    {
+        repo.revoke(&token_id).await?;
+    }
 
     auth.logout(&user.id, user.session_id, client_ip.0.clone(), user_agent.0.clone()).await?;
 

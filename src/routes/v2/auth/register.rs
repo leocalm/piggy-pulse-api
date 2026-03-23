@@ -40,6 +40,7 @@ pub async fn register(
 
     set_session_cookie(cookies, config, session_id, user.id);
 
-    let user_response = auth.get_user_response(&user.id).await?;
-    Ok((Status::Created, Json(AuthenticatedResponse::new(user_response, None))))
+    let (access_token, _) = auth.issue_bearer_token(&user.id).await?;
+    let user_response = auth.build_user_response(user).await?;
+    Ok((Status::Created, Json(AuthenticatedResponse::new(user_response, Some(access_token)))))
 }

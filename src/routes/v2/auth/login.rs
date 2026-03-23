@@ -50,8 +50,12 @@ pub async fn login(
     match outcome {
         V2LoginOutcome::Success { session_id, user } => {
             set_session_cookie(cookies, config, session_id, user.id);
+            let (access_token, _) = auth.issue_bearer_token(&user.id).await?;
             let user_response = auth.build_user_response(user).await?;
-            Ok(Json(LoginResponse::Authenticated(AuthenticatedResponse::new(user_response, None))))
+            Ok(Json(LoginResponse::Authenticated(AuthenticatedResponse::new(
+                user_response,
+                Some(access_token),
+            ))))
         }
         V2LoginOutcome::TwoFactorRequired { two_factor_token } => {
             Ok(Json(LoginResponse::TwoFactorChallenge(TwoFactorChallengeResponse::new(two_factor_token))))

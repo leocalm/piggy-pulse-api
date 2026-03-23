@@ -484,6 +484,9 @@ impl<'a> AuthService<'a> {
             let _ = self.repo.delete_all_sessions_for_user(user_id).await;
         }
 
+        // Revoke all bearer tokens — force re-authentication
+        let _ = self.repo.revoke_all_for_user(user_id).await;
+
         let _ = self
             .repo
             .create_security_audit_log(Some(user_id), audit_events::PASSWORD_CHANGED, true, client_ip, user_agent, None)
@@ -554,8 +557,9 @@ impl<'a> AuthService<'a> {
         // Mark token as used
         self.repo.mark_password_reset_used(&reset.id).await?;
 
-        // Invalidate all sessions
+        // Invalidate all sessions and revoke all bearer tokens
         let sessions_invalidated = self.repo.invalidate_all_user_sessions(&reset.user_id).await?;
+        let _ = self.repo.revoke_all_for_user(&reset.user_id).await;
 
         // Clean up remaining reset tokens
         self.repo.delete_password_resets_for_user(&reset.user_id).await?;
@@ -589,6 +593,58 @@ impl<'a> AuthService<'a> {
         let new_session = self.repo.create_session(user_id, expires_at, user_agent, client_ip).await?;
 
         Ok(new_session.id)
+    }
+
+    /// Issue a bearer access token for a user.
+    /// Returns `(access_token_plaintext, access_ttl_seconds)`.
+    pub async fn issue_bearer_token(&self, user_id: &Uuid) -> Result<(String, i64), AppError> {
+        use crate::models::api_token::generate_token;
+
+        let access_secs = self.config.session.access_token_ttl_seconds.unwrap_or(3600);
+        // V2 does not use refresh tokens, but refresh_expires_at controls when
+        // cleanup_expired() deletes the row — effectively the max token lifetime.
+        let refresh_secs = self.config.session.refresh_token_ttl_seconds.unwrap_or(30 * 24 * 3600);
+
+        let (access_plain, access_hash) = generate_token("pp_at_");
+        // V2 uses access-token-based refresh (via token row ID), not refresh tokens.
+        // Store a sentinel hash so the column is non-empty but never matches a lookup.
+        let refresh_hash = "v2_no_refresh".to_string();
+
+        let now = Utc::now();
+        let expires_at = now + chrono::Duration::seconds(access_secs);
+        let refresh_expires_at = now + chrono::Duration::seconds(refresh_secs);
+
+        // Use a stable device_id so the ON CONFLICT upsert replaces the previous
+        // v2 token for this user, preventing unbounded row accumulation.
+        let device_id = format!("v2_{}", user_id);
+
+        self.repo
+            .create_api_token(
+                user_id,
+                access_hash,
+                refresh_hash,
+                "v2".to_string(),
+                &device_id,
+                &expires_at,
+                &refresh_expires_at,
+            )
+            .await?;
+
+        Ok((access_plain, access_secs))
+    }
+
+    /// Rotate the bearer access token for an existing API token row identified by its DB row ID.
+    /// Returns the new plaintext access token.
+    pub async fn refresh_bearer_token_by_id(&self, token_id: &Uuid) -> Result<String, AppError> {
+        use crate::models::api_token::generate_token;
+
+        let access_secs = self.config.session.access_token_ttl_seconds.unwrap_or(3600);
+        let (access_plain, access_hash) = generate_token("pp_at_");
+        let new_expires_at = Utc::now() + chrono::Duration::seconds(access_secs);
+
+        self.repo.update_access_token(token_id, access_hash, &new_expires_at).await?;
+
+        Ok(access_plain)
     }
 
     /// Log out by deleting the session and recording an audit event.

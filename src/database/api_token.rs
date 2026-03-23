@@ -60,7 +60,8 @@ impl PostgresRepository {
                 device_name = EXCLUDED.device_name,
                 device_id = EXCLUDED.device_id,
                 expires_at = EXCLUDED.expires_at,
-                refresh_expires_at = EXCLUDED.refresh_expires_at
+                refresh_expires_at = EXCLUDED.refresh_expires_at,
+                revoked_at = NULL
             RETURNING
                 id,
                 user_id,
@@ -206,17 +207,21 @@ impl PostgresRepository {
     }
 
     pub async fn update_access_token(&self, id: &Uuid, new_hash: String, new_expires_at: &DateTime<Utc>) -> Result<(), AppError> {
-        sqlx::query(
+        let result = sqlx::query(
             r#"
             UPDATE api_tokens
             SET access_token_hash = $1, expires_at = $2
-            WHERE id = $3"#,
+            WHERE id = $3 AND revoked_at IS NULL"#,
         )
         .bind(new_hash)
         .bind(new_expires_at)
         .bind(id)
         .execute(&self.pool)
         .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::Unauthorized);
+        }
 
         Ok(())
     }
