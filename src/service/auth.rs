@@ -591,6 +591,53 @@ impl<'a> AuthService<'a> {
         Ok(new_session.id)
     }
 
+    /// Issue a bearer access token for a user.
+    /// Returns `(access_token_plaintext, access_ttl_seconds)`.
+    pub async fn issue_bearer_token(&self, user_id: &Uuid) -> Result<(String, i64), AppError> {
+        use crate::models::api_token::generate_token;
+
+        let access_secs = self.config.session.access_token_ttl_seconds.unwrap_or(3600);
+        let refresh_secs = self.config.session.refresh_token_ttl_seconds.unwrap_or(30 * 24 * 3600);
+
+        let (access_plain, access_hash) = generate_token("pp_at_");
+        let (_, refresh_hash) = generate_token("pp_rt_");
+
+        let now = Utc::now();
+        let expires_at = now + chrono::Duration::seconds(access_secs);
+        let refresh_expires_at = now + chrono::Duration::seconds(refresh_secs);
+
+        // Use a random device_id per login so each v2 login creates its own token row.
+        let device_id = Uuid::new_v4().to_string();
+
+        self.repo
+            .create_api_token(
+                user_id,
+                access_hash,
+                refresh_hash,
+                "v2".to_string(),
+                &device_id,
+                &expires_at,
+                &refresh_expires_at,
+            )
+            .await?;
+
+        Ok((access_plain, access_secs))
+    }
+
+    /// Rotate the bearer access token for an existing API token row identified by its DB row ID.
+    /// Returns the new plaintext access token.
+    pub async fn refresh_bearer_token_by_id(&self, token_id: &Uuid) -> Result<String, AppError> {
+        use crate::models::api_token::generate_token;
+
+        let access_secs = self.config.session.access_token_ttl_seconds.unwrap_or(3600);
+        let (access_plain, access_hash) = generate_token("pp_at_");
+        let new_expires_at = Utc::now() + chrono::Duration::seconds(access_secs);
+
+        self.repo.update_access_token(token_id, access_hash, &new_expires_at).await?;
+
+        Ok(access_plain)
+    }
+
     /// Log out by deleting the session and recording an audit event.
     pub async fn logout(&self, user_id: &Uuid, session_id: Option<Uuid>, client_ip: Option<String>, user_agent: Option<String>) -> Result<(), AppError> {
         if let Some(sid) = session_id {

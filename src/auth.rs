@@ -21,7 +21,8 @@ pub enum AuthMethod {
 pub struct CurrentUser {
     pub id: Uuid,
     pub username: String,
-    pub session_id: Option<Uuid>, // None for Bearer auth
+    pub session_id: Option<Uuid>,   // None for Bearer auth
+    pub api_token_id: Option<Uuid>, // Set for Bearer auth — the DB row id
     pub auth_method: AuthMethod,
 }
 
@@ -64,6 +65,7 @@ impl<'r> FromRequest<'r> for CurrentUser {
                                 id: user.id,
                                 username: user.email,
                                 session_id: None,
+                                api_token_id: Some(token.id),
                                 auth_method: AuthMethod::Bearer,
                             };
                             req.local_cache(|| Some(current_user.clone()));
@@ -97,6 +99,7 @@ impl<'r> FromRequest<'r> for CurrentUser {
                         id: user.id,
                         username: user.email,
                         session_id: Some(session_id),
+                        api_token_id: None,
                         auth_method: AuthMethod::Cookie,
                     };
                     req.local_cache(|| Some(current_user.clone()));

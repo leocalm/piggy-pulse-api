@@ -1,7 +1,7 @@
 mod common;
 
 use common::{TEST_PASSWORD, V2_BASE, test_client};
-use rocket::http::{ContentType, Status};
+use rocket::http::{ContentType, Header, Status};
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -662,4 +662,188 @@ async fn test_2fa_emergency_disable_confirm_invalid_token() {
         "expected 400 or 404, got {}",
         resp.status()
     );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Bearer Token Authentication
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_login_returns_bearer_token() {
+    let client = test_client().await;
+    let eur_id = common::auth::get_eur_currency_id_unauthenticated(&client).await;
+    let email = format!("bearer.{}@example.com", Uuid::new_v4());
+
+    // Register
+    let reg = serde_json::json!({
+        "email": email,
+        "password": TEST_PASSWORD,
+        "name": "Bearer User",
+        "currencyId": eur_id
+    });
+    client
+        .post(format!("{}/auth/register", V2_BASE))
+        .header(ContentType::JSON)
+        .body(reg.to_string())
+        .dispatch()
+        .await;
+
+    // Logout to clear cookie
+    client.post(format!("{}/auth/logout", V2_BASE)).dispatch().await;
+
+    // Login
+    let login = serde_json::json!({
+        "email": email,
+        "password": TEST_PASSWORD
+    });
+    let resp = client
+        .post(format!("{}/auth/login", V2_BASE))
+        .header(ContentType::JSON)
+        .body(login.to_string())
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["requiresTwoFactor"], false);
+
+    // Token must be a non-null string starting with pp_at_
+    let token = body["token"].as_str().expect("token should be a string");
+    assert!(token.starts_with("pp_at_"), "token should start with pp_at_ prefix, got: {}", token);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_register_returns_bearer_token() {
+    let client = test_client().await;
+    let eur_id = common::auth::get_eur_currency_id_unauthenticated(&client).await;
+
+    let payload = serde_json::json!({
+        "email": format!("regtoken.{}@example.com", Uuid::new_v4()),
+        "password": TEST_PASSWORD,
+        "name": "Reg Token User",
+        "currencyId": eur_id
+    });
+
+    let resp = client
+        .post(format!("{}/auth/register", V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Created);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+
+    let token = body["token"].as_str().expect("token should be a string");
+    assert!(token.starts_with("pp_at_"), "token should start with pp_at_ prefix");
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_bearer_token_auth_on_me_endpoint() {
+    let client = test_client().await;
+    let eur_id = common::auth::get_eur_currency_id_unauthenticated(&client).await;
+    let email = format!("bearerme.{}@example.com", Uuid::new_v4());
+
+    // Register and get the token
+    let reg = serde_json::json!({
+        "email": email,
+        "password": TEST_PASSWORD,
+        "name": "Bearer Me User",
+        "currencyId": eur_id
+    });
+    let resp = client
+        .post(format!("{}/auth/register", V2_BASE))
+        .header(ContentType::JSON)
+        .body(reg.to_string())
+        .dispatch()
+        .await;
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    let token = body["token"].as_str().unwrap().to_string();
+
+    // Logout to clear session cookie — forces bearer-only auth
+    client.post(format!("{}/auth/logout", V2_BASE)).dispatch().await;
+
+    // Use bearer token only (no cookie) to access /auth/me
+    let resp = client
+        .get(format!("{}/auth/me", V2_BASE))
+        .header(Header::new("Authorization", format!("Bearer {}", token)))
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["email"], email);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_invalid_bearer_token_returns_401() {
+    let client = test_client().await;
+
+    let resp = client
+        .get(format!("{}/auth/me", V2_BASE))
+        .header(Header::new("Authorization", "Bearer pp_at_invalid_token_value"))
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Unauthorized);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_bearer_token_refresh() {
+    let client = test_client().await;
+    let eur_id = common::auth::get_eur_currency_id_unauthenticated(&client).await;
+    let email = format!("bearerrefresh.{}@example.com", Uuid::new_v4());
+
+    // Register and get the token
+    let reg = serde_json::json!({
+        "email": email,
+        "password": TEST_PASSWORD,
+        "name": "Bearer Refresh User",
+        "currencyId": eur_id
+    });
+    let resp = client
+        .post(format!("{}/auth/register", V2_BASE))
+        .header(ContentType::JSON)
+        .body(reg.to_string())
+        .dispatch()
+        .await;
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    let old_token = body["token"].as_str().unwrap().to_string();
+
+    // Logout to clear session cookie
+    client.post(format!("{}/auth/logout", V2_BASE)).dispatch().await;
+
+    // Refresh using bearer token
+    let resp = client
+        .post(format!("{}/auth/refresh", V2_BASE))
+        .header(Header::new("Authorization", format!("Bearer {}", old_token)))
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    let new_token = body["token"].as_str().expect("new token should be a string");
+    assert!(new_token.starts_with("pp_at_"), "new token should have pp_at_ prefix");
+    assert_ne!(new_token, old_token, "new token should differ from old token");
+
+    // Old token should no longer work
+    let resp = client
+        .get(format!("{}/auth/me", V2_BASE))
+        .header(Header::new("Authorization", format!("Bearer {}", old_token)))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Unauthorized);
+
+    // New token should work
+    let resp = client
+        .get(format!("{}/auth/me", V2_BASE))
+        .header(Header::new("Authorization", format!("Bearer {}", new_token)))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Ok);
 }
