@@ -6,6 +6,8 @@ post:
   responses:
     '204':
       description: Onboarding completed
+    '400':
+      $ref: '../responses/BadRequest.yaml'
     '401':
       $ref: '../responses/Unauthorized.yaml'
     '500':
