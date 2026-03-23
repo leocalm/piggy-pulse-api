@@ -12,6 +12,8 @@ get:
         application/json:
           schema:
             $ref: '../schemas/Overlay.yaml#/OverlayResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
     '401':
       $ref: '../responses/Unauthorized.yaml'
     '404':
@@ -60,6 +62,8 @@ delete:
   responses:
     '204':
       description: Overlay deleted
+    '400':
+      $ref: '../responses/BadRequest.yaml'
     '401':
       $ref: '../responses/Unauthorized.yaml'
     '404':

@@ -12,6 +12,8 @@ post:
         application/json:
           schema:
             $ref: '../schemas/Accounts.yaml#/AccountResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
     '401':
       $ref: '../responses/Unauthorized.yaml'
     '404':

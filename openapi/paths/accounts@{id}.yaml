@@ -12,6 +12,8 @@ get:
         application/json:
           schema:
             $ref: '../schemas/Accounts.yaml#/AccountResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
     '401':
       $ref: '../responses/Unauthorized.yaml'
     '404':
@@ -60,6 +62,8 @@ delete:
   responses:
     '204':
       description: Account deleted
+    '400':
+      $ref: '../responses/BadRequest.yaml'
     '401':
       $ref: '../responses/Unauthorized.yaml'
     '404':

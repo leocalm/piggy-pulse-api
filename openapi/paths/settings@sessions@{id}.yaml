@@ -8,6 +8,8 @@ delete:
   responses:
     '204':
       description: Session revoked
+    '400':
+      $ref: '../responses/BadRequest.yaml'
     '401':
       $ref: '../responses/Unauthorized.yaml'
     '404':
