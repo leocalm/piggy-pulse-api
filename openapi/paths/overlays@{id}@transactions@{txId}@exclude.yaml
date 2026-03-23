@@ -15,6 +15,8 @@ delete:
   responses:
     '204':
       description: Transaction excluded
+    '400':
+      $ref: '../responses/BadRequest.yaml'
     '401':
       $ref: '../responses/Unauthorized.yaml'
     '404':

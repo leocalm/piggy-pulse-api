@@ -19,6 +19,8 @@ get:
         application/json:
           schema:
             $ref: '../schemas/Period.yaml#/PeriodResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
     '404':
       $ref: '../responses/NotFound.yaml'
     '401':
@@ -73,6 +75,8 @@ delete:
   responses:
     '204':
       description: Period deleted
+    '400':
+      $ref: '../responses/BadRequest.yaml'
     '404':
       $ref: '../responses/NotFound.yaml'
     '401':

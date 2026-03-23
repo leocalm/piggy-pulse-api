@@ -17,7 +17,7 @@ pub async fn list_targets(
     #[allow(non_snake_case)] periodId: Option<String>,
 ) -> Result<Json<CategoryTargetsResponse>, AppError> {
     let period_uuid = match periodId {
-        Some(ref s) if !s.is_empty() => Uuid::parse_str(s).map_err(|e| AppError::uuid("Invalid periodId", e))?,
+        Some(ref s) if !s.is_empty() && s != "null" => Uuid::parse_str(s).map_err(|e| AppError::uuid("Invalid periodId", e))?,
         _ => return Err(AppError::BadRequest("periodId is required".to_string())),
     };
 

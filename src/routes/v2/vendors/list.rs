@@ -13,7 +13,7 @@ use crate::service::vendor::VendorService;
 #[get("/?<cursor>&<limit>")]
 pub async fn list_vendors(pool: &State<PgPool>, user: CurrentUser, cursor: Option<String>, limit: Option<u32>) -> Result<Json<VendorListResponse>, AppError> {
     let cursor_uuid = match cursor {
-        Some(ref s) if !s.is_empty() => Some(Uuid::parse_str(s).map_err(|e| AppError::uuid("Invalid cursor", e))?),
+        Some(ref s) if !s.is_empty() && s != "null" => Some(Uuid::parse_str(s).map_err(|e| AppError::uuid("Invalid cursor", e))?),
         _ => None,
     };
     let effective_limit = limit.unwrap_or(50).min(200) as i64;

@@ -12,6 +12,8 @@ post:
         application/json:
           schema:
             $ref: '../schemas/Category.yaml#/CategoryResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
     '401':
       $ref: '../responses/Unauthorized.yaml'
     '404':
