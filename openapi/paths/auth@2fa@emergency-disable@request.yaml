@@ -16,6 +16,8 @@ post:
       description: Email sent if account exists
     '400':
       $ref: '../responses/BadRequest.yaml'
+    '422':
+      $ref: '../responses/UnprocessableEntity.yaml'
     '429':
       $ref: '../responses/TooManyRequests.yaml'
     '500':

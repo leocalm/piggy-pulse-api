@@ -47,6 +47,8 @@ post:
             $ref: '../schemas/Transaction.yaml#/TransactionResponse'
     '400':
       $ref: '../responses/BadRequest.yaml'
+    '422':
+      $ref: '../responses/UnprocessableEntity.yaml'
     '401':
       $ref: '../responses/Unauthorized.yaml'
     '500':

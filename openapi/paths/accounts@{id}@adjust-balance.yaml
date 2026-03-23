@@ -20,6 +20,8 @@ post:
             $ref: '../schemas/Accounts.yaml#/AccountResponse'
     '400':
       $ref: '../responses/BadRequest.yaml'
+    '422':
+      $ref: '../responses/UnprocessableEntity.yaml'
     '401':
       $ref: '../responses/Unauthorized.yaml'
     '404':

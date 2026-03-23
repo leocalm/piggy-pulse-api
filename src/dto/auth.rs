@@ -46,7 +46,6 @@ impl TwoFactorChallengeResponse {
 pub struct AuthenticatedResponse {
     requires_two_factor: bool,
     pub user: UserResponse,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
     /// One-time backup codes, only present after 2FA setup confirmation.
     #[serde(skip_serializing_if = "Option::is_none")]

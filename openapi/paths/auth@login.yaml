@@ -21,8 +21,16 @@ post:
             $ref: '../schemas/Auth.yaml#/LoginResponse'
     '400':
       $ref: '../responses/BadRequest.yaml'
+    '422':
+      $ref: '../responses/UnprocessableEntity.yaml'
     '401':
       $ref: '../responses/Unauthorized.yaml'
+    '423':
+      description: Account Locked
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Common.yaml#/ErrorResponse'
     '429':
       $ref: '../responses/TooManyRequests.yaml'
     '500':

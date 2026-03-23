@@ -53,7 +53,7 @@ impl PostgresRepository {
 
         // Insert category caps
         for cap in &request.category_caps {
-            sqlx::query(
+            let result = sqlx::query(
                 r#"
                 INSERT INTO overlay_category_caps (overlay_id, category_id, cap_amount)
                 VALUES ($1, $2, $3)
@@ -63,7 +63,15 @@ impl PostgresRepository {
             .bind(cap.category_id)
             .bind(cap.cap_amount)
             .execute(&mut *tx)
-            .await?;
+            .await;
+
+            match result {
+                Ok(_) => {}
+                Err(sqlx::Error::Database(ref db_err)) if db_err.is_foreign_key_violation() => {
+                    return Err(AppError::BadRequest(format!("Category {} does not exist", cap.category_id)));
+                }
+                Err(e) => return Err(e.into()),
+            }
         }
 
         tx.commit().await?;

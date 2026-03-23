@@ -39,6 +39,8 @@ post:
             $ref: '../schemas/Period.yaml#/PeriodScheduleResponse'
     '400':
       $ref: '../responses/BadRequest.yaml'
+    '422':
+      $ref: '../responses/UnprocessableEntity.yaml'
     '401':
       $ref: '../responses/Unauthorized.yaml'
     '409':
@@ -67,6 +69,8 @@ put:
             $ref: '../schemas/Period.yaml#/PeriodScheduleResponse'
     '400':
       $ref: '../responses/BadRequest.yaml'
+    '422':
+      $ref: '../responses/UnprocessableEntity.yaml'
     '401':
       $ref: '../responses/Unauthorized.yaml'
     '404':

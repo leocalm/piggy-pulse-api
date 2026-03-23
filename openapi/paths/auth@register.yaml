@@ -19,6 +19,8 @@ post:
             $ref: '../schemas/Auth.yaml#/AuthenticatedResponse'
     '400':
       $ref: '../responses/BadRequest.yaml'
+    '422':
+      $ref: '../responses/UnprocessableEntity.yaml'
     '409':
       $ref: '../responses/Conflict.yaml'
     '500':
