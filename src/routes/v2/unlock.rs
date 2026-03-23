@@ -15,6 +15,10 @@ pub async fn unlock(pool: &State<PgPool>, client_ip: ClientIp, token: Option<Str
         .filter(|t| !t.is_empty())
         .ok_or_else(|| AppError::BadRequest("Missing required query parameter: token".to_string()))?;
 
+    if !token.is_ascii() {
+        return Err(AppError::BadRequest("Invalid token".to_string()));
+    }
+
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let service = UnlockService::new(&repo);
     let ip = client_ip.0.as_deref().unwrap_or("unknown");

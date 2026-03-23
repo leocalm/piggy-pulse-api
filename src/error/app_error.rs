@@ -45,7 +45,7 @@ pub enum AppError {
     NotFound(String),
     #[error("Currency not found: {0}")]
     CurrencyDoesNotExist(String),
-    #[error("Internal server error")]
+    #[error("Bad request: {message}")]
     UuidError {
         message: String,
         #[source]
