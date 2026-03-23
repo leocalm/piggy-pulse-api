@@ -210,7 +210,7 @@ impl PostgresRepository {
             r#"
             UPDATE api_tokens
             SET access_token_hash = $1, expires_at = $2
-            WHERE id = $3"#,
+            WHERE id = $3 AND revoked_at IS NULL"#,
         )
         .bind(new_hash)
         .bind(new_expires_at)

@@ -847,3 +847,88 @@ async fn test_bearer_token_refresh() {
         .await;
     assert_eq!(resp.status(), Status::Ok);
 }
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_bearer_token_revoked_after_logout() {
+    let client = test_client().await;
+    let eur_id = common::auth::get_eur_currency_id_unauthenticated(&client).await;
+    let email = format!("logoutrevoke.{}@example.com", Uuid::new_v4());
+
+    // Register and get the token
+    let reg = serde_json::json!({
+        "email": email,
+        "password": TEST_PASSWORD,
+        "name": "Logout Revoke User",
+        "currencyId": eur_id
+    });
+    let resp = client
+        .post(format!("{}/auth/register", V2_BASE))
+        .header(ContentType::JSON)
+        .body(reg.to_string())
+        .dispatch()
+        .await;
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    let token = body["token"].as_str().unwrap().to_string();
+
+    // Logout using bearer token
+    let resp = client
+        .post(format!("{}/auth/logout", V2_BASE))
+        .header(Header::new("Authorization", format!("Bearer {}", token)))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Ok);
+
+    // Token should now be revoked
+    let resp = client
+        .get(format!("{}/auth/me", V2_BASE))
+        .header(Header::new("Authorization", format!("Bearer {}", token)))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Unauthorized);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_bearer_token_revoked_after_password_change() {
+    let client = test_client().await;
+    let eur_id = common::auth::get_eur_currency_id_unauthenticated(&client).await;
+    let email = format!("pwchange.{}@example.com", Uuid::new_v4());
+
+    // Register and get the token
+    let reg = serde_json::json!({
+        "email": email,
+        "password": TEST_PASSWORD,
+        "name": "PW Change User",
+        "currencyId": eur_id
+    });
+    let resp = client
+        .post(format!("{}/auth/register", V2_BASE))
+        .header(ContentType::JSON)
+        .body(reg.to_string())
+        .dispatch()
+        .await;
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    let token = body["token"].as_str().unwrap().to_string();
+
+    // Change password (using session cookie from register)
+    let payload = serde_json::json!({
+        "currentPassword": TEST_PASSWORD,
+        "newPassword": "NewSecurePassword!2026abc"
+    });
+    let resp = client
+        .put(format!("{}/auth/password", V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Ok);
+
+    // Bearer token should now be revoked
+    let resp = client
+        .get(format!("{}/auth/me", V2_BASE))
+        .header(Header::new("Authorization", format!("Bearer {}", token)))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Unauthorized);
+}
