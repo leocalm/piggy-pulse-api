@@ -601,6 +601,8 @@ impl<'a> AuthService<'a> {
         use crate::models::api_token::generate_token;
 
         let access_secs = self.config.session.access_token_ttl_seconds.unwrap_or(3600);
+        // V2 does not use refresh tokens, but refresh_expires_at controls when
+        // cleanup_expired() deletes the row — effectively the max token lifetime.
         let refresh_secs = self.config.session.refresh_token_ttl_seconds.unwrap_or(30 * 24 * 3600);
 
         let (access_plain, access_hash) = generate_token("pp_at_");

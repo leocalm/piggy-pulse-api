@@ -879,13 +879,37 @@ async fn test_bearer_token_revoked_after_logout() {
         .await;
     assert_eq!(resp.status(), Status::Ok);
 
-    // Token should now be revoked
+    // Old token should now be revoked
     let resp = client
         .get(format!("{}/auth/me", V2_BASE))
         .header(Header::new("Authorization", format!("Bearer {}", token)))
         .dispatch()
         .await;
     assert_eq!(resp.status(), Status::Unauthorized);
+
+    // Login again — should get a fresh working token (verifies upsert clears revoked_at)
+    let login = serde_json::json!({
+        "email": email,
+        "password": TEST_PASSWORD
+    });
+    let resp = client
+        .post(format!("{}/auth/login", V2_BASE))
+        .header(ContentType::JSON)
+        .body(login.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    let new_token = body["token"].as_str().expect("new token after re-login");
+    assert!(new_token.starts_with("pp_at_"));
+
+    // New token should work
+    let resp = client
+        .get(format!("{}/auth/me", V2_BASE))
+        .header(Header::new("Authorization", format!("Bearer {}", new_token)))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Ok);
 }
 
 #[rocket::async_test]
