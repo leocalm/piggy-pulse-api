@@ -345,10 +345,16 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
     );
     rocket = mount_v2_routes(rocket, &v2_base_path);
 
-    rocket = rocket.register(
-        primary_base_path.as_str(),
-        catchers![app_routes::error::not_found, app_routes::error::conflict, app_routes::error::too_many_requests],
-    );
+    let all_catchers = catchers![
+        app_routes::error::bad_request,
+        app_routes::error::not_found,
+        app_routes::error::conflict,
+        app_routes::error::unprocessable_entity,
+        app_routes::error::too_many_requests,
+    ];
+
+    rocket = rocket.register(primary_base_path.as_str(), all_catchers.clone());
+    rocket = rocket.register(v2_base_path.as_str(), all_catchers.clone());
 
     for base_path in additional_base_paths {
         if config.api.expose_docs {
@@ -382,10 +388,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
             rocket = mount_api_routes(rocket, base_path);
         }
 
-        rocket = rocket.register(
-            base_path.as_str(),
-            catchers![app_routes::error::not_found, app_routes::error::conflict, app_routes::error::too_many_requests],
-        );
+        rocket = rocket.register(base_path.as_str(), all_catchers.clone());
     }
 
     rocket

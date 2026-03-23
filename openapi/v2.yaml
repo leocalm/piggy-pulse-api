@@ -35,6 +35,8 @@ components:
       $ref: './responses/ServiceUnavailable.yaml'
     TooManyRequests:
       $ref: './responses/TooManyRequests.yaml'
+    UnprocessableEntity:
+      $ref: './responses/UnprocessableEntity.yaml'
   parameters:
     PeriodId:
       $ref: './parameters/PeriodId.yaml'
@@ -247,8 +249,6 @@ components:
     # Overlay
     InclusionMode:
       $ref: './schemas/Overlay.yaml#/InclusionMode'
-    InclusionSource:
-      $ref: './schemas/Overlay.yaml#/InclusionSource'
     OverlayCategoryCap:
       $ref: './schemas/Overlay.yaml#/OverlayCategoryCap'
     OverlayRules:

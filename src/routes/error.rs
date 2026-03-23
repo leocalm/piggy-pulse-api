@@ -32,6 +32,22 @@ pub fn not_found(req: &Request) -> Json<Error> {
     })
 }
 
+#[catch(400)]
+pub fn bad_request(req: &Request) -> Json<Error> {
+    Json(Error {
+        message: "Bad request".to_string(),
+        request_id: get_request_id(req),
+    })
+}
+
+#[catch(422)]
+pub fn unprocessable_entity(req: &Request) -> Json<Error> {
+    Json(Error {
+        message: "Unprocessable entity".to_string(),
+        request_id: get_request_id(req),
+    })
+}
+
 #[catch(409)]
 pub fn conflict(req: &Request) -> Json<Error> {
     Json(Error {
