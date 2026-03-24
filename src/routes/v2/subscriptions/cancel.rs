@@ -1,5 +1,4 @@
 use rocket::State;
-use rocket::http::Status;
 use rocket::post;
 use rocket::serde::json::Json;
 use sqlx::PgPool;
@@ -19,10 +18,4 @@ pub async fn cancel_subscription(pool: &State<PgPool>, user: CurrentUser, id: &s
     let service = SubscriptionService::new(&repo);
     let response = service.cancel(&uuid, &user.id).await?;
     Ok(Json(response))
-}
-
-// Needed to satisfy Rocket's route return type convention for 200 OK
-#[allow(dead_code)]
-fn _status_ok() -> Status {
-    Status::Ok
 }

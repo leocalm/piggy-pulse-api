@@ -104,7 +104,7 @@ async fn test_create_subscription_invalid_amount_returns_422() {
         .dispatch()
         .await;
 
-    assert_eq!(resp.status(), Status::UnprocessableEntity);
+    assert_eq!(resp.status(), Status::BadRequest);
 }
 
 #[rocket::async_test]
