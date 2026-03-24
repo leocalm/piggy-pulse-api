@@ -16,6 +16,7 @@ pub mod postgres_repository;
 pub mod rate_limit;
 pub mod session;
 pub mod settings;
+pub mod subscription;
 pub mod transaction;
 pub mod two_factor;
 pub mod user;

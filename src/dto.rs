@@ -8,5 +8,6 @@ pub mod misc;
 pub mod overlay;
 pub mod period;
 pub mod settings;
+pub mod subscriptions;
 pub mod transactions;
 pub mod vendors;
