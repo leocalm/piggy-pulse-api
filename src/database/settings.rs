@@ -544,6 +544,170 @@ impl PostgresRepository {
         }))
     }
 
+    /// Import data from a JSON backup (reverse of `export_all_data_v2`).
+    ///
+    /// Inserts accounts, categories, and transactions from the provided JSON blob.
+    /// Fresh UUIDs are generated for every imported row so that a backup from
+    /// one account can be safely imported into a different account without ID
+    /// collisions. Old→new ID mappings are maintained in memory so that
+    /// transaction foreign-key references are correctly remapped.
+    ///
+    /// Returns the counts of imported rows: `(accounts, categories, transactions)`.
+    pub async fn import_data_v2(&self, user_id: &Uuid, data: &serde_json::Value) -> Result<(usize, usize, usize), AppError> {
+        use std::collections::HashMap;
+
+        let empty_vec = serde_json::Value::Array(vec![]);
+
+        let accounts_json = data.get("accounts").unwrap_or(&empty_vec);
+        let categories_json = data.get("categories").unwrap_or(&empty_vec);
+        let transactions_json = data.get("transactions").unwrap_or(&empty_vec);
+
+        let accounts_arr = accounts_json
+            .as_array()
+            .ok_or_else(|| AppError::BadRequest("'accounts' must be an array".to_string()))?;
+        let categories_arr = categories_json
+            .as_array()
+            .ok_or_else(|| AppError::BadRequest("'categories' must be an array".to_string()))?;
+        let transactions_arr = transactions_json
+            .as_array()
+            .ok_or_else(|| AppError::BadRequest("'transactions' must be an array".to_string()))?;
+
+        let mut tx = self.pool.begin().await?;
+
+        // ── Accounts ─────────────────────────────────────────────────────────
+        let mut account_id_map: HashMap<String, Uuid> = HashMap::new();
+
+        for acct in accounts_arr {
+            let old_id = acct
+                .get("id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::BadRequest("account missing 'id'".to_string()))?;
+            let name = acct
+                .get("name")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::BadRequest("account missing 'name'".to_string()))?;
+            let account_type = acct
+                .get("account_type")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::BadRequest("account missing 'account_type'".to_string()))?;
+            let color = acct.get("color").and_then(|v| v.as_str()).unwrap_or("#868E96");
+            let is_archived = acct.get("is_archived").and_then(|v| v.as_bool()).unwrap_or(false);
+
+            let new_id = Uuid::new_v4();
+            account_id_map.insert(old_id.to_string(), new_id);
+
+            sqlx::query(
+                r#"
+                INSERT INTO account (id, user_id, name, account_type, color, icon, balance, is_archived)
+                VALUES ($1, $2, $3, $4::text::account_type, $5, '', 0, $6)
+                "#,
+            )
+            .bind(new_id)
+            .bind(user_id)
+            .bind(name)
+            .bind(account_type)
+            .bind(color)
+            .bind(is_archived)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        // ── Categories ───────────────────────────────────────────────────────
+        let mut category_id_map: HashMap<String, Uuid> = HashMap::new();
+
+        for cat in categories_arr {
+            let old_id = cat
+                .get("id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::BadRequest("category missing 'id'".to_string()))?;
+            let name = cat
+                .get("name")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::BadRequest("category missing 'name'".to_string()))?;
+            let category_type = cat
+                .get("category_type")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::BadRequest("category missing 'category_type'".to_string()))?;
+            let color = cat.get("color").and_then(|v| v.as_str()).unwrap_or("#868E96");
+            let icon = cat.get("icon").and_then(|v| v.as_str()).unwrap_or("?");
+            let is_system = cat.get("is_system").and_then(|v| v.as_bool()).unwrap_or(false);
+
+            let new_id = Uuid::new_v4();
+            category_id_map.insert(old_id.to_string(), new_id);
+
+            sqlx::query(
+                r#"
+                INSERT INTO category (id, user_id, name, category_type, color, icon, is_system)
+                VALUES ($1, $2, $3, $4::text::category_type, $5, $6, $7)
+                "#,
+            )
+            .bind(new_id)
+            .bind(user_id)
+            .bind(name)
+            .bind(category_type)
+            .bind(color)
+            .bind(icon)
+            .bind(is_system)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        // ── Transactions ─────────────────────────────────────────────────────
+        let mut imported_transactions: usize = 0;
+
+        for txn in transactions_arr {
+            let description = txn.get("description").and_then(|v| v.as_str()).unwrap_or("");
+            let amount = txn
+                .get("amount")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| AppError::BadRequest("transaction missing 'amount'".to_string()))?;
+            let occurred_at = txn
+                .get("occurred_at")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::BadRequest("transaction missing 'occurred_at'".to_string()))?;
+
+            let from_account_id = txn
+                .get("from_account_id")
+                .and_then(|v| v.as_str())
+                .and_then(|old| account_id_map.get(old).copied());
+
+            let to_account_id = txn
+                .get("to_account_id")
+                .and_then(|v| if v.is_null() { None } else { v.as_str() })
+                .and_then(|old| account_id_map.get(old).copied());
+
+            let category_id = txn
+                .get("category_id")
+                .and_then(|v| if v.is_null() { None } else { v.as_str() })
+                .and_then(|old| category_id_map.get(old).copied());
+
+            let new_id = Uuid::new_v4();
+
+            sqlx::query(
+                r#"
+                INSERT INTO transaction (id, user_id, description, amount, occurred_at, from_account_id, to_account_id, category_id)
+                VALUES ($1, $2, $3, $4, $5::date, $6, $7, $8)
+                "#,
+            )
+            .bind(new_id)
+            .bind(user_id)
+            .bind(description)
+            .bind(amount)
+            .bind(occurred_at)
+            .bind(from_account_id)
+            .bind(to_account_id)
+            .bind(category_id)
+            .execute(&mut *tx)
+            .await?;
+
+            imported_transactions += 1;
+        }
+
+        tx.commit().await?;
+
+        Ok((accounts_arr.len(), categories_arr.len(), imported_transactions))
+    }
+
     // ── V2 Reset Structure ───────────────────────────────────────────────────
 
     /// V2 reset: also deletes vendors (unlike V1)
