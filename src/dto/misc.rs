@@ -53,6 +53,33 @@ pub struct OnboardingStatusResponse {
     pub current_step: Option<OnboardingStep>,
 }
 
+// ===== Category Templates =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CategoryTemplateCategory {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub category_type: String,
+    pub behavior: Option<String>,
+    pub icon: String,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CategoryTemplateResponse {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub categories: Vec<CategoryTemplateCategory>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyTemplateRequest {
+    pub template_id: String,
+}
+
 // ===== Unlock =====
 
 #[derive(Serialize, Debug)]
