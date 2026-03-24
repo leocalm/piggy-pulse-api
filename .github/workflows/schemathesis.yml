@@ -72,11 +72,14 @@ jobs:
       - name: Register test user and capture token
         id: seed
         run: |
-          CURRENCY_ID=$(psql "$DATABASE_URL" -t -c "SELECT id FROM currency LIMIT 1;" | tr -d ' \n')
-          RESPONSE=$(curl -sf -X POST http://localhost:8000/v2/auth/register \
+          RESPONSE=$(curl -s -X POST http://localhost:8000/v2/auth/register \
             -H "Content-Type: application/json" \
-            -d "{\"email\":\"ci@schemathesis.test\",\"password\":\"SchemaTest1!\",\"name\":\"CI\",\"currencyId\":\"$CURRENCY_ID\"}")
-          echo "token=$(echo "$RESPONSE" | jq -r '.token')" >> "$GITHUB_OUTPUT"
+            -d '{"email":"ci@schemathesis.test","password":"correct-horse-battery-staple-99","name":"CI"}')
+          TOKEN=$(echo "$RESPONSE" | jq -r '.token')
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "Registration failed: $RESPONSE" && exit 1
+          fi
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
       - name: Run schemathesis
         run: |
