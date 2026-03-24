@@ -5,8 +5,8 @@ use crate::database::budget_period::{V2PeriodRow, V2ScheduleParams};
 use crate::database::postgres_repository::PostgresRepository;
 use crate::dto::common::{Date, PaginatedResponse};
 use crate::dto::period::{
-    CreatePeriodRequest, CreatePeriodScheduleRequest, DurationUnit, PeriodDuration, PeriodKind, PeriodResponse, PeriodScheduleResponse, PeriodStatus,
-    ScheduleKind, UpdatePeriodRequest, UpdatePeriodScheduleRequest, WeekendPolicy,
+    CreatePeriodRequest, CreatePeriodScheduleRequest, DurationUnit, PeriodDuration, PeriodGap, PeriodGapsResponse, PeriodKind, PeriodResponse,
+    PeriodScheduleResponse, PeriodStatus, ScheduleKind, UpdatePeriodRequest, UpdatePeriodScheduleRequest, WeekendPolicy,
 };
 use crate::error::app_error::AppError;
 use crate::models::budget_period::{BudgetPeriodRequest, PeriodSchedule};
@@ -137,6 +137,30 @@ impl<'a> PeriodService<'a> {
             return Err(AppError::NotFound("Schedule not found".to_string()));
         }
         Ok(())
+    }
+
+    pub async fn get_gaps(&self, user_id: &Uuid) -> Result<PeriodGapsResponse, AppError> {
+        let ranges = self.repository.list_period_date_ranges_v2(user_id).await?;
+
+        let mut gaps = Vec::new();
+
+        for window in ranges.windows(2) {
+            let (_, end_a) = window[0];
+            let (start_b, _) = window[1];
+
+            // gap exists if there is at least one day between the end of period A and the start of period B
+            if let Some(gap_start) = end_a.checked_add_days(Days::new(1))
+                && gap_start < start_b
+                && let Some(gap_end) = start_b.checked_sub_days(Days::new(1))
+            {
+                gaps.push(PeriodGap {
+                    start_date: Date(gap_start),
+                    end_date: Date(gap_end),
+                });
+            }
+        }
+
+        Ok(gaps)
     }
 }
 

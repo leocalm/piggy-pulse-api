@@ -715,6 +715,32 @@ impl PostgresRepository {
         })
     }
 
+    // ===== V2 Gap Detection =====
+
+    /// Returns all budget-period date ranges for a user, sorted by start_date ascending.
+    /// The service layer computes the gap intervals from this sorted list.
+    pub async fn list_period_date_ranges_v2(&self, user_id: &Uuid) -> Result<Vec<(NaiveDate, NaiveDate)>, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct DateRangeRow {
+            start_date: NaiveDate,
+            end_date: NaiveDate,
+        }
+
+        let rows = sqlx::query_as::<_, DateRangeRow>(
+            r#"
+            SELECT start_date, end_date
+            FROM budget_period
+            WHERE user_id = $1
+            ORDER BY start_date ASC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|r| (r.start_date, r.end_date)).collect())
+    }
+
     // ===== Gap Detection =====
 
     pub async fn get_period_gaps(&self, user_id: &Uuid) -> Result<GapsResponse, AppError> {

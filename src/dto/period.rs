@@ -77,6 +77,17 @@ pub struct PeriodResponse {
 
 pub type PeriodListResponse = PaginatedResponse<PeriodResponse>;
 
+// ===== PeriodGap =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PeriodGap {
+    pub start_date: Date,
+    pub end_date: Date,
+}
+
+pub type PeriodGapsResponse = Vec<PeriodGap>;
+
 // ===== CreatePeriodRequest / UpdatePeriodRequest =====
 
 /// Top-level internally-tagged enum avoids the serde flatten+tag limitation on the Deserialize path.
