@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
-use crate::dto::common::{PaginatedResponse, VendorMinimal};
+use crate::dto::common::{Date, PaginatedResponse, VendorMinimal};
 
 // ===== Enums =====
 
@@ -44,9 +44,63 @@ pub struct VendorSummaryResponse {
     #[serde(flatten)]
     pub base: VendorResponse,
     pub number_of_transactions: i64,
+    pub total_spend: i64,
 }
 
 pub type VendorListResponse = PaginatedResponse<VendorSummaryResponse>;
+
+// ===== VendorDetailResponse =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct VendorTrendItem {
+    pub period_id: Uuid,
+    pub period_name: String,
+    pub total_spend: i64,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct VendorTopCategoryItem {
+    pub category_id: Uuid,
+    pub category_name: String,
+    pub total_spend: i64,
+    pub percentage: f64,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct VendorTransactionItem {
+    pub id: Uuid,
+    pub date: Date,
+    pub amount: i64,
+    pub description: String,
+    pub category_id: Option<Uuid>,
+    pub category_name: Option<String>,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct VendorDetailResponse {
+    #[serde(flatten)]
+    pub base: VendorResponse,
+    pub period_spend: i64,
+    pub transaction_count: i64,
+    pub average_transaction_amount: i64,
+    pub trend: Vec<VendorTrendItem>,
+    pub top_categories: Vec<VendorTopCategoryItem>,
+    pub recent_transactions: Vec<VendorTransactionItem>,
+}
+
+// ===== VendorStatsResponse =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct VendorStatsResponse {
+    pub total_vendors: i64,
+    pub total_spend_this_period: i64,
+    pub avg_spend_per_vendor: i64,
+}
 
 // ===== VendorOptionResponse =====
 
@@ -65,3 +119,9 @@ pub struct CreateVendorRequest {
 }
 
 pub type UpdateVendorRequest = CreateVendorRequest;
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MergeVendorRequest {
+    pub target_vendor_id: Uuid,
+}

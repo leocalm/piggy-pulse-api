@@ -8,6 +8,64 @@ use rocket::FromFormField;
 use schemars::JsonSchema;
 use uuid::Uuid;
 
+// ─── Helper DB rows (vendor analytics) ───────────────────────────────────────
+
+#[derive(sqlx::FromRow)]
+pub struct PeriodDateRow {
+    #[allow(dead_code)]
+    pub id: Uuid,
+    #[allow(dead_code)]
+    pub name: String,
+    pub start_date: NaiveDate,
+    pub end_date: NaiveDate,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct VendorPeriodStatsRow {
+    pub transaction_count: i64,
+    pub period_spend: i64,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct VendorTrendRow {
+    pub period_id: Uuid,
+    pub period_name: String,
+    pub total_spend: i64,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct VendorCategoryRow {
+    pub category_id: Uuid,
+    pub category_name: String,
+    pub total_spend: i64,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct VendorRecentTxRow {
+    pub id: Uuid,
+    pub date: NaiveDate,
+    pub amount: i64,
+    pub description: String,
+    pub category_id: Option<Uuid>,
+    pub category_name: Option<String>,
+}
+
+pub struct VendorDetailDb {
+    pub vendor: Vendor,
+    pub period_spend: i64,
+    pub transaction_count: i64,
+    pub total_vendor_spend: i64,
+    pub trend: Vec<VendorTrendRow>,
+    pub top_categories: Vec<VendorCategoryRow>,
+    pub recent_txns: Vec<VendorRecentTxRow>,
+}
+
+pub struct VendorStatsDb {
+    pub total_vendors: i64,
+    pub total_spend: i64,
+    pub avg_spend_per_vendor: i64,
+}
+
 #[derive(FromFormField, Debug, Clone, Copy, JsonSchema)]
 pub enum VendorOrderBy {
     #[field(value = "name")]
@@ -333,9 +391,9 @@ LIMIT $5
         vendor.ok_or_else(|| AppError::NotFound("Vendor not found".to_string()))
     }
 
-    /// Lists vendors with all-time transaction count for V2 paginated list.
+    /// Lists vendors with all-time transaction count and total spend for V2 paginated list.
     /// Returns `(rows, total_count)`. Fetches `limit + 1` rows so the caller can detect `has_more`.
-    pub async fn list_vendors_v2(&self, cursor: Option<Uuid>, limit: i64, user_id: &Uuid) -> Result<(Vec<(Vendor, i64)>, i64), AppError> {
+    pub async fn list_vendors_v2(&self, cursor: Option<Uuid>, limit: i64, user_id: &Uuid) -> Result<(Vec<(Vendor, i64, i64)>, i64), AppError> {
         let total_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM vendor WHERE user_id = $1")
             .bind(user_id)
             .fetch_one(&self.pool)
@@ -348,6 +406,7 @@ LIMIT $5
             description: Option<String>,
             archived: bool,
             transaction_count: i64,
+            total_spend: i64,
         }
 
         let fetch_limit = limit + 1;
@@ -359,7 +418,8 @@ SELECT v.id,
        v.name,
        v.description,
        v.archived,
-       COUNT(t.id)::bigint AS transaction_count
+       COUNT(t.id)::bigint AS transaction_count,
+       COALESCE(SUM(t.amount), 0)::bigint AS total_spend
 FROM vendor v
 LEFT JOIN transaction t ON v.id = t.vendor_id AND t.user_id = $1
 WHERE v.user_id = $1
@@ -381,7 +441,8 @@ SELECT v.id,
        v.name,
        v.description,
        v.archived,
-       COUNT(t.id)::bigint AS transaction_count
+       COUNT(t.id)::bigint AS transaction_count,
+       COALESCE(SUM(t.amount), 0)::bigint AS total_spend
 FROM vendor v
 LEFT JOIN transaction t ON v.id = t.vendor_id AND t.user_id = $1
 WHERE v.user_id = $1
@@ -407,11 +468,225 @@ LIMIT $2
                             archived: r.archived,
                         },
                         r.transaction_count,
+                        r.total_spend,
                     )
                 })
                 .collect(),
             total_count,
         ))
+    }
+
+    pub async fn get_vendor_detail_v2(&self, vendor_id: &Uuid, user_id: &Uuid, period_id: &Uuid) -> Result<Option<VendorDetailDb>, AppError> {
+        // 1. Verify vendor exists
+        let vendor = match self.get_vendor_by_id(vendor_id, user_id).await? {
+            Some(v) => v,
+            None => return Ok(None),
+        };
+
+        // 2. Period date range
+        let period = sqlx::query_as::<_, PeriodDateRow>("SELECT id, name, start_date, end_date FROM budget_period WHERE id = $1 AND user_id = $2")
+            .bind(period_id)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        let period = match period {
+            Some(p) => p,
+            None => return Err(AppError::NotFound("Period not found".to_string())),
+        };
+
+        // 3. Period spend + tx count
+        let stats = sqlx::query_as::<_, VendorPeriodStatsRow>(
+            r#"
+SELECT
+    COUNT(t.id)::bigint AS transaction_count,
+    COALESCE(SUM(t.amount), 0)::bigint AS period_spend
+FROM transaction t
+WHERE t.vendor_id = $1
+  AND t.user_id = $2
+  AND t.occurred_at >= $3
+  AND t.occurred_at <= $4
+            "#,
+        )
+        .bind(vendor_id)
+        .bind(user_id)
+        .bind(period.start_date)
+        .bind(period.end_date)
+        .fetch_one(&self.pool)
+        .await?;
+
+        // 4. Trend: last 6 periods ordered by start_date
+        let trend = sqlx::query_as::<_, VendorTrendRow>(
+            r#"
+SELECT
+    bp.id AS period_id,
+    bp.name AS period_name,
+    COALESCE(SUM(t.amount), 0)::bigint AS total_spend
+FROM budget_period bp
+LEFT JOIN transaction t
+    ON t.vendor_id = $1
+    AND t.user_id = $2
+    AND t.occurred_at >= bp.start_date
+    AND t.occurred_at <= bp.end_date
+WHERE bp.user_id = $2
+GROUP BY bp.id, bp.name, bp.start_date
+ORDER BY bp.start_date DESC
+LIMIT 6
+            "#,
+        )
+        .bind(vendor_id)
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        // 5. Top categories (all-time, top 5)
+        let total_vendor_spend: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(amount), 0)::bigint FROM transaction WHERE vendor_id = $1 AND user_id = $2")
+            .bind(vendor_id)
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
+
+        let top_categories = sqlx::query_as::<_, VendorCategoryRow>(
+            r#"
+SELECT
+    c.id AS category_id,
+    c.name AS category_name,
+    COALESCE(SUM(t.amount), 0)::bigint AS total_spend
+FROM transaction t
+JOIN category c ON c.id = t.category_id
+WHERE t.vendor_id = $1
+  AND t.user_id = $2
+GROUP BY c.id, c.name
+ORDER BY total_spend DESC
+LIMIT 5
+            "#,
+        )
+        .bind(vendor_id)
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        // 6. Recent transactions (last 10)
+        let recent_txns = sqlx::query_as::<_, VendorRecentTxRow>(
+            r#"
+SELECT
+    t.id,
+    t.occurred_at AS date,
+    t.amount,
+    t.description,
+    t.category_id,
+    c.name AS category_name
+FROM transaction t
+LEFT JOIN category c ON c.id = t.category_id
+WHERE t.vendor_id = $1
+  AND t.user_id = $2
+ORDER BY t.occurred_at DESC, t.id DESC
+LIMIT 10
+            "#,
+        )
+        .bind(vendor_id)
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(Some(VendorDetailDb {
+            vendor,
+            period_spend: stats.period_spend,
+            transaction_count: stats.transaction_count,
+            total_vendor_spend,
+            trend,
+            top_categories,
+            recent_txns,
+        }))
+    }
+
+    pub async fn merge_vendor(&self, source_id: &Uuid, target_id: &Uuid, user_id: &Uuid) -> Result<bool, AppError> {
+        // Verify both vendors belong to this user
+        let source = self.get_vendor_by_id(source_id, user_id).await?;
+        if source.is_none() {
+            return Ok(false);
+        }
+        let target = self.get_vendor_by_id(target_id, user_id).await?;
+        if target.is_none() {
+            return Err(AppError::NotFound("Target vendor not found".to_string()));
+        }
+
+        // Perform reassignment and deletion atomically
+        let mut tx = self.pool.begin().await?;
+
+        // Reassign all transactions from source to target
+        sqlx::query("UPDATE transaction SET vendor_id = $1 WHERE vendor_id = $2 AND user_id = $3")
+            .bind(target_id)
+            .bind(source_id)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+        // Delete the source vendor
+        sqlx::query("DELETE FROM vendor WHERE id = $1 AND user_id = $2")
+            .bind(source_id)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+
+        Ok(true)
+    }
+
+    pub async fn get_vendor_stats_v2(&self, user_id: &Uuid, period_id: &Uuid) -> Result<VendorStatsDb, AppError> {
+        let period = sqlx::query_as::<_, PeriodDateRow>("SELECT id, name, start_date, end_date FROM budget_period WHERE id = $1 AND user_id = $2")
+            .bind(period_id)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        let period = period.ok_or_else(|| AppError::NotFound("Period not found".to_string()))?;
+
+        let total_vendors: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM vendor WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
+
+        let total_spend: i64 = sqlx::query_scalar(
+            r#"
+SELECT COALESCE(SUM(t.amount), 0)::bigint
+FROM transaction t
+JOIN vendor v ON v.id = t.vendor_id
+WHERE t.user_id = $1
+  AND t.occurred_at >= $2
+  AND t.occurred_at <= $3
+            "#,
+        )
+        .bind(user_id)
+        .bind(period.start_date)
+        .bind(period.end_date)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let vendors_with_spend: i64 = sqlx::query_scalar(
+            r#"
+SELECT COUNT(DISTINCT t.vendor_id)
+FROM transaction t
+WHERE t.user_id = $1
+  AND t.vendor_id IS NOT NULL
+  AND t.occurred_at >= $2
+  AND t.occurred_at <= $3
+            "#,
+        )
+        .bind(user_id)
+        .bind(period.start_date)
+        .bind(period.end_date)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let avg_spend_per_vendor = if vendors_with_spend > 0 { total_spend / vendors_with_spend } else { 0 };
+
+        Ok(VendorStatsDb {
+            total_vendors,
+            total_spend,
+            avg_spend_per_vendor,
+        })
     }
 
     pub async fn restore_vendor(&self, id: &Uuid, user_id: &Uuid) -> Result<Vendor, AppError> {
