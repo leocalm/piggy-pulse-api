@@ -124,9 +124,9 @@ target AS (
 SELECT
     spent.value AS spent,
     target.value AS target,
-    GREATEST(0, (p.end_date - CURRENT_DATE)::int) AS days_remaining,
-    GREATEST(1, (p.end_date - p.start_date)::int) AS days_in_period,
-    GREATEST(0, LEAST((CURRENT_DATE - p.start_date)::int, (p.end_date - p.start_date)::int)) AS days_elapsed,
+    GREATEST(0, (p.end_date - CURRENT_DATE + 1)::int) AS days_remaining,
+    GREATEST(1, (p.end_date - p.start_date + 1)::int) AS days_in_period,
+    GREATEST(0, LEAST((CURRENT_DATE - p.start_date + 1)::int, (p.end_date - p.start_date + 1)::int)) AS days_elapsed,
     p.start_date,
     p.end_date
 FROM period p
