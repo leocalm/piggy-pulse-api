@@ -1,8 +1,9 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::dto::categories::{
-    CategoriesWithTargets, CategoryBase, CategoryManagementListItem, CategoryManagementListResponse, CategoryOptionListResponse, CategoryOptionResponse,
-    CategoryOverviewResponse, CategoryOverviewSummary, CategoryResponse, CategorySummaryItem, CategoryTargetsResponse, CategoryType, CreateCategoryRequest,
-    CreateTargetRequest, TargetItem, TargetStatus, TargetSummary, UpdateTargetRequest, compute_color,
+    CategoriesWithTargets, CategoryBase, CategoryDetailResponse, CategoryManagementListItem, CategoryManagementListResponse, CategoryOptionListResponse,
+    CategoryOptionResponse, CategoryOverviewResponse, CategoryOverviewSummary, CategoryResponse, CategoryStabilityDot, CategorySummaryItem,
+    CategoryTargetsResponse, CategoryTransactionItem, CategoryTrendItem, CategoryTrendResponse, CategoryType, CreateCategoryRequest, CreateTargetRequest,
+    TargetItem, TargetStatus, TargetSummary, UpdateTargetRequest, compute_color,
 };
 use crate::dto::common::{Date, PaginatedResponse};
 use crate::error::app_error::AppError;
@@ -353,5 +354,68 @@ impl<'a> CategoryService<'a> {
             status: TargetStatus::Excluded,
             spent_in_period: 0,
         })
+    }
+
+    pub async fn get_category_detail(&self, category_id: &Uuid, period_id: &Uuid, user_id: &Uuid) -> Result<CategoryDetailResponse, AppError> {
+        let db = self
+            .repository
+            .get_category_detail_v2(category_id, user_id, period_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Category not found".to_string()))?;
+
+        let variance = db.budgeted.map(|b| b - db.period_spend).unwrap_or(0);
+
+        let stability_dots = db
+            .stability_rows
+            .into_iter()
+            .map(|r| {
+                let within_budget = r.budget.map(|b| r.spent <= b).unwrap_or(true);
+                CategoryStabilityDot {
+                    period_id: r.period_id,
+                    period_name: r.period_name,
+                    within_budget,
+                }
+            })
+            .collect();
+
+        let recent_transactions = db
+            .recent_txns
+            .into_iter()
+            .map(|r| CategoryTransactionItem {
+                id: r.id,
+                date: Date(r.date),
+                amount: r.amount,
+                description: r.description,
+                vendor_id: r.vendor_id,
+                vendor_name: r.vendor_name,
+            })
+            .collect();
+
+        Ok(CategoryDetailResponse {
+            base: CategoryResponse::from_model(&db.category),
+            period_spent: db.period_spend,
+
+            budgeted: db.budgeted,
+            variance,
+            stability_dots,
+            recent_transactions,
+        })
+    }
+
+    pub async fn get_category_trend(&self, category_id: &Uuid, limit: i64, user_id: &Uuid) -> Result<CategoryTrendResponse, AppError> {
+        let rows = self
+            .repository
+            .get_category_trend_v2(category_id, user_id, limit)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Category not found".to_string()))?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| CategoryTrendItem {
+                period_id: r.period_id,
+                period_name: r.period_name,
+                total_spend: r.total_spend,
+            })
+            .collect())
     }
 }
