@@ -37,6 +37,8 @@ jobs:
       PIGGY_PULSE_EMAIL__ENABLED: "false"
       # Match local PiggyPulse.toml base_path so v2 routes land at /v2
       PIGGY_PULSE_API__BASE_PATH: /v1
+      # Insecure all-zeros key — safe for ephemeral CI; real key is in PiggyPulse.toml locally
+      PIGGY_PULSE_TWO_FACTOR__ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
 
     steps:
       - name: Checkout
