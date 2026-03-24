@@ -108,6 +108,17 @@ impl<'a> SettingsService<'a> {
         self.repository.export_all_data_v2(user_id).await
     }
 
+    pub async fn import_data(&self, user_id: &Uuid, data: &serde_json::Value) -> Result<serde_json::Value, AppError> {
+        let (accounts, categories, transactions) = self.repository.import_data_v2(user_id, data).await?;
+        Ok(serde_json::json!({
+            "imported": {
+                "accounts": accounts,
+                "categories": categories,
+                "transactions": transactions,
+            }
+        }))
+    }
+
     // ── Destructive ──────────────────────────────────────────────────────────
 
     pub async fn verify_password(&self, user_id: &Uuid, password: &str) -> Result<(), AppError> {
