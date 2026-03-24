@@ -1,7 +1,9 @@
+use chrono::NaiveDate;
+use uuid::Uuid;
+
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::service::dashboard::is_outside_tolerance;
-use uuid::Uuid;
 
 /// Row returned by the current-period query.
 #[derive(sqlx::FromRow)]
@@ -11,6 +13,8 @@ pub struct CurrentPeriodRow {
     pub days_remaining: i32,
     pub days_in_period: i32,
     pub days_elapsed: i32,
+    pub start_date: NaiveDate,
+    pub end_date: NaiveDate,
 }
 
 /// Row returned by the net-position query.
@@ -34,8 +38,60 @@ struct ClosedPeriodRow {
 /// Result of the budget stability calculation.
 pub struct BudgetStabilityResult {
     pub stability: i64,
+    pub recent_stability: i64,
     pub periods_within_range: i64,
     pub periods_stability: Vec<bool>,
+}
+
+/// Row for daily spend sparkline.
+#[derive(sqlx::FromRow)]
+pub struct DailySpendRow {
+    #[allow(dead_code)]
+    pub day: NaiveDate,
+    pub amount: i64,
+}
+
+/// Row returned by cash-flow query.
+#[derive(sqlx::FromRow)]
+pub struct CashFlowRow {
+    pub inflows: i64,
+    pub outflows: i64,
+}
+
+/// Row returned by spending-trend query.
+#[derive(sqlx::FromRow)]
+pub struct SpendingTrendRow {
+    pub period_id: Uuid,
+    pub period_name: String,
+    pub total_spend: i64,
+}
+
+/// Row returned by top-vendors query.
+#[derive(sqlx::FromRow)]
+pub struct TopVendorRow {
+    pub vendor_id: Uuid,
+    pub vendor_name: String,
+    pub total_spend: i64,
+}
+
+/// Row returned by uncategorized query.
+#[derive(sqlx::FromRow)]
+pub struct UncategorizedRow {
+    pub id: Uuid,
+    pub amount: i64,
+    pub occurred_at: NaiveDate,
+    pub description: String,
+    pub from_account_id: Uuid,
+}
+
+/// Row returned by fixed-categories query.
+#[derive(sqlx::FromRow)]
+pub struct FixedCategoryRow {
+    pub category_id: Uuid,
+    pub category_name: String,
+    pub category_icon: String,
+    pub spent: i64,
+    pub budgeted: i64,
 }
 
 impl PostgresRepository {
@@ -70,7 +126,9 @@ SELECT
     target.value AS target,
     GREATEST(0, (p.end_date - CURRENT_DATE)::int) AS days_remaining,
     GREATEST(1, (p.end_date - p.start_date)::int) AS days_in_period,
-    GREATEST(0, LEAST((CURRENT_DATE - p.start_date)::int, (p.end_date - p.start_date)::int)) AS days_elapsed
+    GREATEST(0, LEAST((CURRENT_DATE - p.start_date)::int, (p.end_date - p.start_date)::int)) AS days_elapsed,
+    p.start_date,
+    p.end_date
 FROM period p
 CROSS JOIN spent
 CROSS JOIN target
@@ -82,6 +140,31 @@ CROSS JOIN target
         .await?;
 
         Ok(row)
+    }
+
+    /// Fetch daily spend amounts for the period (one entry per calendar day).
+    pub async fn get_daily_spend_v2(&self, start_date: NaiveDate, end_date: NaiveDate, user_id: &Uuid) -> Result<Vec<DailySpendRow>, AppError> {
+        let rows = sqlx::query_as::<_, DailySpendRow>(
+            r#"
+SELECT
+    gs.day::date AS day,
+    COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::bigint AS amount
+FROM generate_series($1::date, $2::date, '1 day'::interval) AS gs(day)
+LEFT JOIN transaction t
+    ON t.occurred_at = gs.day::date
+    AND t.user_id = $3
+LEFT JOIN category c ON c.id = t.category_id
+GROUP BY gs.day
+ORDER BY gs.day
+            "#,
+        )
+        .bind(start_date)
+        .bind(end_date)
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows)
     }
 
     /// Fetch net-position dashboard data for a given period.
@@ -244,6 +327,15 @@ FROM account_balances ab
 
         let stability = if total_closed == 0 { 0 } else { (periods_within_range * 100) / total_closed };
 
+        // Recent 3 periods for recentStability
+        let recent_rows: Vec<&ClosedPeriodRow> = closed_period_rows.iter().take(3).collect();
+        let recent_total = recent_rows.len() as i64;
+        let recent_within = recent_rows
+            .iter()
+            .filter(|row| !is_outside_tolerance(row.spent_budget, row.total_budget, tolerance_basis_points))
+            .count() as i64;
+        let recent_stability = if recent_total == 0 { 0 } else { (recent_within * 100) / recent_total };
+
         // Recent 6 periods, reversed to chronological order (oldest first)
         let mut periods_stability: Vec<bool> = closed_period_rows
             .iter()
@@ -254,8 +346,190 @@ FROM account_balances ab
 
         Ok(BudgetStabilityResult {
             stability,
+            recent_stability,
             periods_within_range,
             periods_stability,
         })
+    }
+
+    /// Fetch inflows and outflows for a given period.
+    pub async fn get_cash_flow_v2(&self, period_id: &Uuid, user_id: &Uuid) -> Result<CashFlowRow, AppError> {
+        self.get_budget_period(period_id, user_id).await?;
+
+        let row = sqlx::query_as::<_, CashFlowRow>(
+            r#"
+SELECT
+    COALESCE(SUM(CASE WHEN c.category_type = 'Incoming' THEN t.amount ELSE 0 END), 0)::bigint AS inflows,
+    COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::bigint AS outflows
+FROM transaction t
+JOIN category c ON c.id = t.category_id
+JOIN budget_period bp ON bp.id = $1 AND bp.user_id = $2
+WHERE t.user_id = $2
+  AND t.occurred_at >= bp.start_date
+  AND t.occurred_at <= bp.end_date
+            "#,
+        )
+        .bind(period_id)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(row)
+    }
+
+    /// Fetch spend per period for the last N closed/current periods.
+    pub async fn get_spending_trend_v2(&self, period_id: &Uuid, user_id: &Uuid, limit: i64) -> Result<Vec<SpendingTrendRow>, AppError> {
+        self.get_budget_period(period_id, user_id).await?;
+
+        let rows = sqlx::query_as::<_, SpendingTrendRow>(
+            r#"
+SELECT
+    bp.id AS period_id,
+    bp.name AS period_name,
+    COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::bigint AS total_spend
+FROM budget_period bp
+LEFT JOIN transaction t
+    ON t.user_id = $1
+    AND t.occurred_at >= bp.start_date
+    AND t.occurred_at <= bp.end_date
+LEFT JOIN category c ON c.id = t.category_id
+WHERE bp.user_id = $1
+GROUP BY bp.id, bp.name, bp.end_date
+ORDER BY bp.end_date DESC
+LIMIT $2
+            "#,
+        )
+        .bind(user_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        // Return oldest-first
+        let mut rows = rows;
+        rows.reverse();
+        Ok(rows)
+    }
+
+    /// Fetch top vendors by spend within a period.
+    pub async fn get_top_vendors_v2(&self, period_id: &Uuid, user_id: &Uuid, limit: i64) -> Result<Vec<TopVendorRow>, AppError> {
+        self.get_budget_period(period_id, user_id).await?;
+
+        let rows = sqlx::query_as::<_, TopVendorRow>(
+            r#"
+SELECT
+    v.id AS vendor_id,
+    v.name AS vendor_name,
+    COALESCE(SUM(t.amount), 0)::bigint AS total_spend
+FROM vendor v
+JOIN transaction t ON t.vendor_id = v.id AND t.user_id = $2
+JOIN category c ON c.id = t.category_id AND c.category_type = 'Outgoing'
+JOIN budget_period bp ON bp.id = $1 AND bp.user_id = $2
+WHERE v.user_id = $2
+  AND t.occurred_at >= bp.start_date
+  AND t.occurred_at <= bp.end_date
+GROUP BY v.id, v.name
+ORDER BY total_spend DESC
+LIMIT $3
+            "#,
+        )
+        .bind(period_id)
+        .bind(user_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows)
+    }
+
+    /// Fetch transactions without a category within a period (up to limit).
+    pub async fn get_uncategorized_v2(&self, period_id: &Uuid, user_id: &Uuid, limit: i64) -> Result<Vec<UncategorizedRow>, AppError> {
+        self.get_budget_period(period_id, user_id).await?;
+
+        let rows = sqlx::query_as::<_, UncategorizedRow>(
+            r#"
+SELECT
+    t.id,
+    t.amount,
+    t.occurred_at,
+    t.description,
+    t.from_account_id
+FROM transaction t
+JOIN budget_period bp ON bp.id = $1 AND bp.user_id = $2
+WHERE t.user_id = $2
+  AND t.category_id IS NULL
+  AND t.occurred_at >= bp.start_date
+  AND t.occurred_at <= bp.end_date
+ORDER BY t.occurred_at DESC
+LIMIT $3
+            "#,
+        )
+        .bind(period_id)
+        .bind(user_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows)
+    }
+
+    /// Count total uncategorized transactions within a period.
+    pub async fn count_uncategorized_v2(&self, period_id: &Uuid, user_id: &Uuid) -> Result<i64, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct CountRow {
+            count: i64,
+        }
+
+        let row = sqlx::query_as::<_, CountRow>(
+            r#"
+SELECT COUNT(*)::bigint AS count
+FROM transaction t
+JOIN budget_period bp ON bp.id = $1 AND bp.user_id = $2
+WHERE t.user_id = $2
+  AND t.category_id IS NULL
+  AND t.occurred_at >= bp.start_date
+  AND t.occurred_at <= bp.end_date
+            "#,
+        )
+        .bind(period_id)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(row.count)
+    }
+
+    /// Fetch fixed categories with their status for a period.
+    pub async fn get_fixed_categories_v2(&self, period_id: &Uuid, user_id: &Uuid) -> Result<Vec<FixedCategoryRow>, AppError> {
+        self.get_budget_period(period_id, user_id).await?;
+
+        let rows = sqlx::query_as::<_, FixedCategoryRow>(
+            r#"
+SELECT
+    c.id AS category_id,
+    c.name AS category_name,
+    COALESCE(c.icon, '') AS category_icon,
+    COALESCE(SUM(CASE
+        WHEN t.occurred_at >= bp.start_date AND t.occurred_at <= bp.end_date THEN t.amount
+        ELSE 0
+    END), 0)::bigint AS spent,
+    COALESCE(bc.budgeted_value, 0)::bigint AS budgeted
+FROM category c
+JOIN budget_period bp ON bp.id = $1 AND bp.user_id = $2
+LEFT JOIN transaction t ON t.category_id = c.id AND t.user_id = $2
+LEFT JOIN budget_category bc ON bc.category_id = c.id AND bc.user_id = $2
+WHERE c.user_id = $2
+  AND c.category_type = 'Outgoing'
+  AND c.behavior = 'fixed'
+  AND c.is_archived = false
+GROUP BY c.id, c.name, c.icon, bc.budgeted_value, bp.start_date, bp.end_date
+ORDER BY c.name
+            "#,
+        )
+        .bind(period_id)
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows)
     }
 }

@@ -1,5 +1,9 @@
 use crate::database::postgres_repository::PostgresRepository;
-use crate::dto::dashboard::{BudgetStabilityResponse, CurrentPeriodResponse, NetPositionResponse};
+use crate::dto::common::Date;
+use crate::dto::dashboard::{
+    BudgetStabilityResponse, CashFlowResponse, CurrentPeriodResponse, FixedCategoriesResponse, FixedCategoryItem, FixedCategoryStatus, NetPositionResponse,
+    SpendingTrendItem, SpendingTrendResponse, TopVendorItem, TopVendorsResponse, UncategorizedResponse, UncategorizedTransaction,
+};
 use crate::error::app_error::AppError;
 use uuid::Uuid;
 
@@ -37,12 +41,17 @@ impl<'a> DashboardService<'a> {
         // Projected spend: if some days have elapsed, extrapolate to full period
         let projected_spend = if days_elapsed > 0 { (row.spent * days_in_period) / days_elapsed } else { 0 };
 
+        // Fetch daily spend sparkline
+        let daily_rows = self.repository.get_daily_spend_v2(row.start_date, row.end_date, user_id).await?;
+        let daily_spend: Vec<i64> = daily_rows.into_iter().map(|r| r.amount).collect();
+
         Ok(CurrentPeriodResponse {
             spent: row.spent,
             target: row.target,
             days_remaining,
             days_in_period,
             projected_spend,
+            daily_spend,
         })
     }
 
@@ -64,9 +73,94 @@ impl<'a> DashboardService<'a> {
 
         Ok(BudgetStabilityResponse {
             stability: result.stability,
+            recent_stability: result.recent_stability,
             periods_within_range: result.periods_within_range,
             periods_stability: result.periods_stability,
         })
+    }
+
+    pub async fn get_cash_flow(&self, period_id: &Uuid, user_id: &Uuid) -> Result<CashFlowResponse, AppError> {
+        let row = self.repository.get_cash_flow_v2(period_id, user_id).await?;
+        Ok(CashFlowResponse {
+            inflows: row.inflows,
+            outflows: row.outflows,
+            net: row.inflows - row.outflows,
+        })
+    }
+
+    pub async fn get_spending_trend(&self, period_id: &Uuid, user_id: &Uuid, limit: i64) -> Result<SpendingTrendResponse, AppError> {
+        let rows = self.repository.get_spending_trend_v2(period_id, user_id, limit).await?;
+        Ok(rows
+            .into_iter()
+            .map(|r| SpendingTrendItem {
+                period_id: r.period_id,
+                period_name: r.period_name,
+                total_spend: r.total_spend,
+            })
+            .collect())
+    }
+
+    pub async fn get_top_vendors(&self, period_id: &Uuid, user_id: &Uuid, limit: i64) -> Result<TopVendorsResponse, AppError> {
+        let rows = self.repository.get_top_vendors_v2(period_id, user_id, limit).await?;
+
+        let total_spend: i64 = rows.iter().map(|r| r.total_spend).sum();
+
+        Ok(rows
+            .into_iter()
+            .map(|r| {
+                let percentage = if total_spend > 0 {
+                    (r.total_spend as f64 / total_spend as f64) * 100.0
+                } else {
+                    0.0
+                };
+                TopVendorItem {
+                    vendor_id: r.vendor_id,
+                    vendor_name: r.vendor_name,
+                    total_spend: r.total_spend,
+                    percentage,
+                }
+            })
+            .collect())
+    }
+
+    pub async fn get_uncategorized(&self, period_id: &Uuid, user_id: &Uuid) -> Result<UncategorizedResponse, AppError> {
+        let count = self.repository.count_uncategorized_v2(period_id, user_id).await?;
+        let rows = self.repository.get_uncategorized_v2(period_id, user_id, 10).await?;
+        let transactions = rows
+            .into_iter()
+            .map(|r| UncategorizedTransaction {
+                id: r.id,
+                amount: r.amount,
+                date: Date(r.occurred_at),
+                description: r.description,
+                from_account_id: r.from_account_id,
+            })
+            .collect();
+        Ok(UncategorizedResponse { count, transactions })
+    }
+
+    pub async fn get_fixed_categories(&self, period_id: &Uuid, user_id: &Uuid) -> Result<FixedCategoriesResponse, AppError> {
+        let rows = self.repository.get_fixed_categories_v2(period_id, user_id).await?;
+        Ok(rows
+            .into_iter()
+            .map(|r| {
+                let status = if r.spent == 0 {
+                    FixedCategoryStatus::Pending
+                } else if r.budgeted > 0 && r.spent < r.budgeted {
+                    FixedCategoryStatus::Partial
+                } else {
+                    FixedCategoryStatus::Paid
+                };
+                FixedCategoryItem {
+                    category_id: r.category_id,
+                    category_name: r.category_name,
+                    category_icon: r.category_icon,
+                    status,
+                    spent: r.spent,
+                    budgeted: r.budgeted,
+                }
+            })
+            .collect())
     }
 }
 
