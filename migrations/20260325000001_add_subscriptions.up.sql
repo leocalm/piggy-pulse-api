@@ -3,7 +3,7 @@ CREATE TYPE subscription_status AS ENUM ('active', 'cancelled', 'paused');
 
 CREATE TABLE subscription (
     id                UUID                     PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id           UUID                     NOT NULL REFERENCES "user" (id) ON DELETE CASCADE,
+    user_id           UUID                     NOT NULL REFERENCES users (id) ON DELETE CASCADE,
     name              VARCHAR(255)             NOT NULL,
     category_id       UUID                     NOT NULL REFERENCES category (id) ON DELETE RESTRICT,
     vendor_id         UUID                     REFERENCES vendor (id) ON DELETE SET NULL,
