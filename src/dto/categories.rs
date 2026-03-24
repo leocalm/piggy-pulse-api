@@ -150,6 +150,51 @@ pub struct CategoryOverviewResponse {
     pub categories: Vec<CategorySummaryItem>,
 }
 
+// ===== CategoryDetailResponse =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CategoryStabilityDot {
+    pub period_id: Uuid,
+    pub period_name: String,
+    pub within_budget: bool,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CategoryTransactionItem {
+    pub id: Uuid,
+    pub date: Date,
+    pub amount: i64,
+    pub description: String,
+    pub vendor_id: Option<Uuid>,
+    pub vendor_name: Option<String>,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CategoryDetailResponse {
+    #[serde(flatten)]
+    pub base: CategoryResponse,
+    pub period_spent: i64,
+    pub budgeted: Option<i64>,
+    pub variance: i64,
+    pub stability_dots: Vec<CategoryStabilityDot>,
+    pub recent_transactions: Vec<CategoryTransactionItem>,
+}
+
+// ===== CategoryTrendItem / Response =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CategoryTrendItem {
+    pub period_id: Uuid,
+    pub period_name: String,
+    pub total_spend: i64,
+}
+
+pub type CategoryTrendResponse = Vec<CategoryTrendItem>;
+
 // ===== CategoryOptionResponse =====
 
 #[derive(Serialize, Debug)]

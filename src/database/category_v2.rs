@@ -1,6 +1,7 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::category::{Category, CategoryType};
+use chrono::NaiveDate;
 use uuid::Uuid;
 
 use super::category::category_type_from_db;
@@ -386,6 +387,183 @@ impl PostgresRepository {
 
         Ok(())
     }
+
+    pub async fn get_category_detail_v2(&self, category_id: &Uuid, user_id: &Uuid, period_id: &Uuid) -> Result<Option<CategoryDetailDb>, AppError> {
+        // 1. Fetch the category
+        let cat_row = sqlx::query_as::<_, CategoryWithTxCountRow>(
+            r#"
+SELECT c.id, c.name, COALESCE(c.color,'') AS color, COALESCE(c.icon,'') AS icon,
+       c.parent_id, c.category_type::text AS category_type, c.is_archived,
+       c.description, c.is_system, c.behavior::text AS behavior,
+       0::bigint AS transaction_count
+FROM category c
+WHERE c.id = $1 AND c.user_id = $2
+            "#,
+        )
+        .bind(category_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let cat_row = match cat_row {
+            Some(r) => r,
+            None => return Ok(None),
+        };
+
+        // 2. Period date range
+        let period = sqlx::query_as::<_, CategoryPeriodRow>("SELECT id, name, start_date, end_date FROM budget_period WHERE id = $1 AND user_id = $2")
+            .bind(period_id)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        let period = period.ok_or_else(|| AppError::NotFound("Period not found".to_string()))?;
+
+        // 3. Period spend + budget
+        let period_spend: i64 = sqlx::query_scalar(
+            r#"
+SELECT COALESCE(SUM(t.amount), 0)::bigint
+FROM transaction t
+WHERE t.category_id = $1
+  AND t.user_id = $2
+  AND t.occurred_at >= $3
+  AND t.occurred_at <= $4
+            "#,
+        )
+        .bind(category_id)
+        .bind(user_id)
+        .bind(period.start_date)
+        .bind(period.end_date)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let budgeted: Option<i64> = sqlx::query_scalar(
+            r#"
+SELECT bc.budgeted_value::bigint
+FROM budget_category bc
+WHERE bc.category_id = $1 AND bc.user_id = $2 AND bc.is_excluded = FALSE
+            "#,
+        )
+        .bind(category_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .flatten();
+
+        // 4. Stability dots: last 6 closed periods, was spend within budget?
+        let stability_rows = sqlx::query_as::<_, StabilityRow>(
+            r#"
+SELECT
+    bp.id AS period_id,
+    bp.name AS period_name,
+    COALESCE(SUM(t.amount), 0)::bigint AS spent,
+    bc.budgeted_value::bigint AS budget
+FROM budget_period bp
+LEFT JOIN transaction t
+    ON t.category_id = $1
+    AND t.user_id = $2
+    AND t.occurred_at >= bp.start_date
+    AND t.occurred_at <= bp.end_date
+LEFT JOIN budget_category bc
+    ON bc.category_id = $1 AND bc.user_id = $2 AND bc.is_excluded = FALSE
+WHERE bp.user_id = $2
+GROUP BY bp.id, bp.name, bp.start_date, bc.budgeted_value
+ORDER BY bp.start_date DESC
+LIMIT 6
+            "#,
+        )
+        .bind(category_id)
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        // 5. Recent transactions in this period (last 10)
+        let recent_txns = sqlx::query_as::<_, CategoryTxRow>(
+            r#"
+SELECT
+    t.id,
+    t.occurred_at AS date,
+    t.amount,
+    t.description,
+    t.vendor_id,
+    v.name AS vendor_name
+FROM transaction t
+LEFT JOIN vendor v ON v.id = t.vendor_id
+WHERE t.category_id = $1
+  AND t.user_id = $2
+  AND t.occurred_at >= $3
+  AND t.occurred_at <= $4
+ORDER BY t.occurred_at DESC, t.id DESC
+LIMIT 10
+            "#,
+        )
+        .bind(category_id)
+        .bind(user_id)
+        .bind(period.start_date)
+        .bind(period.end_date)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let category = Category {
+            id: cat_row.id,
+            name: cat_row.name,
+            color: cat_row.color,
+            icon: cat_row.icon,
+            parent_id: cat_row.parent_id,
+            category_type: category_type_from_db(&cat_row.category_type),
+            is_archived: cat_row.is_archived,
+            description: cat_row.description,
+            is_system: cat_row.is_system,
+            behavior: cat_row.behavior.as_deref().and_then(crate::models::category::category_behavior_from_db),
+        };
+
+        Ok(Some(CategoryDetailDb {
+            category,
+            period_spend,
+            budgeted,
+            stability_rows,
+            recent_txns,
+        }))
+    }
+
+    pub async fn get_category_trend_v2(&self, category_id: &Uuid, user_id: &Uuid, limit: i64) -> Result<Option<Vec<CategoryTrendRow>>, AppError> {
+        // Verify category exists
+        let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM category WHERE id = $1 AND user_id = $2)")
+            .bind(category_id)
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
+
+        if !exists {
+            return Ok(None);
+        }
+
+        let rows = sqlx::query_as::<_, CategoryTrendRow>(
+            r#"
+SELECT
+    bp.id AS period_id,
+    bp.name AS period_name,
+    COALESCE(SUM(t.amount), 0)::bigint AS total_spend
+FROM budget_period bp
+LEFT JOIN transaction t
+    ON t.category_id = $1
+    AND t.user_id = $2
+    AND t.occurred_at >= bp.start_date
+    AND t.occurred_at <= bp.end_date
+WHERE bp.user_id = $2
+GROUP BY bp.id, bp.name, bp.start_date
+ORDER BY bp.start_date DESC
+LIMIT $3
+            "#,
+        )
+        .bind(category_id)
+        .bind(user_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(Some(rows))
+    }
 }
 
 // ===== Row types =====
@@ -422,4 +600,47 @@ pub struct BudgetCategoryRow {
     pub category_id: Uuid,
     pub budgeted_value: i64,
     pub is_excluded: bool,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct CategoryPeriodRow {
+    #[allow(dead_code)]
+    pub id: Uuid,
+    #[allow(dead_code)]
+    pub name: String,
+    pub start_date: NaiveDate,
+    pub end_date: NaiveDate,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct StabilityRow {
+    pub period_id: Uuid,
+    pub period_name: String,
+    pub spent: i64,
+    pub budget: Option<i64>,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct CategoryTxRow {
+    pub id: Uuid,
+    pub date: NaiveDate,
+    pub amount: i64,
+    pub description: String,
+    pub vendor_id: Option<Uuid>,
+    pub vendor_name: Option<String>,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct CategoryTrendRow {
+    pub period_id: Uuid,
+    pub period_name: String,
+    pub total_spend: i64,
+}
+
+pub struct CategoryDetailDb {
+    pub category: Category,
+    pub period_spend: i64,
+    pub budgeted: Option<i64>,
+    pub stability_rows: Vec<StabilityRow>,
+    pub recent_txns: Vec<CategoryTxRow>,
 }
