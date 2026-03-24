@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites disabled="0" errors="0" failures="4" tests="87" time="30.75813583715353">
+	<testsuite disabled="0" errors="0" failures="4" name="schemathesis" skipped="63" tests="87" time="30.75813583715353" hostname="Leonardos-Mini.localdomain">
+		<testcase name="POST /accounts" time="0.504437"/>
+		<testcase name="POST /auth/2fa/backup-codes/regenerate" time="0.206062"/>
+		<testcase name="POST /auth/2fa/disable" time="0.157019"/>
+		<testcase name="POST /auth/2fa/emergency-disable/confirm" time="0.070417"/>
+		<testcase name="POST /auth/2fa/emergency-disable/request" time="0.086044"/>
+		<testcase name="POST /auth/2fa/enable" time="0.304774">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /auth/2fa/verify" time="0.258385"/>
+		<testcase name="POST /auth/forgot-password" time="1.309154"/>
+		<testcase name="POST /auth/login" time="1.657208"/>
+		<testcase name="POST /auth/logout" time="0.102175">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /auth/refresh" time="0.121175">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /auth/register" time="0.601815"/>
+		<testcase name="POST /auth/reset-password" time="0.094934"/>
+		<testcase name="POST /categories" time="0.338357"/>
+		<testcase name="POST /onboarding/complete" time="0.130505">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /overlays" time="0.658018"/>
+		<testcase name="POST /overlays/{id}/transactions/{txId}/include" time="0.132257">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /periods" time="0.402576"/>
+		<testcase name="POST /periods/schedule" time="0.496694">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /settings/reset-structure" time="2.311377"/>
+		<testcase name="POST /targets" time="0.252788"/>
+		<testcase name="POST /transactions" time="0.357281">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /vendors" time="0.172868"/>
+		<testcase name="PUT /auth/password" time="1.418179"/>
+		<testcase name="PUT /periods/schedule" time="0.549813">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="PUT /settings/preferences" time="0.324661"/>
+		<testcase name="PUT /settings/profile" time="0.194611"/>
+		<testcase name="GET /accounts" time="0.188798">
+			<failure type="failure" message="1. Test Case ID: 4kPwBJ
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;a42aaf5f-0c0f-421c-bf88-38f36ca36a7b&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/accounts?cursor=null'"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /accounts/options" time="0.111893">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /auth/2fa/status" time="0.100695">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /auth/me" time="0.123855">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /categories" time="0.165577">
+			<failure type="failure" message="1. Test Case ID: S1Yrl6
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;0460a719-7c52-411e-98e0-7a6041c7cafb&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/categories?cursor=null'"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /categories/options" time="0.113900">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /currencies" time="0.017979">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /currencies/{code}" time="0.074052"/>
+		<testcase name="GET /dashboard/budget-stability" time="0.198661">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /dashboard/current-period" time="0.167786">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /dashboard/net-position" time="0.151559">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /health" time="0.017178">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /onboarding/status" time="0.138249">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /overlays" time="4.026316">
+			<failure type="failure" message="1. Test Case ID: bxREkq
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;86ae2d5d-1d61-4c96-aef2-2826ee1fd1fb&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/overlays?cursor=null'"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /overlays/{id}/transactions" time="0.108465">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /periods" time="0.234141">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /periods/schedule" time="0.088536">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /settings/export/data" time="0.108361">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /settings/export/transactions" time="0.135174">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /settings/preferences" time="0.084717">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /settings/profile" time="0.093328">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /settings/sessions" time="0.117352">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /unlock" time="0.070593">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /vendors" time="0.288277">
+			<failure type="failure" message="1. Test Case ID: Dmo4My
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;44795ff2-f184-4bea-888f-d2bcbc69274e&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/vendors?cursor=null'"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /vendors/options" time="0.155436">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="DELETE /overlays/{id}/transactions/{txId}/exclude" time="0.144049">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="DELETE /periods/schedule" time="0.082515">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="DELETE /settings/account" time="2.126492"/>
+		<testcase name="DELETE /settings/sessions/{id}" time="0.131038">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /accounts/{id}/adjust-balance" time="0.244684"/>
+		<testcase name="POST /accounts/{id}/archive" time="0.190957">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /accounts/{id}/unarchive" time="0.130075">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /categories/{id}/archive" time="0.151436">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /categories/{id}/unarchive" time="0.130590">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /vendors/{id}/archive" time="0.136011">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /vendors/{id}/unarchive" time="0.137895">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="PUT /periods/{id}" time="0.376350">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /accounts/summary" time="0.319802">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /accounts/{id}/balance-history" time="0.193036">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /accounts/{id}/details" time="0.198154">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /categories/overview" time="0.147488">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /periods/{id}" time="0.111472">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /targets" time="0.173867">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /transactions" time="0.749488"/>
+		<testcase name="DELETE /periods/{id}" time="0.102060">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="PUT /categories/{id}" time="0.333835">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="PUT /transactions/{id}" time="0.499828">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="PUT /vendors/{id}" time="0.263940">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="DELETE /categories/{id}" time="0.122031">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="DELETE /transactions/{id}" time="0.128493">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="DELETE /vendors/{id}" time="0.131922">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /targets/{id}/exclude" time="0.117381">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="PUT /accounts/{id}" time="0.346945">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="PUT /overlays/{id}" time="0.666147">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="PUT /targets/{id}" time="0.334224">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /accounts/{id}" time="0.131235">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /overlays/{id}" time="0.184222">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="DELETE /accounts/{id}" time="0.171955">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="DELETE /overlays/{id}" time="0.134045">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="Stateful tests" time="0.920012"/>
+	</testsuite>
+</testsuites>

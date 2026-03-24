@@ -83,13 +83,9 @@ async fn test_create_category_behavior_and_computed_color() {
         assert_eq!(resp.status(), Status::Created, "failed for type={} behavior={:?}", cat_type, behavior);
         let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
         assert_eq!(
-            body["color"],
-            expected_color,
+            body["color"], expected_color,
             "wrong color for type={} behavior={:?}: expected {} got {}",
-            cat_type,
-            behavior,
-            expected_color,
-            body["color"]
+            cat_type, behavior, expected_color, body["color"]
         );
         if let Some(b) = behavior {
             assert_eq!(body["behavior"], b, "behavior not persisted for type={} behavior={:?}", cat_type, behavior);

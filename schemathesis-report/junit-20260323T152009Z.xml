@@ -1,0 +1,1177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites disabled="0" errors="0" failures="36" tests="87" time="26.75652058958076">
+	<testsuite disabled="0" errors="0" failures="36" name="schemathesis" skipped="63" tests="87" time="26.75652058958076" hostname="Leonardos-Mini.localdomain">
+		<testcase name="POST /accounts" time="0.473392"/>
+		<testcase name="POST /auth/2fa/backup-codes/regenerate" time="0.187861"/>
+		<testcase name="POST /auth/2fa/disable" time="0.169876"/>
+		<testcase name="POST /auth/2fa/emergency-disable/confirm" time="0.062818"/>
+		<testcase name="POST /auth/2fa/emergency-disable/request" time="0.085250"/>
+		<testcase name="POST /auth/2fa/enable" time="0.291889">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /auth/2fa/verify" time="0.283126"/>
+		<testcase name="POST /auth/forgot-password" time="5.063692"/>
+		<testcase name="POST /auth/login" time="1.371045"/>
+		<testcase name="POST /auth/logout" time="0.105040">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /auth/refresh" time="0.096456">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /auth/register" time="0.612212"/>
+		<testcase name="POST /auth/reset-password" time="0.098486"/>
+		<testcase name="POST /categories" time="0.316723"/>
+		<testcase name="POST /onboarding/complete" time="0.024020">
+			<failure type="failure" message="1. Test Case ID: j6LIWZ
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Bad request: Onboarding steps are not yet complete&quot;,&quot;request_id&quot;:&quot;25206d0b-12aa-4a8c-89cd-3e802ce4ab58&quot;}`
+
+Reproduce with:
+
+    curl -X POST -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/onboarding/complete"/>
+			<failure type="failure" message="1. Test Case ID: j6LIWZ
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Bad request: Onboarding steps are not yet complete&quot;,&quot;request_id&quot;:&quot;25206d0b-12aa-4a8c-89cd-3e802ce4ab58&quot;}`
+
+Reproduce with:
+
+    curl -X POST -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/onboarding/complete"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /overlays" time="0.701573"/>
+		<testcase name="POST /overlays/{id}/transactions/{txId}/include" time="0.049279">
+			<failure type="failure" message="1. Test Case ID: CAplDy
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 404, 409, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;d718a4ac-7388-423b-841b-b581e558745e&quot;}`
+
+Reproduce with:
+
+    curl -X POST -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/overlays/e3e70682-c209-4cac-629f-6fbed82c07cd/transactions/0/include"/>
+			<failure type="failure" message="1. Test Case ID: CAplDy
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 404, 409, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;d718a4ac-7388-423b-841b-b581e558745e&quot;}`
+
+Reproduce with:
+
+    curl -X POST -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/overlays/e3e70682-c209-4cac-629f-6fbed82c07cd/transactions/0/include"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /periods" time="0.438959"/>
+		<testcase name="POST /periods/schedule" time="0.544174">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /settings/reset-structure" time="1.896323"/>
+		<testcase name="POST /targets" time="0.211256"/>
+		<testcase name="POST /transactions" time="0.415963">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /vendors" time="0.231304"/>
+		<testcase name="PUT /auth/password" time="1.163332"/>
+		<testcase name="PUT /periods/schedule" time="0.426566">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="PUT /settings/preferences" time="0.298480"/>
+		<testcase name="PUT /settings/profile" time="0.258240"/>
+		<testcase name="GET /accounts" time="0.141169">
+			<failure type="failure" message="1. Test Case ID: jFxb3l
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;c42e422f-f6fb-461b-ad75-f2450a6cd180&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/accounts?cursor=null'"/>
+			<failure type="failure" message="1. Test Case ID: jFxb3l
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;c42e422f-f6fb-461b-ad75-f2450a6cd180&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/accounts?cursor=null'"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /accounts/options" time="0.113830">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /auth/2fa/status" time="0.095847">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /auth/me" time="0.116760">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /categories" time="0.118804">
+			<failure type="failure" message="1. Test Case ID: VxwPe2
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;c61b5887-3630-45ac-899b-6f33332846fb&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/categories?cursor=null'"/>
+			<failure type="failure" message="1. Test Case ID: VxwPe2
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;c61b5887-3630-45ac-899b-6f33332846fb&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/categories?cursor=null'"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /categories/options" time="0.099164">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /currencies" time="0.017942">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /currencies/{code}" time="0.060147">
+			<failure type="failure" message="1. Test Case ID: Qx0cbq
+
+- Server error
+
+[500] Internal Server Error:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;a0a6175c-4eda-4a4c-9556-ca81e322b066&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/currencies/%F3%9A%9A%96T%00%1C%C2%AF"/>
+		</testcase>
+		<testcase name="GET /dashboard/budget-stability" time="0.028247">
+			<failure type="failure" message="1. Test Case ID: EWj3gX
+
+- Undocumented HTTP status code
+
+    Received: 404
+    Documented: 200, 400, 401, 500
+
+[404] Not Found:
+
+    `{&quot;message&quot;:&quot;Not found: Resource not found&quot;,&quot;request_id&quot;:&quot;4005aaea-872d-479c-8cc4-25895252475e&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/dashboard/budget-stability?periodId=e3e70682-c209-4cac-629f-6fbed82c07cd'"/>
+			<failure type="failure" message="1. Test Case ID: EWj3gX
+
+- Undocumented HTTP status code
+
+    Received: 404
+    Documented: 200, 400, 401, 500
+
+[404] Not Found:
+
+    `{&quot;message&quot;:&quot;Not found: Resource not found&quot;,&quot;request_id&quot;:&quot;4005aaea-872d-479c-8cc4-25895252475e&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/dashboard/budget-stability?periodId=e3e70682-c209-4cac-629f-6fbed82c07cd'"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /dashboard/current-period" time="0.033188">
+			<failure type="failure" message="1. Test Case ID: YIVP0u
+
+- Undocumented HTTP status code
+
+    Received: 404
+    Documented: 200, 400, 401, 500
+
+[404] Not Found:
+
+    `{&quot;message&quot;:&quot;Not found: Resource not found&quot;,&quot;request_id&quot;:&quot;157256cb-267b-4cc7-a7b6-c03eea8b03c9&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/dashboard/current-period?periodId=e3e70682-c209-4cac-629f-6fbed82c07cd'"/>
+			<failure type="failure" message="1. Test Case ID: YIVP0u
+
+- Undocumented HTTP status code
+
+    Received: 404
+    Documented: 200, 400, 401, 500
+
+[404] Not Found:
+
+    `{&quot;message&quot;:&quot;Not found: Resource not found&quot;,&quot;request_id&quot;:&quot;157256cb-267b-4cc7-a7b6-c03eea8b03c9&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/dashboard/current-period?periodId=e3e70682-c209-4cac-629f-6fbed82c07cd'"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /dashboard/net-position" time="0.026527">
+			<failure type="failure" message="1. Test Case ID: 7G2kHu
+
+- Undocumented HTTP status code
+
+    Received: 404
+    Documented: 200, 400, 401, 500
+
+[404] Not Found:
+
+    `{&quot;message&quot;:&quot;Not found: Resource not found&quot;,&quot;request_id&quot;:&quot;49055ebf-2de5-476b-aeb7-a5a0bd6d39b5&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/dashboard/net-position?periodId=e3e70682-c209-4cac-629f-6fbed82c07cd'"/>
+			<failure type="failure" message="1. Test Case ID: 7G2kHu
+
+- Undocumented HTTP status code
+
+    Received: 404
+    Documented: 200, 400, 401, 500
+
+[404] Not Found:
+
+    `{&quot;message&quot;:&quot;Not found: Resource not found&quot;,&quot;request_id&quot;:&quot;49055ebf-2de5-476b-aeb7-a5a0bd6d39b5&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/dashboard/net-position?periodId=e3e70682-c209-4cac-629f-6fbed82c07cd'"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /health" time="0.017994">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /onboarding/status" time="0.129255">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /overlays" time="1.804696">
+			<failure type="failure" message="1. Test Case ID: KfJRvV
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;00887a31-1476-4585-a480-cdaac1c21f93&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/overlays?cursor=null'"/>
+			<failure type="failure" message="1. Test Case ID: KfJRvV
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;00887a31-1476-4585-a480-cdaac1c21f93&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/overlays?cursor=null'"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /overlays/{id}/transactions" time="0.039780">
+			<failure type="failure" message="1. Test Case ID: 1TJQzk
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;5a49f530-1740-4782-b537-9161dd2924d6&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/overlays/0/transactions"/>
+			<failure type="failure" message="1. Test Case ID: 1TJQzk
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;5a49f530-1740-4782-b537-9161dd2924d6&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/overlays/0/transactions"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /periods" time="0.240022">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /periods/schedule" time="0.109310">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /settings/export/data" time="0.101340">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /settings/export/transactions" time="0.083510">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /settings/preferences" time="0.073522">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /settings/profile" time="0.076099">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /settings/sessions" time="0.093864">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /unlock" time="0.039991">
+			<failure type="failure" message="1. Test Case ID: ExVlF6
+
+- Server error
+
+[500] Internal Server Error:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;41f3666a-d610-4387-8b4c-8763eeeb65b1&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/unlock?token=%5BFiltered%5D'"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /vendors" time="0.133255">
+			<failure type="failure" message="1. Test Case ID: Hkn3ND
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;b0da997c-5122-4d2f-9b08-165b2c0c12ec&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/vendors?cursor=null'"/>
+			<failure type="failure" message="1. Test Case ID: Hkn3ND
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;b0da997c-5122-4d2f-9b08-165b2c0c12ec&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/vendors?cursor=null'"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /vendors/options" time="0.107854">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="DELETE /overlays/{id}/transactions/{txId}/exclude" time="0.045977">
+			<failure type="failure" message="1. Test Case ID: 8u3FKy
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 404, 409, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;6887b1f1-af94-420f-a198-38c6031e4f94&quot;}`
+
+Reproduce with:
+
+    curl -X DELETE -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/overlays/e3e70682-c209-4cac-629f-6fbed82c07cd/transactions/0/exclude"/>
+			<failure type="failure" message="1. Test Case ID: 8u3FKy
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 404, 409, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;6887b1f1-af94-420f-a198-38c6031e4f94&quot;}`
+
+Reproduce with:
+
+    curl -X DELETE -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/overlays/e3e70682-c209-4cac-629f-6fbed82c07cd/transactions/0/exclude"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="DELETE /periods/schedule" time="0.099894">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="DELETE /settings/account" time="0.771843">
+			<failure type="failure" message="1. Test Case ID: cztEF6
+
+- Undocumented HTTP status code
+
+    Received: 422
+    Documented: 204, 400, 401, 500
+
+[422] Unprocessable Content:
+
+    `{&quot;message&quot;:&quot;Unprocessable entity&quot;,&quot;request_id&quot;:&quot;34beb689-4887-4469-9ad7-3774fa949a23&quot;}`
+
+Reproduce with:
+
+    curl -X DELETE -H 'Authorization: [Filtered]' -H 'Content-Type: application/json' -H 'Cookie: [Filtered]' -d '{&quot;password&quot;: {}}' http://localhost:8000/v2/settings/account"/>
+			<failure type="failure" message="1. Test Case ID: cztEF6
+
+- Undocumented HTTP status code
+
+    Received: 422
+    Documented: 204, 400, 401, 500
+
+[422] Unprocessable Content:
+
+    `{&quot;message&quot;:&quot;Unprocessable entity&quot;,&quot;request_id&quot;:&quot;34beb689-4887-4469-9ad7-3774fa949a23&quot;}`
+
+Reproduce with:
+
+    curl -X DELETE -H 'Authorization: [Filtered]' -H 'Content-Type: application/json' -H 'Cookie: [Filtered]' -d '{&quot;password&quot;: {}}' http://localhost:8000/v2/settings/account"/>
+		</testcase>
+		<testcase name="DELETE /settings/sessions/{id}" time="0.045577">
+			<failure type="failure" message="1. Test Case ID: bUJEo3
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;9c1113a9-bf38-434e-b204-05cf54219e3f&quot;}`
+
+Reproduce with:
+
+    curl -X DELETE -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/settings/sessions/0"/>
+			<failure type="failure" message="1. Test Case ID: bUJEo3
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;9c1113a9-bf38-434e-b204-05cf54219e3f&quot;}`
+
+Reproduce with:
+
+    curl -X DELETE -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/settings/sessions/0"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /accounts/{id}/adjust-balance" time="0.224419"/>
+		<testcase name="POST /accounts/{id}/archive" time="0.048107">
+			<failure type="failure" message="1. Test Case ID: uMMaha
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 409, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;d3912278-58cf-431c-bea7-7f2878cb2332&quot;}`
+
+Reproduce with:
+
+    curl -X POST -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/accounts/0/archive"/>
+			<failure type="failure" message="1. Test Case ID: uMMaha
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 409, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;d3912278-58cf-431c-bea7-7f2878cb2332&quot;}`
+
+Reproduce with:
+
+    curl -X POST -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/accounts/0/archive"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /accounts/{id}/unarchive" time="0.045122">
+			<failure type="failure" message="1. Test Case ID: bJ1vrQ
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 409, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;aa85ad95-dec4-4087-b126-89e2cc153b80&quot;}`
+
+Reproduce with:
+
+    curl -X POST -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/accounts/0/unarchive"/>
+			<failure type="failure" message="1. Test Case ID: bJ1vrQ
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 409, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;aa85ad95-dec4-4087-b126-89e2cc153b80&quot;}`
+
+Reproduce with:
+
+    curl -X POST -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/accounts/0/unarchive"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /categories/{id}/archive" time="0.045975">
+			<failure type="failure" message="1. Test Case ID: rAgDcr
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 409, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;6f64256b-d731-4d8f-a847-0ca72c1da4c2&quot;}`
+
+Reproduce with:
+
+    curl -X POST -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/categories/0/archive"/>
+			<failure type="failure" message="1. Test Case ID: rAgDcr
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 409, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;6f64256b-d731-4d8f-a847-0ca72c1da4c2&quot;}`
+
+Reproduce with:
+
+    curl -X POST -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/categories/0/archive"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /categories/{id}/unarchive" time="0.041768">
+			<failure type="failure" message="1. Test Case ID: WVP6j8
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 409, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;9b2c3695-94d2-4bad-a922-9dfab83da1b5&quot;}`
+
+Reproduce with:
+
+    curl -X POST -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/categories/0/unarchive"/>
+			<failure type="failure" message="1. Test Case ID: WVP6j8
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 409, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;9b2c3695-94d2-4bad-a922-9dfab83da1b5&quot;}`
+
+Reproduce with:
+
+    curl -X POST -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/categories/0/unarchive"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /vendors/{id}/archive" time="0.081178">
+			<failure type="failure" message="1. Test Case ID: xnmemh
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 409, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;64878f18-3e2c-40bd-ac41-7d4811db9cc3&quot;}`
+
+Reproduce with:
+
+    curl -X POST -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/vendors/0/archive"/>
+			<failure type="failure" message="1. Test Case ID: xnmemh
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 409, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;64878f18-3e2c-40bd-ac41-7d4811db9cc3&quot;}`
+
+Reproduce with:
+
+    curl -X POST -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/vendors/0/archive"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /vendors/{id}/unarchive" time="0.047195">
+			<failure type="failure" message="1. Test Case ID: LD5Va4
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 409, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;e2eca4c2-8795-4aa6-8f35-e56ca8494c4d&quot;}`
+
+Reproduce with:
+
+    curl -X POST -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/vendors/0/unarchive"/>
+			<failure type="failure" message="1. Test Case ID: LD5Va4
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 409, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;e2eca4c2-8795-4aa6-8f35-e56ca8494c4d&quot;}`
+
+Reproduce with:
+
+    curl -X POST -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/vendors/0/unarchive"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="PUT /periods/{id}" time="0.433607">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /accounts/summary" time="0.329218">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /accounts/{id}/balance-history" time="0.065292">
+			<failure type="failure" message="1. Test Case ID: sSQKZC
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Bad request: periodId is required&quot;,&quot;request_id&quot;:&quot;854a97d0-59db-4a2e-be01-f6ea25a52642&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/accounts/e3e70682-c209-4cac-629f-6fbed82c07cd/balance-history"/>
+			<failure type="failure" message="1. Test Case ID: sSQKZC
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Bad request: periodId is required&quot;,&quot;request_id&quot;:&quot;854a97d0-59db-4a2e-be01-f6ea25a52642&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/accounts/e3e70682-c209-4cac-629f-6fbed82c07cd/balance-history"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /accounts/{id}/details" time="0.074065">
+			<failure type="failure" message="1. Test Case ID: ILKIxd
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Bad request: periodId is required&quot;,&quot;request_id&quot;:&quot;ceb56a49-6b32-4491-99ee-608e41e1908b&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/accounts/e3e70682-c209-4cac-629f-6fbed82c07cd/details"/>
+			<failure type="failure" message="1. Test Case ID: ILKIxd
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Bad request: periodId is required&quot;,&quot;request_id&quot;:&quot;ceb56a49-6b32-4491-99ee-608e41e1908b&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/accounts/e3e70682-c209-4cac-629f-6fbed82c07cd/details"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /categories/overview" time="0.026381">
+			<failure type="failure" message="1. Test Case ID: bgwZNC
+
+- Undocumented HTTP status code
+
+    Received: 404
+    Documented: 200, 400, 401, 500
+
+[404] Not Found:
+
+    `{&quot;message&quot;:&quot;Not found: Resource not found&quot;,&quot;request_id&quot;:&quot;3e1ba2fc-cbfe-4cb8-ae3d-4a519de50fdb&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/categories/overview?periodId=e3e70682-c209-4cac-629f-6fbed82c07cd'"/>
+			<failure type="failure" message="1. Test Case ID: bgwZNC
+
+- Undocumented HTTP status code
+
+    Received: 404
+    Documented: 200, 400, 401, 500
+
+[404] Not Found:
+
+    `{&quot;message&quot;:&quot;Not found: Resource not found&quot;,&quot;request_id&quot;:&quot;3e1ba2fc-cbfe-4cb8-ae3d-4a519de50fdb&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/categories/overview?periodId=e3e70682-c209-4cac-629f-6fbed82c07cd'"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /periods/{id}" time="0.041544">
+			<failure type="failure" message="1. Test Case ID: q1NjxK
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;6f2d7076-3417-428e-9485-4ac2ecb6da54&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/periods/0"/>
+			<failure type="failure" message="1. Test Case ID: q1NjxK
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;6f2d7076-3417-428e-9485-4ac2ecb6da54&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/periods/0"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /targets" time="0.025474">
+			<failure type="failure" message="1. Test Case ID: Vv5vPi
+
+- Undocumented HTTP status code
+
+    Received: 404
+    Documented: 200, 400, 401, 500
+
+[404] Not Found:
+
+    `{&quot;message&quot;:&quot;Not found: Resource not found&quot;,&quot;request_id&quot;:&quot;32ff5288-a302-49da-b9f5-39488dbed543&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/targets?periodId=e3e70682-c209-4cac-629f-6fbed82c07cd'"/>
+			<failure type="failure" message="1. Test Case ID: Vv5vPi
+
+- Undocumented HTTP status code
+
+    Received: 404
+    Documented: 200, 400, 401, 500
+
+[404] Not Found:
+
+    `{&quot;message&quot;:&quot;Not found: Resource not found&quot;,&quot;request_id&quot;:&quot;32ff5288-a302-49da-b9f5-39488dbed543&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' 'http://localhost:8000/v2/targets?periodId=e3e70682-c209-4cac-629f-6fbed82c07cd'"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /transactions" time="0.772667"/>
+		<testcase name="DELETE /periods/{id}" time="0.043304">
+			<failure type="failure" message="1. Test Case ID: kjsDwy
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;b3c2b267-f30e-4523-b7d9-637415f50e1d&quot;}`
+
+Reproduce with:
+
+    curl -X DELETE -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/periods/0"/>
+			<failure type="failure" message="1. Test Case ID: kjsDwy
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;b3c2b267-f30e-4523-b7d9-637415f50e1d&quot;}`
+
+Reproduce with:
+
+    curl -X DELETE -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/periods/0"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="PUT /categories/{id}" time="0.349066">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="PUT /transactions/{id}" time="0.455701">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="PUT /vendors/{id}" time="0.181385">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="DELETE /categories/{id}" time="0.041915">
+			<failure type="failure" message="1. Test Case ID: 9hkMIV
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;bd2a53fd-703d-40cf-863c-bb7daa189751&quot;}`
+
+Reproduce with:
+
+    curl -X DELETE -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/categories/0"/>
+			<failure type="failure" message="1. Test Case ID: 9hkMIV
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;bd2a53fd-703d-40cf-863c-bb7daa189751&quot;}`
+
+Reproduce with:
+
+    curl -X DELETE -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/categories/0"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="DELETE /transactions/{id}" time="0.093744">
+			<failure type="failure" message="1. Test Case ID: virBa8
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;b834aa2a-0700-4f55-b536-22228be9d30b&quot;}`
+
+Reproduce with:
+
+    curl -X DELETE -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/transactions/0"/>
+			<failure type="failure" message="1. Test Case ID: virBa8
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;b834aa2a-0700-4f55-b536-22228be9d30b&quot;}`
+
+Reproduce with:
+
+    curl -X DELETE -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/transactions/0"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="DELETE /vendors/{id}" time="0.037807">
+			<failure type="failure" message="1. Test Case ID: ugLZ4p
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;e8852162-1bd7-4ec1-976e-7d0b43e0aecb&quot;}`
+
+Reproduce with:
+
+    curl -X DELETE -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/vendors/0"/>
+			<failure type="failure" message="1. Test Case ID: ugLZ4p
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;e8852162-1bd7-4ec1-976e-7d0b43e0aecb&quot;}`
+
+Reproduce with:
+
+    curl -X DELETE -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/vendors/0"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="POST /targets/{id}/exclude" time="0.040121">
+			<failure type="failure" message="1. Test Case ID: 0259EV
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 409, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;5777619c-c763-4a8d-b63a-09b721020e55&quot;}`
+
+Reproduce with:
+
+    curl -X POST -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/targets/0/exclude"/>
+			<failure type="failure" message="1. Test Case ID: 0259EV
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 409, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;5777619c-c763-4a8d-b63a-09b721020e55&quot;}`
+
+Reproduce with:
+
+    curl -X POST -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/targets/0/exclude"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="PUT /accounts/{id}" time="0.368398">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="PUT /overlays/{id}" time="0.611366">
+			<failure type="failure" message="1. Test Case ID: If2C9z
+
+- Server error
+
+[500] Internal Server Error:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;6ad36c35-412f-41c0-baa3-9ce43bdd192f&quot;}`
+
+Reproduce with:
+
+    curl -X PUT -H 'Authorization: [Filtered]' -H 'Content-Type: application/json' -H 'Cookie: [Filtered]' -d '{&quot;endDate&quot;: &quot;6072-06-27&quot;, &quot;inclusionMode&quot;: &quot;all&quot;, &quot;name&quot;: &quot;9\u0093\ud909\udcce?\u00cf-&quot;, &quot;startDate&quot;: &quot;5178-03-02&quot;, &quot;icon&quot;: null, &quot;categoryCaps&quot;: [{&quot;capAmount&quot;: 102, &quot;categoryId&quot;: &quot;4bf93f55-212f-fb0f-90b9-c5e2ffccd665&quot;, &quot;&quot;: {&quot;\udb81\udce8\u0001\udb95\udee3 \ud873\ude7d\udb81\udc32h\u00c4\u00bd`\uda00\udfad\u001b\ud92a\udfe0\u00d1\udaec\udfae&quot;: [{&quot;\ud862\ude57\u00c2\u00ae\u0095H&quot;: [-11210, -3.437553582745149e+16], &quot;\u001dLy\u00c5\u0086\udb01\udee8'&quot;'&quot;'\ud858\udff5\udb22\udeb5\ud83b\udc15\ud84d\uddce\u00e1&quot;: {&quot;\ud83b\ude06\u00ea\u0091&quot;: true, &quot;&quot;: [], &quot;1V\u00b5\u00d3\u0013\udadb\udc03\ud94a\ude1d\u00e4\u00f4\u00c2&quot;: {&quot;c\u00f0\uda3d\udf29\u0019\u0001&quot;: -6497, &quot;\u00dc\u0018&quot;: -5.08245101711918e-139, &quot;\u0099&quot;: true}}, &quot;\u00b8\ud9c2\ude75&quot;: []}, true, {&quot;\u0090\ud9b7\udcd8\u00d8\uda2a\ude1d&quot;: [false, &quot;&gt;&quot;, &quot;h\u000f\u009a:\u008f\u0094\u0087\ud8b1\udcfa\uda71\udc6e&quot;]}]}}, {&quot;capAmount&quot;: 17836, &quot;categoryId&quot;: &quot;0cd44fd6-2061-d7b7-c246-812f57c8c7c5&quot;}, {&quot;capAmount&quot;: 3415, &quot;categoryId&quot;: &quot;e449c4a6-10ed-8a37-7052-d83c24f31c7f&quot;, &quot;\udac5\udd4f\u00b6K7;\uda17\uddbc&quot;: {}, &quot;&quot;: {}, &quot;\u00c8vRD&quot;: {&quot;C7\u001f\u00e0U&quot;: {}}}, {&quot;capAmount&quot;: 2064519464, &quot;categoryId&quot;: &quot;8c8ada6d-0e1c-f847-6946-7775ca468921&quot;, &quot;\udadc\udf9f\u009d\udbf9\udc29\u00a5z\u0084\u0014\u009b&quot;: [6.765713069280254e+16, [[]], [[[false, 5.1830881187381064e+16], -2.613363677311318e+148, [-6, null, true]], [[64], {&quot;4\u00a0\uda1e\ude519\u00a8&quot;: -1.0566499969179796e-148}, false]]], &quot; \u00b6\u00b4\u00da\ud999\udfac&quot;: [false], &quot;\u00eex\u00ad\udbc5\udf2a&quot;: [{&quot;\f1\u00876&quot;: [], &quot;\u00b8\u00eb&lt;&quot;: -122}, {}, []], &quot;\u0091\ud81c\udcc6&quot;: [[0.99999], [true, 21, null], [[null]]]}, {&quot;capAmount&quot;: 67, &quot;categoryId&quot;: &quot;8bf879a8-dda3-8096-370e-872f90034204&quot;, &quot;\udb64\udf40&gt;&quot;: {&quot;L\u00d5t\ud8f0\udfb8\ud9c0\uddb2\ud8c2\udd6ei&lt;\ud9b3\udf33\uda9f\uddf2\u0016\udbc5\udf20\u00b9^&quot;: -18}, &quot;\r&quot;: [-18014398509481983, [&quot;\ud9c1\ude52\u0097&quot;]], &quot;\u00be&quot;: {}, &quot;\u00b1{\u0019\ud9da\ude36!\u00d9&quot;: [], &quot;?\u00bcz\u001e\u00ee&quot;: [[&quot;\u00d8 ;)\u0085\u000b\u001f&quot;, false, 18102], {&quot;\u008c\udac2\udc10\u00fe0\u00d1&quot;: [12487, [-1376558480, 3.7686025163872775e+52], true], &quot;None&quot;: {}}, {&quot;i\u00f3\udaef\udf98\u00f6\u00f5\u008f\u0080f\u00f5\u00f2&quot;: [{&quot;\udbf2\udeee#\u00ac\u0083\u00b1\u009d\ud91f\udd75&quot;: 3673813304234543747, &quot;&quot;: -4.145673371454486e+16, &quot;B\u0098r\u00c5d&quot;: null}, {&quot;\u00c5\ud971\udd97D\udaf4\udee7&lt;\ud854\ude16\u00e8/\u00ac\ud832\udc2b\u008bj7\ud98c\udd3a\u0084&quot;: &quot;\u0007q\ud8d3\ude52\u00aa\u0015\u00fe\udb56\udc46~&quot;, &quot;\u001e)&amp;Xs\u00f6\ud87e\udc79&quot;: &quot;r\u00e8\u00ed\u00e9\u0092\u000e\u00de&quot;, &quot;\u001c&quot;: -24275}, [null, 2.581070191515751e+16]], &quot;\u001c\ud9fe\udc9b\uda15\udeaf\u0086K\u00fa\nj\u00fa\udb81\udf79+IB\u0094\u0083&quot;: false, &quot;C\u0099\u00b9&quot;: [[9.733997537960487e+234, null, null]]}], &quot;\u009ew\u00a4\udbe6\udf63\u0005&quot;: {&quot;\u00b6&quot;: [null, {}, []]}, &quot;}\u0090&quot;: [], &quot;\u00d3\u00a7P\u001c\uda0c\udd1e\u2363\udad8\udf7a\udb03\udc76&quot;: [], &quot;\ud961\udcd9.\u0087\u00e3&quot;: [{}, [null, -5.424943076304647e+16], {&quot;\uda17\udede\u00a9&quot;: false}], &quot;r\u00be&quot;: {}, &quot;\u00eb&quot;: {&quot;\udb70\udc54BN\udb20\udd0f\u0006\u0081\u00be\u00a2&quot;: [], &quot;\u00f9N\u00c87V&gt;\u00b6\u00d8&quot;: 14978, &quot;&quot;: {}}}]}' http://localhost:8000/v2/overlays/93c2473c-dd33-4b75-af0a-b91bc586c630"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="PUT /targets/{id}" time="0.223513">
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /accounts/{id}" time="0.043203">
+			<failure type="failure" message="1. Test Case ID: y19Jb2
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;b04e4907-44ad-4fe2-8c74-bfd42f9d6872&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/accounts/0"/>
+			<failure type="failure" message="1. Test Case ID: y19Jb2
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;b04e4907-44ad-4fe2-8c74-bfd42f9d6872&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/accounts/0"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="GET /overlays/{id}" time="0.046151">
+			<failure type="failure" message="1. Test Case ID: T1JwNc
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;2f67f21b-bc9a-4b1e-975e-0f825d34edbb&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/overlays/0"/>
+			<failure type="failure" message="1. Test Case ID: T1JwNc
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 200, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;2f67f21b-bc9a-4b1e-975e-0f825d34edbb&quot;}`
+
+Reproduce with:
+
+    curl -X GET -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/overlays/0"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="DELETE /accounts/{id}" time="0.044340">
+			<failure type="failure" message="1. Test Case ID: jb1B9Q
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;b95b2805-779f-4405-973c-479de3304125&quot;}`
+
+Reproduce with:
+
+    curl -X DELETE -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/accounts/0"/>
+			<failure type="failure" message="1. Test Case ID: jb1B9Q
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;b95b2805-779f-4405-973c-479de3304125&quot;}`
+
+Reproduce with:
+
+    curl -X DELETE -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/accounts/0"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="DELETE /overlays/{id}" time="0.044391">
+			<failure type="failure" message="1. Test Case ID: dsj5qt
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;5ae92577-98a4-4d6d-a612-d0b947cc71f9&quot;}`
+
+Reproduce with:
+
+    curl -X DELETE -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/overlays/0"/>
+			<failure type="failure" message="1. Test Case ID: dsj5qt
+
+- Undocumented HTTP status code
+
+    Received: 400
+    Documented: 204, 401, 404, 500
+
+[400] Bad Request:
+
+    `{&quot;message&quot;:&quot;Internal server error&quot;,&quot;request_id&quot;:&quot;5ae92577-98a4-4d6d-a612-d0b947cc71f9&quot;}`
+
+Reproduce with:
+
+    curl -X DELETE -H 'Authorization: [Filtered]' -H 'Cookie: [Filtered]' http://localhost:8000/v2/overlays/0"/>
+			<skipped type="skipped">No examples in schema</skipped>
+		</testcase>
+		<testcase name="Stateful tests" time="1.087361"/>
+	</testsuite>
+</testsuites>
