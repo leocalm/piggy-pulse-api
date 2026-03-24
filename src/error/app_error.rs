@@ -302,7 +302,7 @@ impl From<sqlx::Error> for AppError {
             && let Some(code) = db_err.code()
             && matches!(code.as_ref(), "22021" | "22P05")
         {
-            // 22021 = invalid byte sequence for encoding (e.g. \u0000 in text)
+            // 22021 = character_not_in_repertoire (e.g. null byte \u0000 in UTF-8 text)
             // 22P05 = unsupported_unicode_escape_character
             return AppError::BadRequest("Invalid characters in input".to_string());
         }

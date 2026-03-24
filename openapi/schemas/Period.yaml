@@ -80,7 +80,7 @@ PeriodResponse:
       example: 100
       minimum: 0
     percentageOfTargetUsed:
-      type: ["integer", "null"]
+      type: [integer, "null"]
       description: Percentage of target used in the period. Null when no spending target is set.
       example: 50
       minimum: 0
