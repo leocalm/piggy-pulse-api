@@ -608,23 +608,28 @@ LIMIT 10
         }
         let target = self.get_vendor_by_id(target_id, user_id).await?;
         if target.is_none() {
-            return Err(AppError::BadRequest("Target vendor not found".to_string()));
+            return Err(AppError::NotFound("Target vendor not found".to_string()));
         }
+
+        // Perform reassignment and deletion atomically
+        let mut tx = self.pool.begin().await?;
 
         // Reassign all transactions from source to target
         sqlx::query("UPDATE transaction SET vendor_id = $1 WHERE vendor_id = $2 AND user_id = $3")
             .bind(target_id)
             .bind(source_id)
             .bind(user_id)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?;
 
         // Delete the source vendor
         sqlx::query("DELETE FROM vendor WHERE id = $1 AND user_id = $2")
             .bind(source_id)
             .bind(user_id)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?;
+
+        tx.commit().await?;
 
         Ok(true)
     }
