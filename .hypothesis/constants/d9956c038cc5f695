@@ -1,4 +1,0 @@
-# file: /Volumes/T7/Home/leonardo.almeida/.local/bin/schemathesis
-# hypothesis_version: 6.151.9
-
-['-script.pyw', '.exe', '__main__']
