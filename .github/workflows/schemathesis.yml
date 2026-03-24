@@ -1,0 +1,114 @@
+name: Schemathesis
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  schemathesis:
+    name: API contract tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: piggy_pulse_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgres://postgres:test_password@localhost:5432/piggy_pulse_test
+      PIGGY_PULSE_DATABASE__URL: postgres://postgres:test_password@localhost:5432/piggy_pulse_test
+      # Fixed key for CI — not used in production
+      ROCKET_SECRET_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      PIGGY_PULSE_EMAIL__ENABLED: "false"
+      # Match local PiggyPulse.toml base_path so v2 routes land at /v2
+      PIGGY_PULSE_API__BASE_PATH: /v1
+      # Insecure fixed key — safe for ephemeral CI; real key is in PiggyPulse.toml locally
+      # Must contain letters so figment doesn't coerce it to an integer
+      PIGGY_PULSE_TWO_FACTOR__ENCRYPTION_KEY: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install sqlx-cli
+        uses: taiki-e/install-action@v2
+        with:
+          tool: sqlx-cli
+
+      - name: Run migrations
+        run: sqlx migrate run
+
+      - name: Build server
+        run: cargo build --bin piggy-pulse
+
+      - name: Start server
+        run: |
+          ./target/debug/piggy-pulse &
+          echo "Waiting for server..."
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:8000/v2/health | grep -q '"status":"ok"'; then
+              echo "Server ready after ${i}s"
+              break
+            fi
+            sleep 1
+            if [ "$i" -eq 30 ]; then
+              echo "Server failed to start" && exit 1
+            fi
+          done
+
+      - name: Bundle OpenAPI spec
+        run: npx --yes @redocly/cli@2.20.5 bundle openapi/v2.yaml -o /tmp/v2_full.yaml
+
+      - name: Register test user and capture token
+        id: seed
+        run: |
+          RESPONSE=$(curl -s -X POST http://localhost:8000/v2/auth/register \
+            -H "Content-Type: application/json" \
+            -d '{"email":"ci@schemathesis.test","password":"correct-horse-battery-staple-99","name":"CI"}')
+          echo "Register response: $RESPONSE"
+          TOKEN=$(echo "$RESPONSE" | jq -r '.token // empty' 2>/dev/null || true)
+          if [ -z "$TOKEN" ]; then
+            echo "Registration failed or token missing" && exit 1
+          fi
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Run schemathesis
+        run: |
+          pip install --quiet schemathesis
+          schemathesis run /tmp/v2_full.yaml \
+            --url http://localhost:8000/v2 \
+            --header "Authorization: Bearer ${{ steps.seed.outputs.token }}" \
+            --checks not_a_server_error,response_schema_conformance,status_code_conformance \
+            --max-examples 10 \
+            --exclude-path "/auth/logout" \
+            --exclude-path "/auth/refresh" \
+            --report junit
+
+      - name: Upload JUnit results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: schemathesis-junit
+          path: schemathesis-report/*.xml
+          if-no-files-found: ignore
