@@ -35,6 +35,8 @@ jobs:
       # Fixed key for CI — not used in production
       ROCKET_SECRET_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       PIGGY_PULSE_EMAIL__ENABLED: "false"
+      # Match local PiggyPulse.toml base_path so v2 routes land at /v2
+      PIGGY_PULSE_API__BASE_PATH: /v1
 
     steps:
       - name: Checkout
@@ -60,10 +62,16 @@ jobs:
       - name: Start server
         run: |
           ./target/debug/piggy-pulse &
-          for i in $(seq 1 20); do
-            curl -sf http://localhost:8000/v2/health && echo "Server ready" && break
-            echo "Waiting for server... ($i)"
+          echo "Waiting for server..."
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:8000/v2/health | grep -q '"status":"ok"'; then
+              echo "Server ready after ${i}s"
+              break
+            fi
             sleep 1
+            if [ "$i" -eq 30 ]; then
+              echo "Server failed to start" && exit 1
+            fi
           done
 
       - name: Bundle OpenAPI spec
@@ -75,9 +83,10 @@ jobs:
           RESPONSE=$(curl -s -X POST http://localhost:8000/v2/auth/register \
             -H "Content-Type: application/json" \
             -d '{"email":"ci@schemathesis.test","password":"correct-horse-battery-staple-99","name":"CI"}')
-          TOKEN=$(echo "$RESPONSE" | jq -r '.token')
-          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
-            echo "Registration failed: $RESPONSE" && exit 1
+          echo "Register response: $RESPONSE"
+          TOKEN=$(echo "$RESPONSE" | jq -r '.token // empty' 2>/dev/null || true)
+          if [ -z "$TOKEN" ]; then
+            echo "Registration failed or token missing" && exit 1
           fi
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
