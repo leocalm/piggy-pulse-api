@@ -115,6 +115,131 @@ async fn test_create_allowance_with_null_spend_limit() {
 
 #[rocket::async_test]
 #[ignore = "requires database"]
+async fn test_create_allowance_with_top_up_fields() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+    let eur_id = common::auth::get_eur_currency_id(&client).await;
+
+    let payload = json!({
+        "type": "Allowance",
+        "name": "Allowance With TopUp",
+        "color": "#aabbcc",
+        "initialBalance": 0,
+        "currencyId": eur_id,
+        "spendLimit": null,
+        "topUpAmount": 50000,
+        "topUpCycle": "monthly",
+        "topUpDay": 1
+    });
+
+    let resp = client
+        .post(format!("{}/accounts", V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Created);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["type"], "Allowance");
+    assert_eq!(body["topUpAmount"], 50000);
+    assert_eq!(body["topUpCycle"], "monthly");
+    assert_eq!(body["topUpDay"], 1);
+    // Credit card fields should not appear
+    assert!(body["statementCloseDay"].is_null() || body.get("statementCloseDay").is_none());
+    assert!(body["paymentDueDay"].is_null() || body.get("paymentDueDay").is_none());
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_create_credit_card_with_statement_fields() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+    let eur_id = common::auth::get_eur_currency_id(&client).await;
+
+    let payload = json!({
+        "type": "CreditCard",
+        "name": "CC With Statement",
+        "color": "#ddeeff",
+        "initialBalance": 0,
+        "currencyId": eur_id,
+        "spendLimit": 200000,
+        "statementCloseDay": 25,
+        "paymentDueDay": 10
+    });
+
+    let resp = client
+        .post(format!("{}/accounts", V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Created);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["type"], "CreditCard");
+    assert_eq!(body["statementCloseDay"], 25);
+    assert_eq!(body["paymentDueDay"], 10);
+    // Allowance fields should not appear
+    assert!(body["topUpAmount"].is_null() || body.get("topUpAmount").is_none());
+    assert!(body["topUpCycle"].is_null() || body.get("topUpCycle").is_none());
+    assert!(body["topUpDay"].is_null() || body.get("topUpDay").is_none());
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_top_up_fields_rejected_for_non_allowance() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+    let eur_id = common::auth::get_eur_currency_id(&client).await;
+
+    let payload = json!({
+        "type": "Checking",
+        "name": "Bad Checking",
+        "color": "#000000",
+        "initialBalance": 0,
+        "currencyId": eur_id,
+        "topUpAmount": 50000
+    });
+
+    let resp = client
+        .post(format!("{}/accounts", V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::BadRequest);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_statement_fields_rejected_for_non_credit_card() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+    let eur_id = common::auth::get_eur_currency_id(&client).await;
+
+    let payload = json!({
+        "type": "Savings",
+        "name": "Bad Savings",
+        "color": "#000000",
+        "initialBalance": 0,
+        "currencyId": eur_id,
+        "statementCloseDay": 15
+    });
+
+    let resp = client
+        .post(format!("{}/accounts", V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::BadRequest);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
 async fn test_create_checking_with_spend_limit_rejected() {
     let client = test_client().await;
     create_user_and_login(&client).await;

@@ -2,7 +2,7 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::dto::categories::{
     CategoriesWithTargets, CategoryBase, CategoryManagementListItem, CategoryManagementListResponse, CategoryOptionListResponse, CategoryOptionResponse,
     CategoryOverviewResponse, CategoryOverviewSummary, CategoryResponse, CategorySummaryItem, CategoryTargetsResponse, CategoryType, CreateCategoryRequest,
-    CreateTargetRequest, TargetItem, TargetStatus, TargetSummary, UpdateTargetRequest,
+    CreateTargetRequest, TargetItem, TargetStatus, TargetSummary, UpdateTargetRequest, compute_color,
 };
 use crate::dto::common::{Date, PaginatedResponse};
 use crate::error::app_error::AppError;
@@ -47,13 +47,19 @@ impl<'a> CategoryService<'a> {
     }
 
     pub async fn create_category(&self, request: &CreateCategoryRequest, user_id: &Uuid) -> Result<CategoryResponse, AppError> {
+        let v1_type = request.category_type.to_v1();
+        let v1_behavior = request.behavior.map(|b| b.to_v1());
+        let computed_color = compute_color(v1_type, v1_behavior);
         let v1_request = CategoryRequest {
             name: request.name.clone(),
-            color: request.color.clone(),
+            color: computed_color,
             icon: request.icon.clone(),
             parent_id: request.parent_id,
-            category_type: request.category_type.to_v1(),
+            category_type: v1_type,
             description: request.description.clone(),
+            behavior: request
+                .behavior
+                .map(|b| crate::models::category::category_behavior_to_db(b.to_v1()).to_string()),
         };
 
         let category = self.repository.create_category(&v1_request, user_id).await?;
@@ -61,13 +67,19 @@ impl<'a> CategoryService<'a> {
     }
 
     pub async fn update_category(&self, id: &Uuid, request: &CreateCategoryRequest, user_id: &Uuid) -> Result<CategoryResponse, AppError> {
+        let v1_type = request.category_type.to_v1();
+        let v1_behavior = request.behavior.map(|b| b.to_v1());
+        let computed_color = compute_color(v1_type, v1_behavior);
         let v1_request = CategoryRequest {
             name: request.name.clone(),
-            color: request.color.clone(),
+            color: computed_color,
             icon: request.icon.clone(),
             parent_id: request.parent_id,
-            category_type: request.category_type.to_v1(),
+            category_type: v1_type,
             description: request.description.clone(),
+            behavior: request
+                .behavior
+                .map(|b| crate::models::category::category_behavior_to_db(b.to_v1()).to_string()),
         };
 
         let category = self.repository.update_category(id, &v1_request, user_id).await?;
@@ -92,7 +104,7 @@ impl<'a> CategoryService<'a> {
                 id: c.id,
                 name: c.name.clone(),
                 icon: c.icon.clone(),
-                color: c.color.clone(),
+                color: compute_color(c.category_type, c.behavior),
             })
             .collect())
     }

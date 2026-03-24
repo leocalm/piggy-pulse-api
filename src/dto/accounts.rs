@@ -50,6 +50,16 @@ pub struct AccountResponseFields {
     pub initial_balance: i64,
     pub currency: CurrencyResponse,
     pub spend_limit: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_up_amount: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_up_cycle: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_up_day: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub statement_close_day: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payment_due_day: Option<i32>,
 }
 
 impl fmt::Debug for AccountResponseFields {
@@ -213,8 +223,13 @@ pub struct AccountRequestFields {
     pub color: String,
     pub initial_balance: i64,
     #[allow(dead_code)]
-    pub currency_id: Uuid,
+    pub currency_id: Option<Uuid>,
     pub spend_limit: Option<i64>,
+    pub top_up_amount: Option<i64>,
+    pub top_up_cycle: Option<String>,
+    pub top_up_day: Option<i32>,
+    pub statement_close_day: Option<i32>,
+    pub payment_due_day: Option<i32>,
 }
 
 pub type UpdateAccountRequest = CreateAccountRequest;
@@ -268,6 +283,9 @@ fn convert_symbol_position(pos: ModelSymbolPosition) -> DtoSymbolPosition {
 
 impl From<&Account> for AccountResponse {
     fn from(account: &Account) -> Self {
+        let is_allowance = matches!(account.account_type, ModelAccountType::Allowance);
+        let is_credit_card = matches!(account.account_type, ModelAccountType::CreditCard);
+
         let fields = AccountResponseFields {
             id: account.id,
             name: account.name.clone(),
@@ -287,6 +305,11 @@ impl From<&Account> for AccountResponse {
                 symbol_position: convert_symbol_position(account.currency.symbol_position),
             },
             spend_limit: account.spend_limit.map(|s| s as i64),
+            top_up_amount: if is_allowance { account.top_up_amount } else { None },
+            top_up_cycle: if is_allowance { account.top_up_cycle.clone() } else { None },
+            top_up_day: if is_allowance { account.top_up_day } else { None },
+            statement_close_day: if is_credit_card { account.statement_close_day } else { None },
+            payment_due_day: if is_credit_card { account.payment_due_day } else { None },
         };
         match account.account_type {
             ModelAccountType::Checking => Self::Checking(fields),

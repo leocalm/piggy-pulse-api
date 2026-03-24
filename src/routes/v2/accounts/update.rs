@@ -23,6 +23,22 @@ pub async fn update_account(pool: &State<PgPool>, user: CurrentUser, id: &str, p
         ));
     }
 
+    // top_up fields are only valid for Allowance accounts
+    let is_allowance = matches!(&*payload, UpdateAccountRequest::Allowance(_));
+    if !is_allowance && (fields.top_up_amount.is_some() || fields.top_up_cycle.is_some() || fields.top_up_day.is_some()) {
+        return Err(AppError::BadRequest(
+            "topUpAmount, topUpCycle and topUpDay are only allowed for Allowance account type".to_string(),
+        ));
+    }
+
+    // statement/payment fields are only valid for CreditCard accounts
+    let is_credit_card = matches!(&*payload, UpdateAccountRequest::CreditCard(_));
+    if !is_credit_card && (fields.statement_close_day.is_some() || fields.payment_due_day.is_some()) {
+        return Err(AppError::BadRequest(
+            "statementCloseDay and paymentDueDay are only allowed for CreditCard account type".to_string(),
+        ));
+    }
+
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
     let repo = PostgresRepository { pool: pool.inner().clone() };
 
@@ -34,6 +50,11 @@ pub async fn update_account(pool: &State<PgPool>, user: CurrentUser, id: &str, p
         balance: fields.initial_balance,
         spend_limit: fields.spend_limit.map(|s| s as i32),
         next_transfer_amount: None,
+        top_up_amount: if is_allowance { fields.top_up_amount } else { None },
+        top_up_cycle: if is_allowance { fields.top_up_cycle.clone() } else { None },
+        top_up_day: if is_allowance { fields.top_up_day } else { None },
+        statement_close_day: if is_credit_card { fields.statement_close_day } else { None },
+        payment_due_day: if is_credit_card { fields.payment_due_day } else { None },
     };
 
     let account = repo.update_account(&uuid, &v1_request, &user.id).await?;

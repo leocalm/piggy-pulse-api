@@ -84,6 +84,11 @@ impl From<TransactionRow> for Transaction {
                 spend_limit: row.to_account_spend_limit,
                 is_archived: false,
                 next_transfer_amount: None,
+                top_up_amount: None,
+                top_up_cycle: None,
+                top_up_day: None,
+                statement_close_day: None,
+                payment_due_day: None,
             })
         } else {
             None
@@ -115,6 +120,7 @@ impl From<TransactionRow> for Transaction {
                 is_archived: row.category_is_archived,
                 description: row.category_description,
                 is_system: row.category_is_system,
+                behavior: None,
             },
 
             from_account: Account {
@@ -135,6 +141,11 @@ impl From<TransactionRow> for Transaction {
                 spend_limit: row.from_account_spend_limit,
                 is_archived: false,
                 next_transfer_amount: None,
+                top_up_amount: None,
+                top_up_cycle: None,
+                top_up_day: None,
+                statement_close_day: None,
+                payment_due_day: None,
             },
 
             to_account,

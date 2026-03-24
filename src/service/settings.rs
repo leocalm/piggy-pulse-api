@@ -49,7 +49,15 @@ impl<'a> SettingsService<'a> {
             NumberFormat::SpaceComma => "1 234,56",
         };
         self.repository
-            .update_preferences_v2(user_id, theme_str, date_format_str, number_format_str, &request.language)
+            .update_preferences_v2(
+                user_id,
+                theme_str,
+                date_format_str,
+                number_format_str,
+                &request.language,
+                request.compact_mode,
+                &request.dashboard_layout,
+            )
             .await
     }
 

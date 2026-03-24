@@ -13,6 +13,30 @@ pub enum CategoryType {
     Transfer,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CategoryBehavior {
+    Fixed,
+    Variable,
+    Subscription,
+}
+
+pub fn category_behavior_from_db(s: &str) -> Option<CategoryBehavior> {
+    match s {
+        "fixed" => Some(CategoryBehavior::Fixed),
+        "variable" => Some(CategoryBehavior::Variable),
+        "subscription" => Some(CategoryBehavior::Subscription),
+        _ => None,
+    }
+}
+
+pub fn category_behavior_to_db(b: CategoryBehavior) -> &'static str {
+    match b {
+        CategoryBehavior::Fixed => "fixed",
+        CategoryBehavior::Variable => "variable",
+        CategoryBehavior::Subscription => "subscription",
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Category {
     pub id: Uuid,
@@ -24,6 +48,7 @@ pub struct Category {
     pub is_archived: bool,
     pub description: Option<String>,
     pub is_system: bool,
+    pub behavior: Option<CategoryBehavior>,
 }
 
 #[derive(Deserialize, Debug, Validate, JsonSchema)]
@@ -36,6 +61,8 @@ pub struct CategoryRequest {
     pub parent_id: Option<Uuid>,
     pub category_type: CategoryType,
     pub description: Option<String>,
+    #[serde(default)]
+    pub behavior: Option<String>,
 }
 
 #[derive(Serialize, Debug, Clone, JsonSchema)]

@@ -38,6 +38,16 @@ pub struct OverlayRules {
     pub account_ids: Option<Vec<Uuid>>,
 }
 
+// ===== OverlayCategoryBreakdownItem =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct OverlayCategoryBreakdownItem {
+    pub category_id: Uuid,
+    pub category_name: String,
+    pub amount: i64,
+}
+
 // ===== OverlayResponse =====
 
 #[derive(Serialize, Debug)]
@@ -54,6 +64,7 @@ pub struct OverlayResponse {
     pub transaction_count: i64,
     pub category_caps: Vec<OverlayCategoryCap>,
     pub rules: OverlayRules,
+    pub category_breakdown: Vec<OverlayCategoryBreakdownItem>,
 }
 
 pub type OverlayListResponse = PaginatedResponse<OverlayResponse>;

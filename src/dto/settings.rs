@@ -55,6 +55,13 @@ pub enum NumberFormat {
     SpaceComma,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardLayout {
+    pub widget_order: Vec<String>,
+    pub hidden_widgets: Vec<String>,
+}
+
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PreferencesResponse {
@@ -62,6 +69,8 @@ pub struct PreferencesResponse {
     pub date_format: DateFormat,
     pub number_format: NumberFormat,
     pub language: String,
+    pub compact_mode: bool,
+    pub dashboard_layout: DashboardLayout,
 }
 
 #[derive(Deserialize, Debug, Validate)]
@@ -72,6 +81,10 @@ pub struct UpdatePreferencesRequest {
     pub number_format: NumberFormat,
     #[validate(regex(path = *BCP_47_REGEX))]
     pub language: String,
+    #[serde(default)]
+    pub compact_mode: bool,
+    #[serde(default)]
+    pub dashboard_layout: DashboardLayout,
 }
 
 // ===== Sessions =====

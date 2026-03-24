@@ -77,6 +77,7 @@ pub struct OverlayWithMetrics {
     pub spent_amount: i64,
     pub transaction_count: i64,
     pub category_caps: Vec<OverlayCategoryCap>,
+    pub category_breakdown: Vec<(Uuid, String, i64)>,
 }
 
 // ===== Request DTOs =====

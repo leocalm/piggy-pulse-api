@@ -137,7 +137,7 @@ impl PostgresRepository {
             .collect();
 
         // Calculate spent amount and transaction count
-        let (spent_amount, transaction_count) = self
+        let (spent_amount, transaction_count, category_breakdown) = self
             .calculate_overlay_metrics(
                 overlay_id,
                 &overlay_row.inclusion_mode,
@@ -165,6 +165,7 @@ impl PostgresRepository {
             spent_amount,
             transaction_count,
             category_caps,
+            category_breakdown,
         })
     }
 
@@ -226,7 +227,7 @@ impl PostgresRepository {
                 })
                 .collect();
 
-            let (spent_amount, transaction_count) = self
+            let (spent_amount, transaction_count, category_breakdown) = self
                 .calculate_overlay_metrics(
                     &overlay_row.id,
                     &overlay_row.inclusion_mode,
@@ -254,6 +255,7 @@ impl PostgresRepository {
                 spent_amount,
                 transaction_count,
                 category_caps,
+                category_breakdown,
             });
         }
 
@@ -507,7 +509,7 @@ impl PostgresRepository {
         end_date: &NaiveDate,
         rules: &OverlayRules,
         user_id: &Uuid,
-    ) -> Result<(i64, i64), AppError> {
+    ) -> Result<(i64, i64, Vec<(Uuid, String, i64)>), AppError> {
         // Get manual inclusions/exclusions
         #[derive(sqlx::FromRow)]
         struct InclusionRow {
@@ -528,23 +530,26 @@ impl PostgresRepository {
 
         let manual_map: std::collections::HashMap<Uuid, bool> = inclusion_rows.iter().map(|row| (row.transaction_id, row.is_included)).collect();
 
-        // Get transactions in date range
+        // Get transactions in date range (with category name for breakdown)
         #[derive(sqlx::FromRow)]
         struct TransactionRow {
             id: Uuid,
             amount: i64,
             category_id: Uuid,
+            category_name: String,
             from_account_id: Uuid,
             vendor_id: Option<Uuid>,
         }
 
         let transactions = sqlx::query_as::<_, TransactionRow>(
             r#"
-            SELECT id, amount, category_id, from_account_id, vendor_id
-            FROM transaction
-            WHERE user_id = $1
-                AND occurred_at >= $2
-                AND occurred_at <= $3
+            SELECT t.id, t.amount, t.category_id, COALESCE(c.name, '') AS category_name,
+                   t.from_account_id, t.vendor_id
+            FROM transaction t
+            LEFT JOIN category c ON c.id = t.category_id
+            WHERE t.user_id = $1
+                AND t.occurred_at >= $2
+                AND t.occurred_at <= $3
             "#,
         )
         .bind(user_id)
@@ -555,6 +560,7 @@ impl PostgresRepository {
 
         let mut spent_amount = 0i64;
         let mut transaction_count = 0i64;
+        let mut category_amounts: std::collections::HashMap<Uuid, (String, i64)> = std::collections::HashMap::new();
 
         for tx in transactions {
             // Build a small reference struct to avoid passing many parameters
@@ -570,10 +576,18 @@ impl PostgresRepository {
             if is_included {
                 spent_amount += tx.amount;
                 transaction_count += 1;
+                let entry = category_amounts.entry(tx.category_id).or_insert((tx.category_name.clone(), 0));
+                entry.1 += tx.amount;
             }
         }
 
-        Ok((spent_amount, transaction_count))
+        let mut category_breakdown: Vec<(Uuid, String, i64)> = category_amounts
+            .into_iter()
+            .map(|(category_id, (name, amount))| (category_id, name, amount))
+            .collect();
+        category_breakdown.sort_by(|a, b| b.2.cmp(&a.2));
+
+        Ok((spent_amount, transaction_count, category_breakdown))
     }
 
     fn determine_transaction_membership(
@@ -796,6 +810,11 @@ impl PostgresRepository {
             spend_limit: account_row.spend_limit,
             is_archived: false,
             next_transfer_amount: None,
+            top_up_amount: None,
+            top_up_cycle: None,
+            top_up_day: None,
+            statement_close_day: None,
+            payment_due_day: None,
         })
     }
 

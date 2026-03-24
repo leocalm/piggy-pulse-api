@@ -32,7 +32,6 @@ pub async fn register(
             &payload.email,
             &payload.password,
             &payload.name,
-            &payload.currency_id,
             user_agent.0.as_deref(),
             client_ip.0.as_deref(),
         )

@@ -24,6 +24,22 @@ pub async fn create_account(pool: &State<PgPool>, user: CurrentUser, payload: Js
         ));
     }
 
+    // top_up fields are only valid for Allowance accounts
+    let is_allowance = matches!(&*payload, CreateAccountRequest::Allowance(_));
+    if !is_allowance && (fields.top_up_amount.is_some() || fields.top_up_cycle.is_some() || fields.top_up_day.is_some()) {
+        return Err(AppError::BadRequest(
+            "topUpAmount, topUpCycle and topUpDay are only allowed for Allowance account type".to_string(),
+        ));
+    }
+
+    // statement/payment fields are only valid for CreditCard accounts
+    let is_credit_card = matches!(&*payload, CreateAccountRequest::CreditCard(_));
+    if !is_credit_card && (fields.statement_close_day.is_some() || fields.payment_due_day.is_some()) {
+        return Err(AppError::BadRequest(
+            "statementCloseDay and paymentDueDay are only allowed for CreditCard account type".to_string(),
+        ));
+    }
+
     let v1_request = AccountRequest {
         name: fields.name.clone(),
         color: fields.color.clone(),
@@ -32,6 +48,11 @@ pub async fn create_account(pool: &State<PgPool>, user: CurrentUser, payload: Js
         balance: fields.initial_balance,
         spend_limit: fields.spend_limit.map(|s| s as i32),
         next_transfer_amount: None,
+        top_up_amount: if is_allowance { fields.top_up_amount } else { None },
+        top_up_cycle: if is_allowance { fields.top_up_cycle.clone() } else { None },
+        top_up_day: if is_allowance { fields.top_up_day } else { None },
+        statement_close_day: if is_credit_card { fields.statement_close_day } else { None },
+        payment_due_day: if is_credit_card { fields.payment_due_day } else { None },
     };
 
     let repo = PostgresRepository { pool: pool.inner().clone() };

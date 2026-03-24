@@ -143,17 +143,24 @@ async fn test_get_preferences_has_all_fields() {
     assert_eq!(resp.status(), Status::Ok);
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
 
-    // Assert all four required fields exist and are strings
+    // Assert all required fields exist and are the correct types
     assert!(body["theme"].is_string(), "expected theme string");
     assert!(body["dateFormat"].is_string(), "expected dateFormat string");
     assert!(body["numberFormat"].is_string(), "expected numberFormat string");
     assert!(body["language"].is_string(), "expected language string");
+    assert!(body["compactMode"].is_boolean(), "expected compactMode boolean");
+    assert!(body["dashboardLayout"].is_object(), "expected dashboardLayout object");
 
     // Defaults should be "light", "DD/MM/YYYY", "1,234.56", "en"
     assert_eq!(body["theme"], "light");
     assert_eq!(body["dateFormat"], "DD/MM/YYYY");
     assert_eq!(body["numberFormat"], "1,234.56");
     assert_eq!(body["language"], "en");
+
+    // Default compactMode is false, dashboardLayout has empty arrays
+    assert_eq!(body["compactMode"], false);
+    assert_eq!(body["dashboardLayout"]["widgetOrder"].as_array().unwrap().len(), 0);
+    assert_eq!(body["dashboardLayout"]["hiddenWidgets"].as_array().unwrap().len(), 0);
 }
 
 #[rocket::async_test]
@@ -180,7 +187,12 @@ async fn test_update_preferences_persists_via_get() {
         "theme": "dark",
         "dateFormat": "YYYY-MM-DD",
         "numberFormat": "1.234,56",
-        "language": "pt"
+        "language": "pt",
+        "compactMode": true,
+        "dashboardLayout": {
+            "widgetOrder": ["overview", "accounts"],
+            "hiddenWidgets": ["calendar"]
+        }
     });
 
     let resp = client
@@ -196,6 +208,9 @@ async fn test_update_preferences_persists_via_get() {
     assert_eq!(body["dateFormat"], "YYYY-MM-DD");
     assert_eq!(body["numberFormat"], "1.234,56");
     assert_eq!(body["language"], "pt");
+    assert_eq!(body["compactMode"], true);
+    assert_eq!(body["dashboardLayout"]["widgetOrder"], json!(["overview", "accounts"]));
+    assert_eq!(body["dashboardLayout"]["hiddenWidgets"], json!(["calendar"]));
 
     // Verify persistence via GET
     let resp = client.get(format!("{}/settings/preferences", V2_BASE)).dispatch().await;

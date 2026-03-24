@@ -39,6 +39,7 @@ pub enum OnboardingStatus {
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum OnboardingStep {
+    Currency,
     Period,
     Accounts,
     Categories,

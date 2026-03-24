@@ -18,6 +18,7 @@ struct CategoryWithTxCountRow {
     is_archived: bool,
     description: Option<String>,
     is_system: bool,
+    behavior: Option<String>,
     transaction_count: i64,
 }
 
@@ -55,6 +56,7 @@ impl PostgresRepository {
                     c.parent_id,
                     c.category_type::text as category_type,
                     c.is_archived, c.description, c.is_system,
+                    c.behavior::text as behavior,
                     COALESCE(tc.transaction_count, 0) AS transaction_count
                 FROM category c
                 LEFT JOIN transaction_counts tc ON c.id = tc.category_id
@@ -86,6 +88,7 @@ impl PostgresRepository {
                     c.parent_id,
                     c.category_type::text as category_type,
                     c.is_archived, c.description, c.is_system,
+                    c.behavior::text as behavior,
                     COALESCE(tc.transaction_count, 0) AS transaction_count
                 FROM category c
                 LEFT JOIN transaction_counts tc ON c.id = tc.category_id
@@ -114,6 +117,7 @@ impl PostgresRepository {
                     is_archived: row.is_archived,
                     description: row.description,
                     is_system: row.is_system,
+                    behavior: row.behavior.as_deref().and_then(crate::models::category::category_behavior_from_db),
                 };
                 (cat, row.transaction_count)
             })
@@ -141,6 +145,7 @@ impl PostgresRepository {
             is_archived: bool,
             description: Option<String>,
             is_system: bool,
+            behavior: Option<String>,
             actual: i64,
             budgeted: Option<i64>,
         }
@@ -164,6 +169,7 @@ impl PostgresRepository {
                 c.parent_id,
                 c.category_type::text as category_type,
                 c.is_archived, c.description, c.is_system,
+                c.behavior::text as behavior,
                 COALESCE(ps.actual, 0) AS actual,
                 CASE WHEN bc.budgeted_value IS NOT NULL AND bc.is_excluded = FALSE
                      THEN bc.budgeted_value::bigint
@@ -197,6 +203,7 @@ impl PostgresRepository {
                     is_archived: row.is_archived,
                     description: row.description,
                     is_system: row.is_system,
+                    behavior: row.behavior.as_deref().and_then(crate::models::category::category_behavior_from_db),
                 },
                 actual: row.actual,
                 budgeted: row.budgeted,

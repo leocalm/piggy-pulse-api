@@ -55,6 +55,11 @@ impl From<&AccountRequest> for Account {
             spend_limit: request.spend_limit,
             is_archived: false,
             next_transfer_amount: request.next_transfer_amount,
+            top_up_amount: request.top_up_amount,
+            top_up_cycle: request.top_up_cycle.clone(),
+            top_up_day: request.top_up_day,
+            statement_close_day: request.statement_close_day,
+            payment_due_day: request.payment_due_day,
         }
     }
 }
@@ -92,6 +97,11 @@ pub fn sample_account() -> Account {
         spend_limit: None,
         is_archived: false,
         next_transfer_amount: None,
+        top_up_amount: None,
+        top_up_cycle: None,
+        top_up_day: None,
+        statement_close_day: None,
+        payment_due_day: None,
     }
 }
 

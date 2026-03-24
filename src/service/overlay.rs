@@ -1,8 +1,8 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::dto::common::{Date, PaginatedResponse};
 use crate::dto::overlay::{
-    CreateOverlayRequest, InclusionMode as DtoInclusionMode, OverlayCategoryCap as DtoOverlayCategoryCap, OverlayResponse, OverlayRules as DtoOverlayRules,
-    OverlayTransactionListResponse, OverlayTransactionMembership, OverlayTransactionResponse,
+    CreateOverlayRequest, InclusionMode as DtoInclusionMode, OverlayCategoryBreakdownItem, OverlayCategoryCap as DtoOverlayCategoryCap, OverlayResponse,
+    OverlayRules as DtoOverlayRules, OverlayTransactionListResponse, OverlayTransactionMembership, OverlayTransactionResponse,
 };
 use crate::dto::transactions::{AccountRef, CategoryRef, TransactionKind, TransactionResponse, VendorRef};
 use crate::error::app_error::AppError;
@@ -212,6 +212,15 @@ fn to_dto(overlay: &OverlayWithMetrics) -> OverlayResponse {
                 Some(overlay.overlay.rules.account_ids.clone())
             },
         },
+        category_breakdown: overlay
+            .category_breakdown
+            .iter()
+            .map(|(category_id, category_name, amount)| OverlayCategoryBreakdownItem {
+                category_id: *category_id,
+                category_name: category_name.clone(),
+                amount: *amount,
+            })
+            .collect(),
     }
 }
 

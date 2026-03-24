@@ -1,5 +1,5 @@
 use crate::database::postgres_repository::PostgresRepository;
-use crate::dto::settings::{DateFormat, NumberFormat, Theme};
+use crate::dto::settings::{DashboardLayout, DateFormat, NumberFormat, Theme};
 use crate::error::app_error::AppError;
 use crate::models::settings::{
     PeriodModelRequest, PeriodModelResponse, PeriodSchedule, ProfileData, ProfileRequest, ScheduleConfigResponse, Settings, SettingsRequest, UserPreferences,
@@ -20,6 +20,8 @@ struct PreferencesV2Row {
     date_format: String,
     number_format: String,
     language: String,
+    compact_mode: bool,
+    dashboard_layout: serde_json::Value,
 }
 
 #[derive(sqlx::FromRow)]
@@ -405,7 +407,7 @@ impl PostgresRepository {
     pub async fn get_preferences_v2(&self, user_id: &Uuid) -> Result<crate::dto::settings::PreferencesResponse, AppError> {
         let row = sqlx::query_as::<_, PreferencesV2Row>(
             r#"
-            SELECT theme, date_format, number_format, language
+            SELECT theme, date_format, number_format, language, compact_mode, dashboard_layout
             FROM settings
             WHERE user_id = $1
             "#,
@@ -414,14 +416,19 @@ impl PostgresRepository {
         .fetch_one(&self.pool)
         .await?;
 
+        let dashboard_layout: DashboardLayout = serde_json::from_value(row.dashboard_layout).unwrap_or_default();
+
         Ok(crate::dto::settings::PreferencesResponse {
             theme: parse_theme(&row.theme),
             date_format: parse_date_format(&row.date_format),
             number_format: parse_number_format(&row.number_format),
             language: row.language,
+            compact_mode: row.compact_mode,
+            dashboard_layout,
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn update_preferences_v2(
         &self,
         user_id: &Uuid,
@@ -429,18 +436,25 @@ impl PostgresRepository {
         date_format: &str,
         number_format: &str,
         language: &str,
+        compact_mode: bool,
+        dashboard_layout: &DashboardLayout,
     ) -> Result<crate::dto::settings::PreferencesResponse, AppError> {
+        let layout_json = serde_json::to_value(dashboard_layout).unwrap_or_default();
+
         sqlx::query(
             r#"
             UPDATE settings
-            SET theme = $1, date_format = $2, number_format = $3, language = $4, updated_at = now()
-            WHERE user_id = $5
+            SET theme = $1, date_format = $2, number_format = $3, language = $4,
+                compact_mode = $5, dashboard_layout = $6, updated_at = now()
+            WHERE user_id = $7
             "#,
         )
         .bind(theme)
         .bind(date_format)
         .bind(number_format)
         .bind(language)
+        .bind(compact_mode)
+        .bind(layout_json)
         .bind(user_id)
         .execute(&self.pool)
         .await?;
