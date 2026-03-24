@@ -24,6 +24,7 @@ struct CategoryRow {
     is_archived: bool,
     description: Option<String>,
     is_system: bool,
+    behavior: Option<String>,
 }
 
 impl From<CategoryRow> for Category {
@@ -38,6 +39,7 @@ impl From<CategoryRow> for Category {
             is_archived: row.is_archived,
             description: row.description,
             is_system: row.is_system,
+            behavior: row.behavior.as_deref().and_then(crate::models::category::category_behavior_from_db),
         }
     }
 }
@@ -53,6 +55,7 @@ struct CategoryWithStatsRow {
     is_archived: bool,
     description: Option<String>,
     is_system: bool,
+    behavior: Option<String>,
     used_in_period: i64,
     average_period_usage: i64,
     transaction_count: i64,
@@ -69,6 +72,7 @@ struct BudgetedCategoryDiagnosticsDbRow {
     is_archived: bool,
     description: Option<String>,
     is_system: bool,
+    behavior: Option<String>,
     budgeted_value: i32,
     actual_value: i64,
 }
@@ -84,6 +88,7 @@ struct UnbudgetedCategoryDiagnosticsDbRow {
     is_archived: bool,
     description: Option<String>,
     is_system: bool,
+    behavior: Option<String>,
     actual_value: i64,
 }
 
@@ -105,6 +110,7 @@ struct CategoryManagementDbRow {
     is_archived: bool,
     description: Option<String>,
     is_system: bool,
+    behavior: Option<String>,
     global_transaction_count: i64,
     active_children_count: i64,
 }
@@ -122,6 +128,7 @@ impl From<CategoryManagementDbRow> for CategoryManagementRow {
                 is_archived: row.is_archived,
                 description: row.description,
                 is_system: row.is_system,
+                behavior: row.behavior.as_deref().and_then(crate::models::category::category_behavior_from_db),
             },
             global_transaction_count: row.global_transaction_count,
             active_children_count: row.active_children_count,
@@ -142,6 +149,7 @@ impl From<CategoryWithStatsRow> for CategoryWithStats {
                 is_archived: row.is_archived,
                 description: row.description,
                 is_system: row.is_system,
+                behavior: row.behavior.as_deref().and_then(crate::models::category::category_behavior_from_db),
             },
             stats: CategoryStats {
                 used_in_period: row.used_in_period,
@@ -165,6 +173,7 @@ impl From<BudgetedCategoryDiagnosticsDbRow> for CategoryBudgetedDiagnosticsRow {
                 is_archived: row.is_archived,
                 description: row.description,
                 is_system: row.is_system,
+                behavior: row.behavior.as_deref().and_then(crate::models::category::category_behavior_from_db),
             },
             budgeted_value: row.budgeted_value,
             actual_value: row.actual_value,
@@ -190,7 +199,8 @@ impl PostgresRepository {
                     category_type::text as category_type,
                     is_archived,
                     description,
-                    is_system
+                    is_system,
+                    behavior::text as behavior
                 FROM category
                 WHERE id = $1 AND user_id = $2
                 "#,
@@ -236,8 +246,8 @@ impl PostgresRepository {
 
         let row = sqlx::query_as::<_, CategoryRow>(
             r#"
-            INSERT INTO category (user_id, name, color, icon, parent_id, category_type, is_archived, description)
-            VALUES ($1, $2, $3, $4, $5, $6::text::category_type, FALSE, $7)
+            INSERT INTO category (user_id, name, color, icon, parent_id, category_type, is_archived, description, behavior)
+            VALUES ($1, $2, $3, $4, $5, $6::text::category_type, FALSE, $7, $8::text::category_behavior)
             RETURNING
                 id,
                 name,
@@ -247,7 +257,8 @@ impl PostgresRepository {
                 category_type::text as category_type,
                 is_archived,
                 description,
-                is_system
+                is_system,
+                behavior::text as behavior
             "#,
         )
         .bind(user_id)
@@ -257,6 +268,7 @@ impl PostgresRepository {
         .bind(request.parent_id)
         .bind(request.category_type_to_db())
         .bind(&request.description)
+        .bind(request.behavior.as_deref())
         .fetch_one(&self.pool)
         .await;
 
@@ -283,7 +295,8 @@ impl PostgresRepository {
                 category_type::text as category_type,
                 is_archived,
                 description,
-                is_system
+                is_system,
+                behavior::text as behavior
             FROM category
             WHERE id = $1 AND user_id = $2
             "#,
@@ -355,6 +368,7 @@ SELECT
     c.is_archived,
     c.description,
     c.is_system,
+    c.behavior::text as behavior,
     COALESCE(spt.used_this_period, 0) AS used_in_period,
     COALESCE(at.avg_period_amount, 0) AS average_period_usage,
     COALESCE(spc.transaction_count, 0) AS transaction_count
@@ -434,6 +448,7 @@ SELECT
     c.is_archived,
     c.description,
     c.is_system,
+    c.behavior::text as behavior,
     COALESCE(spt.used_this_period, 0) AS used_in_period,
     COALESCE(at.avg_period_amount, 0) AS average_period_usage,
     COALESCE(spc.transaction_count, 0) AS transaction_count
@@ -485,6 +500,7 @@ SELECT
     c.is_archived,
     c.description,
     c.is_system,
+    c.behavior::text as behavior,
     bc.budgeted_value,
     COALESCE(sps.actual_value, 0) AS actual_value
 FROM budget_category bc
@@ -595,6 +611,7 @@ SELECT
     c.is_archived,
     c.description,
     c.is_system,
+    c.behavior::text as behavior,
     COALESCE(SUM(t.amount), 0)::bigint AS actual_value
 FROM category c
          LEFT JOIN budget_category bc
@@ -633,6 +650,7 @@ ORDER BY actual_value DESC, c.name
                     is_archived: row.is_archived,
                     description: row.description,
                     is_system: row.is_system,
+                    behavior: row.behavior.as_deref().and_then(crate::models::category::category_behavior_from_db),
                 },
                 actual_value: row.actual_value,
                 share_of_total_basis_points: share_of_total_basis_points(row.actual_value, total_unbudgeted_actual),
@@ -729,7 +747,8 @@ ORDER BY actual_value DESC, c.name
                     category_type::text as category_type,
                     is_archived,
                     description,
-                    is_system
+                    is_system,
+                    behavior::text as behavior
                 FROM category
                 WHERE id = $1 AND user_id = $2
                 "#,
@@ -782,7 +801,8 @@ ORDER BY actual_value DESC, c.name
         let row = sqlx::query_as::<_, CategoryRow>(
             r#"
             UPDATE category
-            SET name = $1, color = $2, icon = $3, parent_id = $4, category_type = $5::text::category_type, description = $6
+            SET name = $1, color = $2, icon = $3, parent_id = $4, category_type = $5::text::category_type, description = $6,
+                behavior = $9::text::category_behavior
             WHERE id = $7 AND user_id = $8
             RETURNING
                 id,
@@ -793,7 +813,8 @@ ORDER BY actual_value DESC, c.name
                 category_type::text as category_type,
                 is_archived,
                 description,
-                is_system
+                is_system,
+                behavior::text as behavior
             "#,
         )
         .bind(&request.name)
@@ -804,6 +825,7 @@ ORDER BY actual_value DESC, c.name
         .bind(&request.description)
         .bind(id)
         .bind(user_id)
+        .bind(request.behavior.as_deref())
         .fetch_one(&self.pool)
         .await;
 
@@ -831,7 +853,8 @@ ORDER BY actual_value DESC, c.name
                     c.category_type::text as category_type,
                     c.is_archived,
                     c.description,
-                    c.is_system
+                    c.is_system,
+                    c.behavior::text as behavior
                 FROM category c
                 LEFT JOIN budget_category bc ON c.id = bc.category_id
                 WHERE bc.id IS NULL
@@ -860,7 +883,8 @@ ORDER BY actual_value DESC, c.name
                     c.category_type::text as category_type,
                     c.is_archived,
                     c.description,
-                    c.is_system
+                    c.is_system,
+                    c.behavior::text as behavior
                 FROM category c
                 LEFT JOIN budget_category bc ON c.id = bc.category_id
                 WHERE bc.id IS NULL
@@ -892,7 +916,8 @@ ORDER BY actual_value DESC, c.name
                 c.category_type::text as category_type,
                 c.is_archived,
                 c.description,
-                c.is_system
+                c.is_system,
+                c.behavior::text as behavior
             FROM category c
             WHERE c.user_id = $1
               AND c.is_system = FALSE
@@ -938,6 +963,7 @@ ORDER BY actual_value DESC, c.name
                 c.is_archived,
                 c.description,
                 c.is_system,
+                c.behavior::text as behavior,
                 COALESCE(tc.global_transaction_count, 0) AS global_transaction_count,
                 COALESCE(cc.active_children_count, 0) AS active_children_count
             FROM category c
@@ -1004,7 +1030,8 @@ ORDER BY actual_value DESC, c.name
                 category_type::text as category_type,
                 is_archived,
                 description,
-                is_system
+                is_system,
+                behavior::text as behavior
             "#,
         )
         .bind(id)
@@ -1031,7 +1058,8 @@ ORDER BY actual_value DESC, c.name
                 category_type::text as category_type,
                 is_archived,
                 description,
-                is_system
+                is_system,
+                behavior::text as behavior
             "#,
         )
         .bind(user_id)
@@ -1057,7 +1085,8 @@ ORDER BY actual_value DESC, c.name
                 category_type::text as category_type,
                 is_archived,
                 description,
-                is_system
+                is_system,
+                behavior::text as behavior
             FROM category
             WHERE user_id = $1 AND is_system = TRUE AND category_type = 'Transfer'
             "#,
@@ -1110,7 +1139,8 @@ ORDER BY actual_value DESC, c.name
                 category_type::text as category_type,
                 is_archived,
                 description,
-                is_system
+                is_system,
+                behavior::text as behavior
             "#,
         )
         .bind(id)
@@ -1171,6 +1201,7 @@ mod tests {
             parent_id: None,
             category_type: CategoryType::Incoming,
             description: None,
+            behavior: None,
         };
         assert_eq!(request.category_type_to_db(), "Incoming");
 
@@ -1181,6 +1212,7 @@ mod tests {
             parent_id: None,
             category_type: CategoryType::Outgoing,
             description: None,
+            behavior: None,
         };
         assert_eq!(request_outgoing.category_type_to_db(), "Outgoing");
 
@@ -1191,6 +1223,7 @@ mod tests {
             parent_id: None,
             category_type: CategoryType::Transfer,
             description: None,
+            behavior: None,
         };
         assert_eq!(request_transfer.category_type_to_db(), "Transfer");
     }
@@ -1207,6 +1240,7 @@ mod tests {
             is_archived: false,
             description: None,
             is_system: false,
+            behavior: None,
             budgeted_value: 0,
             actual_value: 4200,
         };
@@ -1230,6 +1264,7 @@ mod tests {
             is_archived: false,
             description: None,
             is_system: false,
+            behavior: None,
             budgeted_value: 1000,
             actual_value: -250,
         };

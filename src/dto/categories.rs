@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::{Validate, ValidationError};
 
-use crate::dto::common::{Date, HEX_COLOR_REGEX, PaginatedResponse};
+use crate::dto::common::{Date, PaginatedResponse};
 
 static EMOJI_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     // Matches a single emoji sequence: an Emoji_Presentation char optionally followed by
@@ -36,6 +36,14 @@ pub enum CategoryType {
     Transfer,
 }
 
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum CategoryBehavior {
+    Fixed,
+    Variable,
+    Subscription,
+}
+
 #[derive(Serialize, Debug, Copy, Clone, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum CategoryStatus {
@@ -50,6 +58,27 @@ pub enum TargetStatus {
     Excluded,
 }
 
+// ===== Color computation =====
+
+pub fn compute_color(category_type: crate::models::category::CategoryType, behavior: Option<crate::models::category::CategoryBehavior>) -> String {
+    use crate::models::category::CategoryBehavior as V1B;
+    use crate::models::category::CategoryType as V1T;
+
+    match category_type {
+        V1T::Transfer => "#868E96".to_string(),
+        V1T::Incoming => match behavior {
+            None | Some(V1B::Variable) => "#9AA0CC".to_string(),
+            Some(V1B::Fixed) => "#7CA8C4".to_string(),
+            Some(V1B::Subscription) => "#8B7EC8".to_string(),
+        },
+        V1T::Outgoing => match behavior {
+            None | Some(V1B::Variable) => "#D4A0B6".to_string(),
+            Some(V1B::Fixed) => "#C48BA0".to_string(),
+            Some(V1B::Subscription) => "#B088A0".to_string(),
+        },
+    }
+}
+
 // ===== CategoryBase =====
 
 #[derive(Serialize, Debug)]
@@ -61,6 +90,7 @@ pub struct CategoryBase {
     pub category_type: CategoryType,
     pub icon: String,
     pub color: String,
+    pub behavior: Option<CategoryBehavior>,
     pub parent_id: Option<Uuid>,
     pub status: CategoryStatus,
 }
@@ -144,8 +174,7 @@ pub struct CreateCategoryRequest {
     pub category_type: CategoryType,
     #[validate(custom(function = "validate_emoji"))]
     pub icon: String,
-    #[validate(regex(path = *HEX_COLOR_REGEX))]
-    pub color: String,
+    pub behavior: Option<CategoryBehavior>,
     pub description: Option<String>,
     pub parent_id: Option<Uuid>,
 }
@@ -154,6 +183,7 @@ pub type UpdateCategoryRequest = CreateCategoryRequest;
 
 // ===== Type conversion helpers =====
 
+use crate::models::category::CategoryBehavior as V1CategoryBehavior;
 use crate::models::category::CategoryType as V1CategoryType;
 
 impl CategoryType {
@@ -174,6 +204,24 @@ impl CategoryType {
     }
 }
 
+impl CategoryBehavior {
+    pub fn to_v1(self) -> V1CategoryBehavior {
+        match self {
+            CategoryBehavior::Fixed => V1CategoryBehavior::Fixed,
+            CategoryBehavior::Variable => V1CategoryBehavior::Variable,
+            CategoryBehavior::Subscription => V1CategoryBehavior::Subscription,
+        }
+    }
+
+    pub fn from_v1(b: V1CategoryBehavior) -> Self {
+        match b {
+            V1CategoryBehavior::Fixed => CategoryBehavior::Fixed,
+            V1CategoryBehavior::Variable => CategoryBehavior::Variable,
+            V1CategoryBehavior::Subscription => CategoryBehavior::Subscription,
+        }
+    }
+}
+
 impl CategoryStatus {
     pub fn from_archived(is_archived: bool) -> Self {
         if is_archived { CategoryStatus::Inactive } else { CategoryStatus::Active }
@@ -182,12 +230,14 @@ impl CategoryStatus {
 
 impl CategoryBase {
     pub fn from_model(c: &crate::models::category::Category) -> Self {
+        let color = compute_color(c.category_type, c.behavior);
         CategoryBase {
             id: c.id,
             name: c.name.clone(),
             category_type: CategoryType::from_v1(c.category_type),
             icon: c.icon.clone(),
-            color: c.color.clone(),
+            color,
+            behavior: c.behavior.map(CategoryBehavior::from_v1),
             parent_id: c.parent_id,
             status: CategoryStatus::from_archived(c.is_archived),
         }

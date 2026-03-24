@@ -27,6 +27,11 @@ struct AccountRow {
     currency_code: String,
     currency_decimal_places: i32,
     currency_symbol_position: SymbolPosition,
+    top_up_amount: Option<i64>,
+    top_up_cycle: Option<String>,
+    top_up_day: Option<i32>,
+    statement_close_day: Option<i32>,
+    payment_due_day: Option<i32>,
 }
 
 impl From<AccountRow> for Account {
@@ -49,6 +54,11 @@ impl From<AccountRow> for Account {
             spend_limit: row.spend_limit,
             is_archived: row.is_archived,
             next_transfer_amount: row.next_transfer_amount,
+            top_up_amount: row.top_up_amount,
+            top_up_cycle: row.top_up_cycle,
+            top_up_day: row.top_up_day,
+            statement_close_day: row.statement_close_day,
+            payment_due_day: row.payment_due_day,
         }
     }
 }
@@ -73,6 +83,11 @@ struct AccountMetricsRow {
     current_balance: i64,
     balance_change_this_period: i64,
     transaction_count: i64,
+    top_up_amount: Option<i64>,
+    top_up_cycle: Option<String>,
+    top_up_day: Option<i32>,
+    statement_close_day: Option<i32>,
+    payment_due_day: Option<i32>,
 }
 
 impl From<AccountMetricsRow> for AccountWithMetrics {
@@ -96,6 +111,11 @@ impl From<AccountMetricsRow> for AccountWithMetrics {
                 spend_limit: row.spend_limit,
                 is_archived: row.is_archived,
                 next_transfer_amount: row.next_transfer_amount,
+                top_up_amount: row.top_up_amount,
+                top_up_cycle: row.top_up_cycle,
+                top_up_day: row.top_up_day,
+                statement_close_day: row.statement_close_day,
+                payment_due_day: row.payment_due_day,
             },
             current_balance: row.current_balance,
             balance_change_this_period: row.balance_change_this_period,
@@ -105,6 +125,7 @@ impl From<AccountMetricsRow> for AccountWithMetrics {
 }
 
 #[derive(Debug, sqlx::FromRow)]
+#[allow(dead_code)]
 struct AccountManagementRow {
     id: Uuid,
     name: String,
@@ -124,6 +145,11 @@ struct AccountManagementRow {
     transaction_count: i64,
     can_delete: bool,
     can_adjust_balance: bool,
+    top_up_amount: Option<i64>,
+    top_up_cycle: Option<String>,
+    top_up_day: Option<i32>,
+    statement_close_day: Option<i32>,
+    payment_due_day: Option<i32>,
 }
 
 impl PostgresRepository {
@@ -178,12 +204,18 @@ impl PostgresRepository {
             spend_limit: Option<i32>,
             is_archived: bool,
             next_transfer_amount: Option<i64>,
+            top_up_amount: Option<i64>,
+            top_up_cycle: Option<String>,
+            top_up_day: Option<i32>,
+            statement_close_day: Option<i32>,
+            payment_due_day: Option<i32>,
         }
 
         let row = sqlx::query_as::<_, CreateAccountRow>(
             r#"
-            INSERT INTO account (user_id, name, color, icon, account_type, currency_id, balance, spend_limit, next_transfer_amount)
-            VALUES ($1, $2, $3, $4, $5::text::account_type, $6, $7, $8, $9)
+            INSERT INTO account (user_id, name, color, icon, account_type, currency_id, balance, spend_limit, next_transfer_amount,
+                                 top_up_amount, top_up_cycle, top_up_day, statement_close_day, payment_due_day)
+            VALUES ($1, $2, $3, $4, $5::text::account_type, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             RETURNING
                 id,
                 name,
@@ -193,7 +225,12 @@ impl PostgresRepository {
                 balance,
                 spend_limit,
                 is_archived,
-                next_transfer_amount
+                next_transfer_amount,
+                top_up_amount,
+                top_up_cycle,
+                top_up_day,
+                statement_close_day,
+                payment_due_day
             "#,
         )
         .bind(user_id)
@@ -205,6 +242,11 @@ impl PostgresRepository {
         .bind(request.balance)
         .bind(request.spend_limit)
         .bind(request.next_transfer_amount)
+        .bind(request.top_up_amount)
+        .bind(request.top_up_cycle.as_deref())
+        .bind(request.top_up_day)
+        .bind(request.statement_close_day)
+        .bind(request.payment_due_day)
         .fetch_one(&self.pool)
         .await;
 
@@ -227,6 +269,11 @@ impl PostgresRepository {
             spend_limit: row.spend_limit,
             is_archived: row.is_archived,
             next_transfer_amount: row.next_transfer_amount,
+            top_up_amount: row.top_up_amount,
+            top_up_cycle: row.top_up_cycle,
+            top_up_day: row.top_up_day,
+            statement_close_day: row.statement_close_day,
+            payment_due_day: row.payment_due_day,
         })
     }
 
@@ -248,7 +295,12 @@ impl PostgresRepository {
                 c.symbol as currency_symbol,
                 c.currency as currency_code,
                 c.decimal_places as currency_decimal_places,
-                c.symbol_position as currency_symbol_position
+                c.symbol_position as currency_symbol_position,
+                a.top_up_amount,
+                a.top_up_cycle,
+                a.top_up_day::int as top_up_day,
+                a.statement_close_day::int as statement_close_day,
+                a.payment_due_day::int as payment_due_day
             FROM account a
             JOIN currency c ON c.id = a.currency_id
             WHERE a.id = $1 AND a.user_id = $2
@@ -273,6 +325,10 @@ impl PostgresRepository {
                 c.id as currency_id, c.name as currency_name, c.symbol as currency_symbol,
                 c.currency as currency_code, c.decimal_places as currency_decimal_places,
                 c.symbol_position as currency_symbol_position,
+                a.top_up_amount, a.top_up_cycle,
+                a.top_up_day::int as top_up_day,
+                a.statement_close_day::int as statement_close_day,
+                a.payment_due_day::int as payment_due_day,
                 (a.balance + COALESCE(SUM(
                     CASE
                         WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
@@ -291,6 +347,7 @@ impl PostgresRepository {
             WHERE a.id = $1 AND a.user_id = $2
             GROUP BY a.id, a.name, a.color, a.icon, a.account_type, a.balance,
                      a.spend_limit, a.is_archived, a.next_transfer_amount,
+                     a.top_up_amount, a.top_up_cycle, a.top_up_day, a.statement_close_day, a.payment_due_day,
                      c.id, c.name, c.symbol, c.currency, c.decimal_places, c.symbol_position
             "#,
         )
@@ -321,6 +378,11 @@ impl PostgresRepository {
                     a.spend_limit,
                     a.is_archived,
                     a.next_transfer_amount,
+                    a.top_up_amount,
+                    a.top_up_cycle,
+                    a.top_up_day::int as top_up_day,
+                    a.statement_close_day::int as statement_close_day,
+                    a.payment_due_day::int as payment_due_day,
                     c.id as currency_id,
                     c.name as currency_name,
                     c.symbol as currency_symbol,
@@ -372,6 +434,11 @@ impl PostgresRepository {
                     a.spend_limit,
                     a.is_archived,
                     a.next_transfer_amount,
+                    a.top_up_amount,
+                    a.top_up_cycle,
+                    a.top_up_day,
+                    a.statement_close_day,
+                    a.payment_due_day,
                     c.id,
                     c.name,
                     c.symbol,
@@ -406,6 +473,11 @@ impl PostgresRepository {
                     a.spend_limit,
                     a.is_archived,
                     a.next_transfer_amount,
+                    a.top_up_amount,
+                    a.top_up_cycle,
+                    a.top_up_day::int as top_up_day,
+                    a.statement_close_day::int as statement_close_day,
+                    a.payment_due_day::int as payment_due_day,
                     c.id as currency_id,
                     c.name as currency_name,
                     c.symbol as currency_symbol,
@@ -455,6 +527,11 @@ impl PostgresRepository {
                     a.spend_limit,
                     a.is_archived,
                     a.next_transfer_amount,
+                    a.top_up_amount,
+                    a.top_up_cycle,
+                    a.top_up_day,
+                    a.statement_close_day,
+                    a.payment_due_day,
                     c.id,
                     c.name,
                     c.symbol,
@@ -488,6 +565,11 @@ impl PostgresRepository {
                 a.spend_limit,
                 a.is_archived,
                 a.next_transfer_amount,
+                a.top_up_amount,
+                a.top_up_cycle,
+                a.top_up_day::int as top_up_day,
+                a.statement_close_day::int as statement_close_day,
+                a.payment_due_day::int as payment_due_day,
                 c.id as currency_id,
                 c.name as currency_name,
                 c.symbol as currency_symbol,
@@ -670,6 +752,11 @@ impl PostgresRepository {
                 spend_limit,
                 is_archived,
                 next_transfer_amount,
+                top_up_amount,
+                top_up_cycle,
+                top_up_day::int as top_up_day,
+                statement_close_day::int as statement_close_day,
+                payment_due_day::int as payment_due_day,
                 (SELECT cu.id FROM currency cu WHERE cu.id = currency_id) as currency_id,
                 (SELECT cu.name FROM currency cu WHERE cu.id = currency_id) as currency_name,
                 (SELECT cu.symbol FROM currency cu WHERE cu.id = currency_id) as currency_symbol,
@@ -892,13 +979,19 @@ ORDER BY a.id, d.day
             spend_limit: Option<i32>,
             is_archived: bool,
             next_transfer_amount: Option<i64>,
+            top_up_amount: Option<i64>,
+            top_up_cycle: Option<String>,
+            top_up_day: Option<i32>,
+            statement_close_day: Option<i32>,
+            payment_due_day: Option<i32>,
         }
 
         let row = sqlx::query_as::<_, UpdateAccountRow>(
             r#"
             UPDATE account
-            SET name = $1, color = $2, icon = $3, account_type = $4::text::account_type, balance = $5, spend_limit = $6, next_transfer_amount = $7
-            WHERE id = $8 AND user_id = $9
+            SET name = $1, color = $2, icon = $3, account_type = $4::text::account_type, balance = $5, spend_limit = $6, next_transfer_amount = $7,
+                top_up_amount = $8, top_up_cycle = $9, top_up_day = $10, statement_close_day = $11, payment_due_day = $12
+            WHERE id = $13 AND user_id = $14
             RETURNING
                 id,
                 name,
@@ -908,7 +1001,12 @@ ORDER BY a.id, d.day
                 balance,
                 spend_limit,
                 is_archived,
-                next_transfer_amount
+                next_transfer_amount,
+                top_up_amount,
+                top_up_cycle,
+                top_up_day::int as top_up_day,
+                statement_close_day::int as statement_close_day,
+                payment_due_day::int as payment_due_day
             "#,
         )
         .bind(&request.name)
@@ -918,6 +1016,11 @@ ORDER BY a.id, d.day
         .bind(request.balance)
         .bind(request.spend_limit)
         .bind(request.next_transfer_amount)
+        .bind(request.top_up_amount)
+        .bind(request.top_up_cycle.as_deref())
+        .bind(request.top_up_day)
+        .bind(request.statement_close_day)
+        .bind(request.payment_due_day)
         .bind(id)
         .bind(user_id)
         .fetch_one(&self.pool)
@@ -942,6 +1045,11 @@ ORDER BY a.id, d.day
             spend_limit: row.spend_limit,
             is_archived: row.is_archived,
             next_transfer_amount: row.next_transfer_amount,
+            top_up_amount: row.top_up_amount,
+            top_up_cycle: row.top_up_cycle,
+            top_up_day: row.top_up_day,
+            statement_close_day: row.statement_close_day,
+            payment_due_day: row.payment_due_day,
         })
     }
 
@@ -1429,6 +1537,10 @@ LIMIT 1
                     a.id, a.name, a.color, a.icon,
                     a.account_type::text as account_type,
                     a.balance, a.spend_limit, a.is_archived, a.next_transfer_amount,
+                    a.top_up_amount, a.top_up_cycle,
+                    a.top_up_day::int as top_up_day,
+                    a.statement_close_day::int as statement_close_day,
+                    a.payment_due_day::int as payment_due_day,
                     c.id as currency_id, c.name as currency_name, c.symbol as currency_symbol,
                     c.currency as currency_code, c.decimal_places as currency_decimal_places,
                     c.symbol_position as currency_symbol_position
@@ -1452,6 +1564,10 @@ LIMIT 1
                     a.id, a.name, a.color, a.icon,
                     a.account_type::text as account_type,
                     a.balance, a.spend_limit, a.is_archived, a.next_transfer_amount,
+                    a.top_up_amount, a.top_up_cycle,
+                    a.top_up_day::int as top_up_day,
+                    a.statement_close_day::int as statement_close_day,
+                    a.payment_due_day::int as payment_due_day,
                     c.id as currency_id, c.name as currency_name, c.symbol as currency_symbol,
                     c.currency as currency_code, c.decimal_places as currency_decimal_places,
                     c.symbol_position as currency_symbol_position
@@ -1508,6 +1624,10 @@ LIMIT 1
                 a.id, a.name, a.color, a.icon,
                 a.account_type::text as account_type,
                 a.balance, a.spend_limit, a.is_archived, a.next_transfer_amount,
+                a.top_up_amount, a.top_up_cycle,
+                a.top_up_day::int as top_up_day,
+                a.statement_close_day::int as statement_close_day,
+                a.payment_due_day::int as payment_due_day,
                 c.id as currency_id, c.name as currency_name, c.symbol as currency_symbol,
                 c.currency as currency_code, c.decimal_places as currency_decimal_places,
                 c.symbol_position as currency_symbol_position
@@ -1574,6 +1694,10 @@ LIMIT 1
                     a.id, a.name, a.color, a.icon,
                     a.account_type::text as account_type,
                     a.balance, a.spend_limit, a.is_archived, a.next_transfer_amount,
+                    a.top_up_amount, a.top_up_cycle,
+                    a.top_up_day::int as top_up_day,
+                    a.statement_close_day::int as statement_close_day,
+                    a.payment_due_day::int as payment_due_day,
                     c.id as currency_id, c.name as currency_name, c.symbol as currency_symbol,
                     c.currency as currency_code, c.decimal_places as currency_decimal_places,
                     c.symbol_position as currency_symbol_position,
@@ -1596,6 +1720,7 @@ LIMIT 1
                   AND a.user_id = $2 AND a.is_archived = FALSE
                 GROUP BY a.id, a.name, a.color, a.icon, a.account_type, a.balance,
                          a.spend_limit, a.is_archived, a.next_transfer_amount, a.created_at,
+                         a.top_up_amount, a.top_up_cycle, a.top_up_day, a.statement_close_day, a.payment_due_day,
                          c.id, c.name, c.symbol, c.currency, c.decimal_places, c.symbol_position
                 ORDER BY a.created_at DESC, a.id DESC
                 LIMIT $3
@@ -1613,6 +1738,10 @@ LIMIT 1
                     a.id, a.name, a.color, a.icon,
                     a.account_type::text as account_type,
                     a.balance, a.spend_limit, a.is_archived, a.next_transfer_amount,
+                    a.top_up_amount, a.top_up_cycle,
+                    a.top_up_day::int as top_up_day,
+                    a.statement_close_day::int as statement_close_day,
+                    a.payment_due_day::int as payment_due_day,
                     c.id as currency_id, c.name as currency_name, c.symbol as currency_symbol,
                     c.currency as currency_code, c.decimal_places as currency_decimal_places,
                     c.symbol_position as currency_symbol_position,
@@ -1634,6 +1763,7 @@ LIMIT 1
                 WHERE a.user_id = $1 AND a.is_archived = FALSE
                 GROUP BY a.id, a.name, a.color, a.icon, a.account_type, a.balance,
                          a.spend_limit, a.is_archived, a.next_transfer_amount, a.created_at,
+                         a.top_up_amount, a.top_up_cycle, a.top_up_day, a.statement_close_day, a.payment_due_day,
                          c.id, c.name, c.symbol, c.currency, c.decimal_places, c.symbol_position
                 ORDER BY a.created_at DESC, a.id DESC
                 LIMIT $2
@@ -1699,6 +1829,11 @@ mod tests {
             balance: 0,
             spend_limit: None,
             next_transfer_amount: None,
+            top_up_amount: None,
+            top_up_cycle: None,
+            top_up_day: None,
+            statement_close_day: None,
+            payment_due_day: None,
         };
         assert_eq!(account_type_to_db(&request.account_type), "Checking");
 
@@ -1710,6 +1845,11 @@ mod tests {
             balance: 0,
             spend_limit: None,
             next_transfer_amount: None,
+            top_up_amount: None,
+            top_up_cycle: None,
+            top_up_day: None,
+            statement_close_day: None,
+            payment_due_day: None,
         };
         assert_eq!(account_type_to_db(&request_savings.account_type), "Savings");
 
@@ -1721,6 +1861,11 @@ mod tests {
             balance: 0,
             spend_limit: None,
             next_transfer_amount: None,
+            top_up_amount: None,
+            top_up_cycle: None,
+            top_up_day: None,
+            statement_close_day: None,
+            payment_due_day: None,
         };
         assert_eq!(account_type_to_db(&request_credit.account_type), "CreditCard");
     }

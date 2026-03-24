@@ -28,7 +28,7 @@ impl<'a> OnboardingService<'a> {
 
         let current_step = self.derive_current_step(user_id).await?;
 
-        let status = if matches!(current_step, Some(OnboardingStep::Period)) {
+        let status = if matches!(current_step, Some(OnboardingStep::Currency)) {
             OnboardingStatus::NotStarted
         } else {
             OnboardingStatus::InProgress
@@ -66,6 +66,16 @@ impl<'a> OnboardingService<'a> {
     }
 
     async fn derive_current_step(&self, user_id: &Uuid) -> Result<Option<OnboardingStep>, AppError> {
+        let has_currency: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM settings WHERE user_id = $1 AND default_currency_id IS NOT NULL)")
+            .bind(user_id)
+            .fetch_one(&self.repository.pool)
+            .await
+            .map_err(AppError::from)?;
+
+        if !has_currency {
+            return Ok(Some(OnboardingStep::Currency));
+        }
+
         let has_period: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM period_schedule WHERE user_id = $1)")
             .bind(user_id)
             .fetch_one(&self.repository.pool)

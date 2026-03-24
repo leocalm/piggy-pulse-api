@@ -37,6 +37,7 @@ impl From<BudgetCategoryRow> for BudgetCategory {
                 is_archived: row.category_is_archived,
                 description: row.category_description,
                 is_system: row.category_is_system,
+                behavior: None,
             },
         }
     }

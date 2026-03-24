@@ -93,7 +93,6 @@ pub struct RegisterRequest {
     pub password: String,
     #[validate(length(min = 1))]
     pub name: String,
-    pub currency_id: Uuid,
 }
 
 // ===== 2FA Complete (after challenge) =====

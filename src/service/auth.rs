@@ -292,15 +292,7 @@ impl<'a> AuthService<'a> {
     // ─── V2 methods ─────────────────────────────────────────────────────────
 
     /// Register a new user, create default resources, and start a session.
-    pub async fn register(
-        &self,
-        email: &str,
-        password: &str,
-        name: &str,
-        currency_id: &Uuid,
-        user_agent: Option<&str>,
-        client_ip: Option<&str>,
-    ) -> Result<(User, Uuid), AppError> {
+    pub async fn register(&self, email: &str, password: &str, name: &str, user_agent: Option<&str>, client_ip: Option<&str>) -> Result<(User, Uuid), AppError> {
         let user = self.repo.create_user(name, email, password).await.map_err(|e| {
             if let AppError::Db { ref source, .. } = e
                 && is_unique_violation(source)
@@ -310,13 +302,10 @@ impl<'a> AuthService<'a> {
             e
         })?;
 
-        // Best-effort: create default settings with the chosen currency
+        // Best-effort: create default settings (no currency chosen yet — done in onboarding)
         if let Err(e) = self.repo.create_default_settings(&user.id).await {
             tracing::warn!("Failed to create default settings for user {}: {}", user.id, e);
         }
-
-        // Best-effort: update the default_currency_id to the one the user chose
-        let _ = self.repo.update_settings_currency(&user.id, currency_id).await;
 
         // Best-effort: create system transfer category
         if let Err(e) = self.repo.create_system_transfer_category(&user.id).await {

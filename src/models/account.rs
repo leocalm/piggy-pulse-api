@@ -28,6 +28,11 @@ pub struct Account {
     pub spend_limit: Option<i32>,
     pub is_archived: bool,
     pub next_transfer_amount: Option<i64>,
+    pub top_up_amount: Option<i64>,
+    pub top_up_cycle: Option<String>,
+    pub top_up_day: Option<i32>,
+    pub statement_close_day: Option<i32>,
+    pub payment_due_day: Option<i32>,
 }
 
 impl std::fmt::Debug for Account {
@@ -55,6 +60,11 @@ pub struct AccountRequest {
     pub balance: i64,
     pub spend_limit: Option<i32>,
     pub next_transfer_amount: Option<i64>,
+    pub top_up_amount: Option<i64>,
+    pub top_up_cycle: Option<String>,
+    pub top_up_day: Option<i32>,
+    pub statement_close_day: Option<i32>,
+    pub payment_due_day: Option<i32>,
 }
 
 #[derive(Deserialize, Debug, Validate, JsonSchema)]
@@ -69,6 +79,11 @@ pub struct AccountUpdateRequest {
     pub balance: i64,
     pub spend_limit: Option<i32>,
     pub next_transfer_amount: Option<i64>,
+    pub top_up_amount: Option<i64>,
+    pub top_up_cycle: Option<String>,
+    pub top_up_day: Option<i32>,
+    pub statement_close_day: Option<i32>,
+    pub payment_due_day: Option<i32>,
 }
 
 #[derive(Deserialize, Debug, Validate, JsonSchema)]
