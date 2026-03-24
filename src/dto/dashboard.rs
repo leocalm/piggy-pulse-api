@@ -1,4 +1,7 @@
 use serde::Serialize;
+use uuid::Uuid;
+
+use crate::dto::common::Date;
 
 // ===== CurrentPeriod =====
 
@@ -10,6 +13,7 @@ pub struct CurrentPeriodResponse {
     pub days_remaining: i64,
     pub days_in_period: i64,
     pub projected_spend: i64,
+    pub daily_spend: Vec<i64>,
 }
 
 // ===== NetPosition =====
@@ -31,6 +35,84 @@ pub struct NetPositionResponse {
 #[serde(rename_all = "camelCase")]
 pub struct BudgetStabilityResponse {
     pub stability: i64,
+    pub recent_stability: i64,
     pub periods_within_range: i64,
     pub periods_stability: Vec<bool>,
 }
+
+// ===== CashFlow =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CashFlowResponse {
+    pub inflows: i64,
+    pub outflows: i64,
+    pub net: i64,
+}
+
+// ===== SpendingTrend =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SpendingTrendItem {
+    pub period_id: Uuid,
+    pub period_name: String,
+    pub total_spend: i64,
+}
+
+pub type SpendingTrendResponse = Vec<SpendingTrendItem>;
+
+// ===== TopVendors =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TopVendorItem {
+    pub vendor_id: Uuid,
+    pub vendor_name: String,
+    pub total_spend: i64,
+    pub percentage: f64,
+}
+
+pub type TopVendorsResponse = Vec<TopVendorItem>;
+
+// ===== Uncategorized =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct UncategorizedTransaction {
+    pub id: Uuid,
+    pub amount: i64,
+    pub date: Date,
+    pub description: String,
+    pub from_account_id: Uuid,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct UncategorizedResponse {
+    pub count: i64,
+    pub transactions: Vec<UncategorizedTransaction>,
+}
+
+// ===== FixedCategories =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub enum FixedCategoryStatus {
+    Paid,
+    Partial,
+    Pending,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FixedCategoryItem {
+    pub category_id: Uuid,
+    pub category_name: String,
+    pub category_icon: String,
+    pub status: FixedCategoryStatus,
+    pub spent: i64,
+    pub budgeted: i64,
+}
+
+pub type FixedCategoriesResponse = Vec<FixedCategoryItem>;

@@ -1,7 +1,7 @@
 mod common;
 
 use common::auth::create_user_and_login;
-use common::entities::{create_account, create_category, create_period, create_target, create_transaction};
+use common::entities::{create_account, create_category, create_period, create_target, create_transaction, create_transaction_with_vendor, create_vendor};
 use common::{V2_BASE, test_client};
 use rocket::http::Status;
 use serde_json::Value;
@@ -296,6 +296,522 @@ async fn test_budget_stability_no_auth_returns_401() {
 
     let resp = client
         .get(format!("{}/dashboard/budget-stability?periodId={}", V2_BASE, uuid::Uuid::new_v4()))
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Unauthorized);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GET /dashboard/current-period — dailySpend sparkline (2.1)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_current_period_daily_spend_sparkline() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let period_id = create_period(&client, "2026-01-01", "2026-01-31").await;
+    let expense_cat = create_category(&client, "Food DS", "expense").await;
+    let account_id = create_account(&client, "DS Checking", 100_000).await;
+
+    // Create transactions on two different days
+    create_transaction(&client, &account_id, &expense_cat, 5_000, "2026-01-05").await;
+    create_transaction(&client, &account_id, &expense_cat, 3_000, "2026-01-10").await;
+
+    let resp = client
+        .get(format!("{}/dashboard/current-period?periodId={}", V2_BASE, period_id))
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+
+    let daily_spend = body["dailySpend"].as_array().unwrap();
+    // Jan 1-31 = 31 elements
+    assert_eq!(daily_spend.len(), 31, "dailySpend should have one entry per day");
+
+    // Day index 4 (Jan 5) = 5000, index 9 (Jan 10) = 3000
+    assert_eq!(daily_spend[4], 5_000);
+    assert_eq!(daily_spend[9], 3_000);
+    // Day with no transactions should be 0
+    assert_eq!(daily_spend[0], 0);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GET /dashboard/budget-stability — recentStability (2.2)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_budget_stability_recent_stability_field() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let current_period = create_period(&client, "2026-03-01", "2026-03-31").await;
+
+    let resp = client
+        .get(format!("{}/dashboard/budget-stability?periodId={}", V2_BASE, current_period))
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+
+    // recentStability is always present (0-100)
+    let recent = body["recentStability"].as_i64().unwrap();
+    assert!((0..=100).contains(&recent), "recentStability={recent}");
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_budget_stability_recent_stability_with_closed_periods() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let expense_cat = create_category(&client, "Food RS", "expense").await;
+    create_target(&client, &expense_cat, 10_000).await;
+    let account_id = create_account(&client, "RS Checking", 100_000).await;
+
+    // 3 closed periods — all within tolerance
+    create_period(&client, "2025-10-01", "2025-10-31").await;
+    create_period(&client, "2025-11-01", "2025-11-30").await;
+    create_period(&client, "2025-12-01", "2025-12-31").await;
+    create_transaction(&client, &account_id, &expense_cat, 9_800, "2025-10-15").await;
+    create_transaction(&client, &account_id, &expense_cat, 10_100, "2025-11-15").await;
+    create_transaction(&client, &account_id, &expense_cat, 9_900, "2025-12-15").await;
+
+    let current_period = create_period(&client, "2026-03-01", "2026-03-31").await;
+
+    let resp = client
+        .get(format!("{}/dashboard/budget-stability?periodId={}", V2_BASE, current_period))
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+
+    // All 3 recent periods are within tolerance → recentStability = 100
+    assert_eq!(body["recentStability"], 100);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GET /dashboard/cash-flow (2.3)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_cash_flow_happy() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let period_id = create_period(&client, "2026-03-01", "2026-03-31").await;
+    let income_cat = create_category(&client, "Salary CF", "income").await;
+    let expense_cat = create_category(&client, "Food CF", "expense").await;
+    let account_id = create_account(&client, "CF Checking", 0).await;
+
+    create_transaction(&client, &account_id, &income_cat, 20_000, "2026-03-05").await;
+    create_transaction(&client, &account_id, &expense_cat, 7_000, "2026-03-10").await;
+    create_transaction(&client, &account_id, &expense_cat, 3_000, "2026-03-15").await;
+
+    let resp = client.get(format!("{}/dashboard/cash-flow?periodId={}", V2_BASE, period_id)).dispatch().await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+
+    assert_eq!(body["inflows"], 20_000);
+    assert_eq!(body["outflows"], 10_000);
+    assert_eq!(body["net"], 10_000);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_cash_flow_empty_period() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let period_id = create_period(&client, "2026-03-01", "2026-03-31").await;
+
+    let resp = client.get(format!("{}/dashboard/cash-flow?periodId={}", V2_BASE, period_id)).dispatch().await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+
+    assert_eq!(body["inflows"], 0);
+    assert_eq!(body["outflows"], 0);
+    assert_eq!(body["net"], 0);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_cash_flow_missing_period_id_returns_400() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let resp = client.get(format!("{}/dashboard/cash-flow", V2_BASE)).dispatch().await;
+    assert_eq!(resp.status(), Status::BadRequest);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_cash_flow_no_auth_returns_401() {
+    let client = test_client().await;
+
+    let resp = client
+        .get(format!("{}/dashboard/cash-flow?periodId={}", V2_BASE, uuid::Uuid::new_v4()))
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Unauthorized);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GET /dashboard/spending-trend (2.4)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_spending_trend_happy() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let expense_cat = create_category(&client, "Food ST", "expense").await;
+    let account_id = create_account(&client, "ST Checking", 100_000).await;
+
+    // Two closed periods with known spend
+    create_period(&client, "2026-01-01", "2026-01-31").await;
+    create_period(&client, "2026-02-01", "2026-02-28").await;
+    create_transaction(&client, &account_id, &expense_cat, 8_000, "2026-01-15").await;
+    create_transaction(&client, &account_id, &expense_cat, 9_000, "2026-02-15").await;
+
+    let current_period = create_period(&client, "2026-03-01", "2026-03-31").await;
+
+    let resp = client
+        .get(format!("{}/dashboard/spending-trend?periodId={}", V2_BASE, current_period))
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+
+    let items = body.as_array().unwrap();
+    assert!(!items.is_empty(), "spending trend should include periods");
+
+    // Each item should have required fields
+    for item in items {
+        assert!(item["periodId"].is_string());
+        assert!(item["periodName"].is_string());
+        assert!(item["totalSpend"].is_number());
+    }
+
+    // Find Jan and Feb periods by spend amount
+    let jan = items.iter().find(|i| i["totalSpend"] == 8_000);
+    assert!(jan.is_some(), "should find jan spend of 8000");
+    let feb = items.iter().find(|i| i["totalSpend"] == 9_000);
+    assert!(feb.is_some(), "should find feb spend of 9000");
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_spending_trend_respects_limit() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    // Create 5 periods
+    for i in 1..=5_u32 {
+        create_period(&client, &format!("2025-{:02}-01", i), &format!("2025-{:02}-28", i)).await;
+    }
+
+    let current_period = create_period(&client, "2026-03-01", "2026-03-31").await;
+
+    let resp = client
+        .get(format!("{}/dashboard/spending-trend?periodId={}&limit=3", V2_BASE, current_period))
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+
+    let items = body.as_array().unwrap();
+    assert_eq!(items.len(), 3, "should return exactly limit=3 items");
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_spending_trend_missing_period_id_returns_400() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let resp = client.get(format!("{}/dashboard/spending-trend", V2_BASE)).dispatch().await;
+    assert_eq!(resp.status(), Status::BadRequest);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_spending_trend_no_auth_returns_401() {
+    let client = test_client().await;
+
+    let resp = client
+        .get(format!("{}/dashboard/spending-trend?periodId={}", V2_BASE, uuid::Uuid::new_v4()))
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Unauthorized);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GET /dashboard/top-vendors (2.5)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_top_vendors_happy() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let period_id = create_period(&client, "2026-03-01", "2026-03-31").await;
+    let expense_cat = create_category(&client, "Food TV", "expense").await;
+    let account_id = create_account(&client, "TV Checking", 100_000).await;
+
+    let vendor_a = create_vendor(&client, "Vendor Alpha").await;
+    let vendor_b = create_vendor(&client, "Vendor Beta").await;
+
+    create_transaction_with_vendor(&client, &account_id, &expense_cat, 10_000, "2026-03-05", &vendor_a).await;
+    create_transaction_with_vendor(&client, &account_id, &expense_cat, 4_000, "2026-03-10", &vendor_b).await;
+
+    let resp = client.get(format!("{}/dashboard/top-vendors?periodId={}", V2_BASE, period_id)).dispatch().await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+
+    let items = body.as_array().unwrap();
+    assert_eq!(items.len(), 2);
+
+    // First should be highest spender (Vendor Alpha)
+    assert_eq!(items[0]["vendorName"], "Vendor Alpha");
+    assert_eq!(items[0]["totalSpend"], 10_000);
+    // percentage: 10000 / 14000 * 100 ≈ 71.4
+    let pct = items[0]["percentage"].as_f64().unwrap();
+    assert!((71.0..=72.0).contains(&pct), "percentage={pct}");
+
+    assert_eq!(items[1]["vendorName"], "Vendor Beta");
+    assert_eq!(items[1]["totalSpend"], 4_000);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_top_vendors_empty_period() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let period_id = create_period(&client, "2026-03-01", "2026-03-31").await;
+
+    let resp = client.get(format!("{}/dashboard/top-vendors?periodId={}", V2_BASE, period_id)).dispatch().await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body.as_array().unwrap().len(), 0);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_top_vendors_missing_period_id_returns_400() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let resp = client.get(format!("{}/dashboard/top-vendors", V2_BASE)).dispatch().await;
+    assert_eq!(resp.status(), Status::BadRequest);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_top_vendors_no_auth_returns_401() {
+    let client = test_client().await;
+
+    let resp = client
+        .get(format!("{}/dashboard/top-vendors?periodId={}", V2_BASE, uuid::Uuid::new_v4()))
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Unauthorized);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GET /dashboard/uncategorized (2.6)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_uncategorized_returns_zero_with_all_categorized() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let period_id = create_period(&client, "2026-03-01", "2026-03-31").await;
+    let expense_cat = create_category(&client, "Food UC", "expense").await;
+    let account_id = create_account(&client, "UC Checking", 100_000).await;
+
+    create_transaction(&client, &account_id, &expense_cat, 5_000, "2026-03-10").await;
+
+    let resp = client
+        .get(format!("{}/dashboard/uncategorized?periodId={}", V2_BASE, period_id))
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+
+    assert_eq!(body["count"], 0);
+    assert_eq!(body["transactions"].as_array().unwrap().len(), 0);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_uncategorized_missing_period_id_returns_400() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let resp = client.get(format!("{}/dashboard/uncategorized", V2_BASE)).dispatch().await;
+    assert_eq!(resp.status(), Status::BadRequest);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_uncategorized_no_auth_returns_401() {
+    let client = test_client().await;
+
+    let resp = client
+        .get(format!("{}/dashboard/uncategorized?periodId={}", V2_BASE, uuid::Uuid::new_v4()))
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Unauthorized);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GET /dashboard/fixed-categories (2.7)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_fixed_categories_happy() {
+    use rocket::http::ContentType;
+
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let period_id = create_period(&client, "2026-03-01", "2026-03-31").await;
+    let account_id = create_account(&client, "FC Checking", 100_000).await;
+
+    // Create a fixed expense category
+    let payload = serde_json::json!({
+        "name": "Rent FC",
+        "type": "expense",
+        "behavior": "fixed",
+        "icon": "🏠",
+        "description": null,
+        "parentId": null
+    });
+    let resp = client
+        .post(format!("{}/categories", V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Created);
+    let cat_body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    let rent_cat_id = cat_body["id"].as_str().unwrap().to_string();
+
+    // Create a variable expense category (should not appear in fixed-categories)
+    let expense_cat = create_category(&client, "Groceries FC", "expense").await;
+
+    // Set a budget target for rent
+    create_target(&client, &rent_cat_id, 15_000).await;
+
+    // Scenario: rent has no transactions yet → pending
+    let resp = client
+        .get(format!("{}/dashboard/fixed-categories?periodId={}", V2_BASE, period_id))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    let items = body.as_array().unwrap();
+    assert_eq!(items.len(), 1, "only fixed categories returned");
+    assert_eq!(items[0]["categoryName"], "Rent FC");
+    assert_eq!(items[0]["status"], "pending");
+    assert_eq!(items[0]["spent"], 0);
+    assert_eq!(items[0]["budgeted"], 15_000);
+
+    // Add a partial payment (less than target)
+    create_transaction(&client, &account_id, &rent_cat_id, 8_000, "2026-03-05").await;
+
+    let resp = client
+        .get(format!("{}/dashboard/fixed-categories?periodId={}", V2_BASE, period_id))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    let items = body.as_array().unwrap();
+    assert_eq!(items[0]["status"], "partial");
+    assert_eq!(items[0]["spent"], 8_000);
+
+    // Pay full amount
+    create_transaction(&client, &account_id, &rent_cat_id, 7_000, "2026-03-06").await;
+
+    let resp = client
+        .get(format!("{}/dashboard/fixed-categories?periodId={}", V2_BASE, period_id))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    let items = body.as_array().unwrap();
+    assert_eq!(items[0]["status"], "paid");
+    assert_eq!(items[0]["spent"], 15_000);
+
+    // The variable category should NOT appear
+    let _ = expense_cat; // ensure it was created
+    for item in items {
+        assert_ne!(item["categoryName"], "Groceries FC");
+    }
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_fixed_categories_empty_when_no_fixed_categories() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let period_id = create_period(&client, "2026-03-01", "2026-03-31").await;
+    // Only variable category — no fixed ones
+    create_category(&client, "Food NoFC", "expense").await;
+
+    let resp = client
+        .get(format!("{}/dashboard/fixed-categories?periodId={}", V2_BASE, period_id))
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body.as_array().unwrap().len(), 0);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_fixed_categories_missing_period_id_returns_400() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let resp = client.get(format!("{}/dashboard/fixed-categories", V2_BASE)).dispatch().await;
+    assert_eq!(resp.status(), Status::BadRequest);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_fixed_categories_no_auth_returns_401() {
+    let client = test_client().await;
+
+    let resp = client
+        .get(format!("{}/dashboard/fixed-categories?periodId={}", V2_BASE, uuid::Uuid::new_v4()))
         .dispatch()
         .await;
 

@@ -19,6 +19,13 @@ PiggyPulse.toml
 gha-creds-*.json
 .serena/
 
+# Schemathesis / Hypothesis
+.hypothesis/
+schemathesis-report/
+
+# macOS
+.DS_Store
+
 # Playwright
 node_modules/
 /test-results/
