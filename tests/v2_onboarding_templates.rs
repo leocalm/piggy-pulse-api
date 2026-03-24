@@ -185,3 +185,53 @@ async fn test_apply_template_creates_categories_visible_in_list() {
     // At minimum 5 categories were created (there may also be a system Transfer)
     assert!(total >= 5);
 }
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_apply_template_missing_template_id_returns_error() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    // Send a JSON body that is missing the required templateId field
+    let payload = serde_json::json!({});
+
+    let resp = client
+        .post(format!("{}/onboarding/apply-template", V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+
+    assert!(
+        resp.status() == Status::BadRequest || resp.status() == Status::UnprocessableEntity,
+        "expected 400 or 422, got {}",
+        resp.status()
+    );
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_apply_template_twice_returns_400() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let payload = serde_json::json!({ "templateId": "essential" });
+
+    // First apply — should succeed
+    let first = client
+        .post(format!("{}/onboarding/apply-template", V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(first.status(), Status::Created);
+
+    // Second apply — should fail because category names already exist
+    let second = client
+        .post(format!("{}/onboarding/apply-template", V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(second.status(), Status::BadRequest, "duplicate apply should return 400");
+}
