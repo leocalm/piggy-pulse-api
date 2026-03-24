@@ -157,6 +157,30 @@ pub async fn create_target(client: &Client, category_id: &str, value: i64) -> St
     body["id"].as_str().expect("target id").to_string()
 }
 
+/// Creates a subscription via V2 POST /subscriptions. Returns the subscription ID.
+pub async fn create_subscription(client: &Client, name: &str, category_id: &str, billing_amount: i64, billing_cycle: &str, next_charge_date: &str) -> String {
+    let payload = serde_json::json!({
+        "name": name,
+        "categoryId": category_id,
+        "vendorId": null,
+        "billingAmount": billing_amount,
+        "billingCycle": billing_cycle,
+        "billingDay": 1,
+        "nextChargeDate": next_charge_date
+    });
+
+    let resp = client
+        .post(format!("{}/subscriptions", super::V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Created, "create_subscription failed");
+
+    let body: Value = serde_json::from_str(&resp.into_string().await.expect("subscription body")).expect("valid json");
+    body["id"].as_str().expect("subscription id").to_string()
+}
+
 /// Creates an overlay via V2 POST /overlays. Returns the overlay ID.
 pub async fn create_overlay(client: &Client, name: &str, start: &str, end: &str) -> String {
     let payload = serde_json::json!({

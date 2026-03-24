@@ -39,11 +39,11 @@ async fn test_current_period_happy() {
     assert_eq!(body["spent"], 15_000);
     // target should reflect the budget category target
     assert_eq!(body["target"], 50_000);
-    // daysInPeriod for a 2026-03-01 to 2026-03-31 period = 30
-    assert_eq!(body["daysInPeriod"], 30);
-    // daysRemaining should be >= 0 and <= 30
+    // daysInPeriod for a 2026-03-01 to 2026-03-31 period = 31 (both endpoints inclusive)
+    assert_eq!(body["daysInPeriod"], 31);
+    // daysRemaining should be >= 0 and <= 31
     let days_remaining = body["daysRemaining"].as_i64().unwrap();
-    assert!((0..=30).contains(&days_remaining), "daysRemaining={days_remaining}");
+    assert!((0..=31).contains(&days_remaining), "daysRemaining={days_remaining}");
     // projectedSpend should be a non-negative number (can vary by day)
     let projected_spend = body["projectedSpend"].as_i64().unwrap();
     assert!(projected_spend >= 0, "projectedSpend={projected_spend}");
@@ -68,7 +68,7 @@ async fn test_current_period_ended_period_zero_remaining() {
 
     // Ended period should have 0 remaining days
     assert_eq!(body["daysRemaining"], 0);
-    assert_eq!(body["daysInPeriod"], 30);
+    assert_eq!(body["daysInPeriod"], 31);
 }
 
 #[rocket::async_test]

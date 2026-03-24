@@ -11,6 +11,7 @@ pub mod onboarding;
 pub mod overlays;
 pub mod periods;
 pub mod settings;
+pub mod subscriptions;
 pub mod targets;
 pub mod transactions;
 pub mod unlock;
