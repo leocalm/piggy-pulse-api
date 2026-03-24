@@ -296,6 +296,16 @@ impl From<figment::Error> for AppError {
 
 impl From<sqlx::Error> for AppError {
     fn from(e: sqlx::Error) -> Self {
+        // Map PostgreSQL encoding errors (e.g. null bytes, invalid UTF-8 sequences) to
+        // 400 Bad Request rather than 500, since the input is invalid.
+        if let sqlx::Error::Database(ref db_err) = e
+            && let Some(code) = db_err.code()
+            && matches!(code.as_ref(), "22021" | "22P05")
+        {
+            // 22021 = invalid byte sequence for encoding (e.g. \u0000 in text)
+            // 22P05 = unsupported_unicode_escape_character
+            return AppError::BadRequest("Invalid characters in input".to_string());
+        }
         match e {
             sqlx::Error::RowNotFound => AppError::NotFound("Resource not found".to_string()),
             _ => AppError::db("Database error", e),

@@ -13,6 +13,8 @@ get:
         application/json:
           schema:
             $ref: '../schemas/Vendor.yaml#/VendorListResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
     '401':
       $ref: '../responses/Unauthorized.yaml'
     '500':
