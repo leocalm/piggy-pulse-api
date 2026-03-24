@@ -666,20 +666,28 @@ impl PostgresRepository {
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| AppError::BadRequest("transaction missing 'occurred_at'".to_string()))?;
 
-            let from_account_id = txn
+            let from_account_old_id = txn
                 .get("from_account_id")
                 .and_then(|v| v.as_str())
-                .and_then(|old| account_id_map.get(old).copied());
+                .ok_or_else(|| AppError::BadRequest("transaction missing 'from_account_id'".to_string()))?;
+            let from_account_id = account_id_map
+                .get(from_account_old_id)
+                .copied()
+                .ok_or_else(|| AppError::BadRequest(format!("transaction references unknown from_account_id '{}'", from_account_old_id)))?;
 
             let to_account_id = txn
                 .get("to_account_id")
                 .and_then(|v| if v.is_null() { None } else { v.as_str() })
                 .and_then(|old| account_id_map.get(old).copied());
 
-            let category_id = txn
+            let category_old_id = txn
                 .get("category_id")
                 .and_then(|v| if v.is_null() { None } else { v.as_str() })
-                .and_then(|old| category_id_map.get(old).copied());
+                .ok_or_else(|| AppError::BadRequest("transaction missing 'category_id'".to_string()))?;
+            let category_id = category_id_map
+                .get(category_old_id)
+                .copied()
+                .ok_or_else(|| AppError::BadRequest(format!("transaction references unknown category_id '{}'", category_old_id)))?;
 
             let new_id = Uuid::new_v4();
 

@@ -600,4 +600,63 @@ impl PostgresRepository {
         let rows = sqlx::query_as::<_, TransactionRow>(&query).bind(user_id).fetch_all(&self.pool).await?;
         Ok(rows.into_iter().map(Transaction::from).collect())
     }
+
+    /// Creates multiple transactions atomically inside a single DB transaction.
+    ///
+    /// If any individual insert fails (validation or DB error), the entire batch is rolled back
+    /// so no partial state is written.
+    pub async fn batch_create_transactions(&self, transactions: &[TransactionRequest], user_id: &Uuid) -> Result<Vec<Transaction>, AppError> {
+        // Validate all requests before opening the DB transaction so that validation
+        // errors are surfaced cheaply without acquiring a connection slot.
+        for transaction in transactions {
+            self.validate_transaction_ownership(transaction, user_id).await?;
+        }
+
+        let mut db_tx = self.pool.begin().await?;
+        let mut results = Vec::with_capacity(transactions.len());
+
+        let select_query = build_transaction_query("inserted t", &[], "");
+        let insert_sql = format!(
+            r#"
+            WITH inserted AS (
+                INSERT INTO transaction (
+                    user_id,
+                    amount,
+                    description,
+                    occurred_at,
+                    category_id,
+                    from_account_id,
+                    to_account_id,
+                    vendor_id
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                RETURNING id, amount, description, occurred_at, category_id, from_account_id, to_account_id, vendor_id
+            )
+            {}
+            "#,
+            select_query
+        );
+
+        for transaction in transactions {
+            let to_account_id = transaction.to_account_id.as_ref().copied();
+            let vendor_id = transaction.vendor_id.as_ref().copied();
+
+            let row = sqlx::query_as::<_, TransactionRow>(&insert_sql)
+                .bind(user_id)
+                .bind(transaction.amount)
+                .bind(&transaction.description)
+                .bind(transaction.occurred_at)
+                .bind(transaction.category_id)
+                .bind(transaction.from_account_id)
+                .bind(to_account_id)
+                .bind(vendor_id)
+                .fetch_one(&mut *db_tx)
+                .await?;
+
+            results.push(Transaction::from(row));
+        }
+
+        db_tx.commit().await?;
+        Ok(results)
+    }
 }

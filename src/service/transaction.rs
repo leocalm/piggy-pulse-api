@@ -24,6 +24,15 @@ impl<'a> TransactionService<'a> {
         Ok(to_v2_response(&tx))
     }
 
+    /// Creates all transactions in a single atomic DB transaction.
+    /// Returns all created transactions or rolls back entirely if any item fails.
+    pub async fn batch_create_transactions(&self, requests: &[CreateTransactionRequest], user_id: &Uuid) -> Result<Vec<TransactionResponse>, AppError> {
+        let v1_requests: Result<Vec<_>, _> = requests.iter().map(to_v1_request).collect();
+        let v1_requests = v1_requests?;
+        let txs = self.repository.batch_create_transactions(&v1_requests, user_id).await?;
+        Ok(txs.iter().map(to_v2_response).collect())
+    }
+
     pub async fn update_transaction(&self, id: &Uuid, request: &CreateTransactionRequest, user_id: &Uuid) -> Result<TransactionResponse, AppError> {
         // Check existence first to return 404 instead of RowNotFound
         let existing = self.repository.get_transaction_by_id(id, user_id).await?;

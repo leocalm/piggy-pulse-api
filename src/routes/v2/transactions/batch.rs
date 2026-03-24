@@ -23,11 +23,7 @@ pub async fn batch_create_transactions(
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let service = TransactionService::new(&repo);
 
-    let mut results = Vec::with_capacity(payload.len());
-    for request in payload.iter() {
-        let response = service.create_transaction(request, &user.id).await?;
-        results.push(response);
-    }
+    let results = service.batch_create_transactions(&payload, &user.id).await?;
 
     Ok((Status::Created, Json(results)))
 }
