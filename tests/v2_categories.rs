@@ -20,7 +20,6 @@ async fn test_create_category_all_fields() {
         "name": "Groceries",
         "type": "expense",
         "icon": "🛒",
-        "color": "#00aa55",
         "description": "Weekly groceries",
         "parentId": null
     });
@@ -37,10 +36,67 @@ async fn test_create_category_all_fields() {
     assert_eq!(body["name"], "Groceries");
     assert_eq!(body["type"], "expense");
     assert_eq!(body["icon"], "🛒");
-    assert_eq!(body["color"], "#00aa55");
+    // Color is computed from type+behavior: expense + null/variable → "#D4A0B6"
+    assert_eq!(body["color"], "#D4A0B6");
     assert_eq!(body["status"], "active");
     assert!(body["parentId"].is_null());
     common::assertions::assert_uuid(&body["id"]);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_create_category_behavior_and_computed_color() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    // Test all color mappings
+    let cases = [
+        ("income", None, "#9AA0CC"),
+        ("income", Some("variable"), "#9AA0CC"),
+        ("income", Some("fixed"), "#7CA8C4"),
+        ("income", Some("subscription"), "#8B7EC8"),
+        ("expense", None, "#D4A0B6"),
+        ("expense", Some("variable"), "#D4A0B6"),
+        ("expense", Some("fixed"), "#C48BA0"),
+        ("expense", Some("subscription"), "#B088A0"),
+    ];
+
+    for (cat_type, behavior, expected_color) in cases {
+        let mut payload = json!({
+            "name": format!("Cat {} {:?}", cat_type, behavior),
+            "type": cat_type,
+            "icon": "🛒",
+            "description": null,
+            "parentId": null
+        });
+        if let Some(b) = behavior {
+            payload["behavior"] = json!(b);
+        }
+
+        let resp = client
+            .post(format!("{}/categories", V2_BASE))
+            .header(ContentType::JSON)
+            .body(payload.to_string())
+            .dispatch()
+            .await;
+
+        assert_eq!(resp.status(), Status::Created, "failed for type={} behavior={:?}", cat_type, behavior);
+        let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+        assert_eq!(
+            body["color"],
+            expected_color,
+            "wrong color for type={} behavior={:?}: expected {} got {}",
+            cat_type,
+            behavior,
+            expected_color,
+            body["color"]
+        );
+        if let Some(b) = behavior {
+            assert_eq!(body["behavior"], b, "behavior not persisted for type={} behavior={:?}", cat_type, behavior);
+        } else {
+            assert!(body["behavior"].is_null(), "expected null behavior, got {:?}", body["behavior"]);
+        }
+    }
 }
 
 #[rocket::async_test]
@@ -100,15 +156,14 @@ async fn test_create_category_name_too_short() {
 
 #[rocket::async_test]
 #[ignore = "requires database"]
-async fn test_create_category_bad_color() {
+async fn test_create_category_bad_icon() {
     let client = test_client().await;
     create_user_and_login(&client).await;
 
     let payload = json!({
-        "name": "Bad Color",
+        "name": "Bad Icon",
         "type": "expense",
-        "icon": "🛒",
-        "color": "not-hex",
+        "icon": "not-an-emoji",
         "description": null,
         "parentId": null
     });
@@ -303,7 +358,6 @@ async fn test_update_category_persists_via_get() {
         "name": "New Name",
         "type": "expense",
         "icon": "🍕",
-        "color": "#ff0000",
         "description": "Updated desc",
         "parentId": null
     });
@@ -317,7 +371,8 @@ async fn test_update_category_persists_via_get() {
     assert_eq!(resp.status(), Status::Ok);
     let put_body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
     assert_eq!(put_body["name"], "New Name");
-    assert_eq!(put_body["color"], "#ff0000");
+    // Color is computed from type+behavior: expense + null/variable → "#D4A0B6"
+    assert_eq!(put_body["color"], "#D4A0B6");
 
     // Verify via GET list — persistence, not just echo
     let list_resp = client.get(format!("{}/categories", V2_BASE)).dispatch().await;
@@ -330,7 +385,7 @@ async fn test_update_category_persists_via_get() {
         .find(|c| c["id"].as_str().unwrap() == cat_id)
         .expect("updated category should appear in list");
     assert_eq!(cat["name"], "New Name");
-    assert_eq!(cat["color"], "#ff0000");
+    assert_eq!(cat["color"], "#D4A0B6");
     assert_eq!(cat["icon"], "🍕");
 }
 

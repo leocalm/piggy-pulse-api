@@ -40,20 +40,16 @@ pub async fn get_eur_currency_id_unauthenticated(client: &Client) -> String {
     eur_id
 }
 
-/// Creates a unique user via V2 register and returns `(user_id, email)`.
+/// Creates a unique user via V2 register, sets currency (EUR), and returns `(user_id, email)`.
 /// The client retains the session cookie set by register.
 pub async fn create_user_and_login(client: &Client) -> (String, String) {
     let unique = Uuid::new_v4();
     let email = format!("test.{}@example.com", unique);
 
-    // Get EUR currency ID (needs a throwaway auth session)
-    let eur_id = get_eur_currency_id_unauthenticated(client).await;
-
     let register_payload = serde_json::json!({
         "name": format!("Test User {}", unique),
         "email": email,
         "password": super::TEST_PASSWORD,
-        "currencyId": eur_id
     });
 
     let resp = client
@@ -66,6 +62,20 @@ pub async fn create_user_and_login(client: &Client) -> (String, String) {
 
     let body: Value = serde_json::from_str(&resp.into_string().await.expect("register body")).expect("valid json");
     let user_id = body["user"]["id"].as_str().expect("user id").to_string();
+    let name = body["user"]["name"].as_str().unwrap_or("Test User").to_string();
+
+    // Set default currency (required as first onboarding step before accounts can be created)
+    let profile_payload = serde_json::json!({
+        "name": name,
+        "currency": "EUR"
+    });
+    let profile_resp = client
+        .put(format!("{}/settings/profile", super::V2_BASE))
+        .header(ContentType::JSON)
+        .body(profile_payload.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(profile_resp.status(), Status::Ok, "set currency on profile failed");
 
     (user_id, email)
 }

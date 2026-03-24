@@ -228,9 +228,9 @@ impl PostgresRepository {
                 next_transfer_amount,
                 top_up_amount,
                 top_up_cycle,
-                top_up_day,
-                statement_close_day,
-                payment_due_day
+                top_up_day::int as top_up_day,
+                statement_close_day::int as statement_close_day,
+                payment_due_day::int as payment_due_day
             "#,
         )
         .bind(user_id)

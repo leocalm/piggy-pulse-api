@@ -34,7 +34,6 @@ pub async fn create_category(client: &Client, name: &str, category_type: &str) -
         "name": name,
         "type": category_type,
         "icon": "🛒",
-        "color": "#123456",
         "description": null,
         "parentId": null
     });

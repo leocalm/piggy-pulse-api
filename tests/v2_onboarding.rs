@@ -5,6 +5,7 @@ use common::entities::{create_account, create_category};
 use common::{V2_BASE, test_client};
 use rocket::http::{ContentType, Status};
 use serde_json::Value;
+use uuid::Uuid;
 
 /// Helper: create a manual period schedule via POST /periods/schedule
 async fn create_period_schedule(client: &rocket::local::asynchronous::Client) {
@@ -26,17 +27,46 @@ async fn create_period_schedule(client: &rocket::local::asynchronous::Client) {
 
 #[rocket::async_test]
 #[ignore = "requires database"]
-async fn test_onboarding_status_fresh_user_is_not_started() {
+async fn test_onboarding_status_fresh_user_no_currency_is_not_started() {
     let client = test_client().await;
+
+    // Register directly without setting currency (currency is the first required step)
+    let email = format!("fresh.{}@example.com", Uuid::new_v4());
+    let register_payload = serde_json::json!({
+        "name": "Fresh User",
+        "email": email,
+        "password": common::TEST_PASSWORD,
+    });
+    let resp = client
+        .post(format!("{}/auth/register", V2_BASE))
+        .header(ContentType::JSON)
+        .body(register_payload.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Created);
+
+    let resp = client.get(format!("{}/onboarding/status", V2_BASE)).dispatch().await;
+    assert_eq!(resp.status(), Status::Ok);
+
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    // No currency set → status is not_started, currentStep is "currency"
+    assert_eq!(body["status"], "not_started");
+    assert_eq!(body["currentStep"], "currency");
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_onboarding_status_after_currency_set_is_in_progress() {
+    let client = test_client().await;
+    // create_user_and_login registers and sets currency (EUR)
     create_user_and_login(&client).await;
 
     let resp = client.get(format!("{}/onboarding/status", V2_BASE)).dispatch().await;
     assert_eq!(resp.status(), Status::Ok);
 
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
-    // Fresh user has no period schedule, so status should be not_started
-    assert_eq!(body["status"], "not_started");
-    // currentStep should be "period" (first step) for a fresh user
+    // Currency set, no period schedule → in_progress at "period" step
+    assert_eq!(body["status"], "in_progress");
     assert_eq!(body["currentStep"], "period");
 }
 
@@ -50,7 +80,7 @@ async fn test_onboarding_status_current_step_is_valid_or_null() {
     assert_eq!(resp.status(), Status::Ok);
 
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
-    let valid_steps = ["period", "accounts", "categories", "summary"];
+    let valid_steps = ["currency", "period", "accounts", "categories", "summary"];
 
     if !body["currentStep"].is_null() {
         let step = body["currentStep"].as_str().expect("currentStep must be string or null");

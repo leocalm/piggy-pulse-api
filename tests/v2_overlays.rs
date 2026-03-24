@@ -97,6 +97,9 @@ async fn test_create_overlay_all_fields() {
     assert_eq!(body["categoryCaps"].as_array().unwrap().len(), 0);
     // rules should be present (empty)
     assert!(body["rules"].is_object() || body["rules"].is_null());
+    // categoryBreakdown must be present as an array (empty when no transactions)
+    assert!(body["categoryBreakdown"].is_array(), "expected categoryBreakdown array");
+    assert_eq!(body["categoryBreakdown"].as_array().unwrap().len(), 0);
 }
 
 #[rocket::async_test]
@@ -338,13 +341,20 @@ async fn test_get_overlay_computed_fields() {
     common::entities::create_transaction(&client, &account_id, &category_id, amount1, "2026-10-05").await;
     common::entities::create_transaction(&client, &account_id, &category_id, amount2, "2026-10-15").await;
 
-    // GET the overlay — spentAmount and transactionCount must reflect real data
+    // GET the overlay — spentAmount, transactionCount, and categoryBreakdown must reflect real data
     let resp = client.get(format!("{}/overlays/{}", V2_BASE, overlay_id)).dispatch().await;
     assert_eq!(resp.status(), Status::Ok);
 
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
     assert_eq!(body["spentAmount"], amount1 + amount2); // 12000
     assert_eq!(body["transactionCount"], 2);
+
+    // categoryBreakdown must be populated with the single category's total
+    let breakdown = body["categoryBreakdown"].as_array().expect("categoryBreakdown must be array");
+    assert_eq!(breakdown.len(), 1, "expected 1 category in breakdown");
+    assert_eq!(breakdown[0]["categoryId"], category_id);
+    assert_eq!(breakdown[0]["categoryName"], "Compute Cat");
+    assert_eq!(breakdown[0]["amount"], amount1 + amount2); // sorted descending by amount
 }
 
 #[rocket::async_test]
