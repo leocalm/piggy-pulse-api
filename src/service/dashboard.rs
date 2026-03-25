@@ -1,8 +1,9 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::dto::common::Date;
 use crate::dto::dashboard::{
-    BudgetStabilityResponse, CashFlowResponse, CurrentPeriodResponse, FixedCategoriesResponse, FixedCategoryItem, FixedCategoryStatus, NetPositionResponse,
-    SpendingTrendItem, SpendingTrendResponse, TopVendorItem, TopVendorsResponse, UncategorizedResponse, UncategorizedTransaction,
+    BudgetStabilityResponse, CashFlowResponse, CurrentPeriodResponse, FixedCategoriesResponse, FixedCategoryItem, FixedCategoryStatus,
+    NetPositionHistoryPoint, NetPositionHistoryResponse, NetPositionResponse, SpendingTrendItem, SpendingTrendResponse, TopVendorItem, TopVendorsResponse,
+    UncategorizedResponse, UncategorizedTransaction,
 };
 use crate::error::app_error::AppError;
 use uuid::Uuid;
@@ -137,6 +138,20 @@ impl<'a> DashboardService<'a> {
             })
             .collect();
         Ok(UncategorizedResponse { count, transactions })
+    }
+
+    pub async fn get_net_position_history(&self, period_id: &Uuid, user_id: &Uuid) -> Result<NetPositionHistoryResponse, AppError> {
+        let rows = self.repository.get_net_position_history_v2(period_id, user_id).await?;
+        Ok(rows
+            .into_iter()
+            .map(|r| NetPositionHistoryPoint {
+                date: r.date,
+                total: r.total,
+                liquid_amount: r.liquid_amount,
+                protected_amount: r.protected_amount,
+                debt_amount: r.debt_amount,
+            })
+            .collect())
     }
 
     pub async fn get_fixed_categories(&self, period_id: &Uuid, user_id: &Uuid) -> Result<FixedCategoriesResponse, AppError> {

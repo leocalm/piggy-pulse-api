@@ -94,6 +94,16 @@ pub struct FixedCategoryRow {
     pub budgeted: i64,
 }
 
+/// One point in the net-position history series (one calendar day).
+#[derive(sqlx::FromRow)]
+pub struct NetPositionHistoryRow {
+    pub date: String,
+    pub total: i64,
+    pub liquid_amount: i64,
+    pub protected_amount: i64,
+    pub debt_amount: i64,
+}
+
 impl PostgresRepository {
     /// Fetch current-period dashboard data for a given period.
     /// Returns `AppError::NotFound` if the period does not exist for this user.
@@ -496,6 +506,111 @@ WHERE t.user_id = $2
         .await?;
 
         Ok(row.count)
+    }
+
+    /// Fetch daily net-position history for the days elapsed within a period.
+    /// Returns one row per calendar day from period start up to today (or period end, whichever
+    /// is earlier). Returns an empty vec when the user has no accounts.
+    pub async fn get_net_position_history_v2(&self, period_id: &Uuid, user_id: &Uuid) -> Result<Vec<NetPositionHistoryRow>, AppError> {
+        // Verify period exists (will 404 if not found)
+        self.get_budget_period(period_id, user_id).await?;
+
+        let rows = sqlx::query_as::<_, NetPositionHistoryRow>(
+            r#"
+WITH period AS (
+    SELECT start_date, end_date
+    FROM budget_period
+    WHERE id = $1 AND user_id = $2
+),
+days AS (
+    SELECT d::date AS day
+    FROM generate_series(
+        (SELECT start_date FROM period),
+        LEAST((SELECT end_date FROM period), CURRENT_DATE),
+        '1 day'
+    ) AS d
+),
+-- Balance each account carried into the period start (sum of all prior transactions + initial balance)
+base_balances AS (
+    SELECT
+        a.id,
+        a.account_type::text AS account_type,
+        (a.balance + COALESCE(SUM(
+            CASE
+                WHEN c.category_type = 'Incoming'                              THEN  t.amount
+                WHEN c.category_type = 'Outgoing'                              THEN -t.amount
+                WHEN c.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount
+                WHEN c.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount
+                ELSE 0
+            END
+        ), 0))::bigint AS base_balance
+    FROM account a
+    LEFT JOIN transaction t
+        ON (t.from_account_id = a.id OR t.to_account_id = a.id)
+        AND t.user_id = $2
+        AND t.occurred_at < (SELECT start_date FROM period)
+    LEFT JOIN category c ON t.category_id = c.id
+    WHERE a.user_id = $2
+    GROUP BY a.id, a.account_type, a.balance
+),
+-- Per-account, per-day delta within the period
+daily_deltas AS (
+    SELECT
+        a.id AS account_id,
+        t.occurred_at::date AS day,
+        SUM(
+            CASE
+                WHEN c.category_type = 'Incoming'                              THEN  t.amount
+                WHEN c.category_type = 'Outgoing'                              THEN -t.amount
+                WHEN c.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount
+                WHEN c.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount
+                ELSE 0
+            END
+        )::bigint AS delta
+    FROM account a
+    JOIN transaction t
+        ON (t.from_account_id = a.id OR t.to_account_id = a.id)
+        AND t.user_id = $2
+    JOIN category c ON t.category_id = c.id
+    CROSS JOIN period
+    WHERE a.user_id = $2
+      AND t.occurred_at >= period.start_date
+      AND t.occurred_at <= LEAST(period.end_date, CURRENT_DATE)
+    GROUP BY a.id, t.occurred_at::date
+),
+-- Running balance per account per day
+running_balances AS (
+    SELECT
+        bb.id AS account_id,
+        bb.account_type,
+        d.day,
+        (bb.base_balance + SUM(COALESCE(dd.delta, 0)) OVER (
+            PARTITION BY bb.id
+            ORDER BY d.day
+            ROWS UNBOUNDED PRECEDING
+        ))::bigint AS balance
+    FROM base_balances bb
+    CROSS JOIN days d
+    LEFT JOIN daily_deltas dd ON dd.account_id = bb.id AND dd.day = d.day
+)
+SELECT
+    to_char(d.day, 'YYYY-MM-DD')                                                                  AS date,
+    COALESCE(SUM(rb.balance), 0)::bigint                                                          AS total,
+    COALESCE(SUM(CASE WHEN rb.account_type IN ('Checking', 'Wallet', 'Allowance') THEN rb.balance ELSE 0 END), 0)::bigint AS liquid_amount,
+    COALESCE(SUM(CASE WHEN rb.account_type = 'Savings'     THEN rb.balance ELSE 0 END), 0)::bigint AS protected_amount,
+    COALESCE(SUM(CASE WHEN rb.account_type = 'CreditCard'  THEN rb.balance ELSE 0 END), 0)::bigint AS debt_amount
+FROM days d
+LEFT JOIN running_balances rb ON rb.day = d.day
+GROUP BY d.day
+ORDER BY d.day
+            "#,
+        )
+        .bind(period_id)
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows)
     }
 
     /// Fetch fixed categories with their status for a period.

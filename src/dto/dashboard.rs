@@ -116,3 +116,17 @@ pub struct FixedCategoryItem {
 }
 
 pub type FixedCategoriesResponse = Vec<FixedCategoryItem>;
+
+// ===== NetPositionHistory =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct NetPositionHistoryPoint {
+    pub date: String,
+    pub total: i64,
+    pub liquid_amount: i64,
+    pub protected_amount: i64,
+    pub debt_amount: i64,
+}
+
+pub type NetPositionHistoryResponse = Vec<NetPositionHistoryPoint>;
