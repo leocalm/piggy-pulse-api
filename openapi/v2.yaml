@@ -71,6 +71,10 @@ components:
       $ref: './schemas/Dashboard.yaml#/NetPositionHistoryPoint'
     NetPositionHistoryResponse:
       $ref: './schemas/Dashboard.yaml#/NetPositionHistoryResponse'
+    CurrentPeriodHistoryPoint:
+      $ref: './schemas/Dashboard.yaml#/CurrentPeriodHistoryPoint'
+    CurrentPeriodHistoryResponse:
+      $ref: './schemas/Dashboard.yaml#/CurrentPeriodHistoryResponse'
     DurationBased:
       $ref: './schemas/Period.yaml#/DurationBased'
     ManualEndDate:
@@ -311,6 +315,8 @@ paths:
     $ref: './paths/dashboard@budget-stability.yaml'
   /dashboard/net-position-history:
     $ref: './paths/dashboard@net-position-history.yaml'
+  /dashboard/current-period-history:
+    $ref: './paths/dashboard@current-period-history.yaml'
   /periods:
     $ref: './paths/periods.yaml'
   /periods/schedule:

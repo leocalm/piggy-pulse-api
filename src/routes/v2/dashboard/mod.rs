@@ -1,6 +1,7 @@
 mod budget_stability;
 mod cash_flow;
 mod current_period;
+mod current_period_history;
 mod fixed_categories;
 mod net_position;
 mod net_position_history;
@@ -11,6 +12,7 @@ mod uncategorized;
 pub fn routes() -> Vec<rocket::Route> {
     rocket::routes![
         current_period::get_current_period,
+        current_period_history::get_current_period_history,
         net_position::get_net_position,
         net_position_history::get_net_position_history,
         budget_stability::get_budget_stability,

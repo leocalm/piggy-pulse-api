@@ -613,6 +613,59 @@ ORDER BY d.day
         Ok(rows)
     }
 
+    /// Fetch daily spending history for the elapsed days within a period.
+    /// Returns one row per calendar day from period start up to today (or period end, whichever
+    /// is earlier), with the daily amount spent and a cumulative running total.
+    pub async fn get_current_period_history_v2(
+        &self,
+        period_id: &Uuid,
+        user_id: &Uuid,
+    ) -> Result<Vec<crate::dto::dashboard::CurrentPeriodHistoryPoint>, AppError> {
+        // Verify period exists (will 404 if not found)
+        self.get_budget_period(period_id, user_id).await?;
+
+        let rows = sqlx::query_as::<_, crate::dto::dashboard::CurrentPeriodHistoryPoint>(
+            r#"
+WITH period AS (
+    SELECT start_date, end_date
+    FROM budget_period
+    WHERE id = $1 AND user_id = $2
+),
+days AS (
+    SELECT d::date AS day
+    FROM generate_series(
+        (SELECT start_date FROM period),
+        LEAST((SELECT end_date FROM period), CURRENT_DATE),
+        '1 day'
+    ) AS d
+),
+daily_spend AS (
+    SELECT
+        gs.day,
+        COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::bigint AS daily_spent
+    FROM days gs
+    LEFT JOIN transaction t
+        ON t.occurred_at = gs.day
+        AND t.user_id = $2
+    LEFT JOIN category c ON c.id = t.category_id
+    GROUP BY gs.day
+)
+SELECT
+    to_char(ds.day, 'YYYY-MM-DD') AS date,
+    ds.daily_spent,
+    SUM(ds.daily_spent) OVER (ORDER BY ds.day ROWS UNBOUNDED PRECEDING)::bigint AS cumulative_spent
+FROM daily_spend ds
+ORDER BY ds.day
+            "#,
+        )
+        .bind(period_id)
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows)
+    }
+
     /// Fetch fixed categories with their status for a period.
     pub async fn get_fixed_categories_v2(&self, period_id: &Uuid, user_id: &Uuid) -> Result<Vec<FixedCategoryRow>, AppError> {
         self.get_budget_period(period_id, user_id).await?;
