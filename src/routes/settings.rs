@@ -309,6 +309,7 @@ pub async fn post_delete_account(
     payload.validate()?;
 
     let repo = PostgresRepository { pool: pool.inner().clone() };
+    repo.delete_all_user_data(&current_user.id).await?;
     repo.delete_user(&current_user.id).await?;
     cookies.remove_private(Cookie::build("user").build());
     Ok(Status::Ok)
