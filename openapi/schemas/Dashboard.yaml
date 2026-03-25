@@ -95,3 +95,41 @@ BudgetStability:
         type: boolean
       description: List of periods within the budget stability range
       example: [true, false, true]
+
+NetPositionHistoryPoint:
+  type: object
+  required:
+    - date
+    - total
+    - liquidAmount
+    - protectedAmount
+    - debtAmount
+  properties:
+    date:
+      type: string
+      format: date
+      example: '2024-01-15'
+    total:
+      type: integer
+      description: Net position in cents at end of day
+      example: 150000
+    liquidAmount:
+      type: integer
+      description: Liquid assets in cents
+      example: 200000
+      minimum: 0
+    protectedAmount:
+      type: integer
+      description: Protected assets in cents
+      example: 50000
+      minimum: 0
+    debtAmount:
+      type: integer
+      description: Debt in cents
+      example: 100000
+      minimum: 0
+
+NetPositionHistoryResponse:
+  type: array
+  items:
+    $ref: '#/NetPositionHistoryPoint'
