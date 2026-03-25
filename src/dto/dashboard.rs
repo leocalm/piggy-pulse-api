@@ -133,7 +133,7 @@ pub type NetPositionHistoryResponse = Vec<NetPositionHistoryPoint>;
 
 // ===== CurrentPeriodHistory =====
 
-#[derive(Debug, Serialize, sqlx::FromRow)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrentPeriodHistoryPoint {
     pub date: String,
