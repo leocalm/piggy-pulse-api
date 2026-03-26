@@ -77,6 +77,10 @@ components:
       $ref: './schemas/Dashboard.yaml#/CurrentPeriodHistoryResponse'
     CashFlowResponse:
       $ref: './schemas/Dashboard.yaml#/CashFlowResponse'
+    SpendingTrendItem:
+      $ref: './schemas/Dashboard.yaml#/SpendingTrendItem'
+    SpendingTrendResponse:
+      $ref: './schemas/Dashboard.yaml#/SpendingTrendResponse'
     TopVendorItem:
       $ref: './schemas/Dashboard.yaml#/TopVendorItem'
     TopVendorsResponse:
@@ -325,6 +329,8 @@ paths:
     $ref: './paths/dashboard@current-period-history.yaml'
   /dashboard/cash-flow:
     $ref: './paths/dashboard@cash-flow.yaml'
+  /dashboard/spending-trend:
+    $ref: './paths/dashboard@spending-trend.yaml'
   /dashboard/top-vendors:
     $ref: './paths/dashboard@top-vendors.yaml'
   /periods:

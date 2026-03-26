@@ -161,13 +161,51 @@ CurrentPeriodHistoryResponse:
   items:
     $ref: '#/CurrentPeriodHistoryPoint'
 
+SpendingTrendItem:
+  type: object
+  required:
+    - periodId
+    - periodName
+    - totalSpent
+  properties:
+    periodId:
+      type: string
+      format: uuid
+      description: Period ID
+      example: 123e4567-e89b-12d3-a456-426655440000
+    periodName:
+      type: string
+      description: Short period label
+      example: Mar
+    totalSpent:
+      type: integer
+      description: Total spending in cents for this period
+      example: 435000
+      minimum: 0
+
+SpendingTrendResponse:
+  type: object
+  required:
+    - periods
+    - periodAverage
+  properties:
+    periods:
+      type: array
+      items:
+        $ref: '#/SpendingTrendItem'
+    periodAverage:
+      type: integer
+      description: Average spend across the included periods, in cents
+      example: 435000
+      minimum: 0
+
 TopVendorItem:
   type: object
   required:
     - vendorId
     - vendorName
-    - totalSpend
-    - percentage
+    - totalSpent
+    - transactionCount
   properties:
     vendorId:
       type: string
@@ -178,16 +216,16 @@ TopVendorItem:
       type: string
       description: Name of the vendor
       example: Supermarket
-    totalSpend:
+    totalSpent:
       type: integer
       description: Total spent at this vendor in cents for the period
       example: 15000
       minimum: 0
-    percentage:
-      type: number
-      format: double
-      description: Percentage of total spend across all top vendors
-      example: 34.5
+    transactionCount:
+      type: integer
+      description: Number of transactions at this vendor
+      example: 12
+      minimum: 0
 
 TopVendorsResponse:
   type: array
