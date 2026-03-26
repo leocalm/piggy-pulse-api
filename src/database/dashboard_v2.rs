@@ -72,6 +72,7 @@ pub struct TopVendorRow {
     pub vendor_id: Uuid,
     pub vendor_name: String,
     pub total_spend: i64,
+    pub transaction_count: i64,
 }
 
 /// Row returned by uncategorized query.
@@ -437,7 +438,8 @@ LIMIT $2
 SELECT
     v.id AS vendor_id,
     v.name AS vendor_name,
-    COALESCE(SUM(t.amount), 0)::bigint AS total_spend
+    COALESCE(SUM(t.amount), 0)::bigint AS total_spend,
+    COUNT(t.id)::bigint AS transaction_count
 FROM vendor v
 JOIN transaction t ON t.vendor_id = v.id AND t.user_id = $2
 JOIN category c ON c.id = t.category_id AND c.category_type = 'Outgoing'

@@ -160,3 +160,94 @@ CurrentPeriodHistoryResponse:
   type: array
   items:
     $ref: '#/CurrentPeriodHistoryPoint'
+
+SpendingTrendItem:
+  type: object
+  required:
+    - periodId
+    - periodName
+    - totalSpent
+  properties:
+    periodId:
+      type: string
+      format: uuid
+      description: Period ID
+      example: 123e4567-e89b-12d3-a456-426655440000
+    periodName:
+      type: string
+      description: Short period label
+      example: Mar
+    totalSpent:
+      type: integer
+      description: Total spending in cents for this period
+      example: 435000
+      minimum: 0
+
+SpendingTrendResponse:
+  type: object
+  required:
+    - periods
+    - periodAverage
+  properties:
+    periods:
+      type: array
+      items:
+        $ref: '#/SpendingTrendItem'
+    periodAverage:
+      type: integer
+      description: Average spend across the included periods, in cents
+      example: 435000
+      minimum: 0
+
+TopVendorItem:
+  type: object
+  required:
+    - vendorId
+    - vendorName
+    - totalSpent
+    - transactionCount
+  properties:
+    vendorId:
+      type: string
+      format: uuid
+      description: Unique identifier of the vendor
+      example: 123e4567-e89b-12d3-a456-426655440000
+    vendorName:
+      type: string
+      description: Name of the vendor
+      example: Supermarket
+    totalSpent:
+      type: integer
+      description: Total spent at this vendor in cents for the period
+      example: 15000
+      minimum: 0
+    transactionCount:
+      type: integer
+      description: Number of transactions at this vendor
+      example: 12
+      minimum: 0
+
+TopVendorsResponse:
+  type: array
+  items:
+    $ref: '#/TopVendorItem'
+
+CashFlowResponse:
+  type: object
+  required:
+    - inflows
+    - outflows
+    - net
+  properties:
+    inflows:
+      type: integer
+      description: Total inflows in cents for the period
+      example: 500000
+    outflows:
+      type: integer
+      description: Total outflows in cents for the period
+      example: 350000
+    net:
+      type: integer
+      description: Net cash flow (inflows - outflows) in cents
+      example: 150000
