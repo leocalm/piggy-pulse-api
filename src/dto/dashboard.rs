@@ -57,10 +57,15 @@ pub struct CashFlowResponse {
 pub struct SpendingTrendItem {
     pub period_id: Uuid,
     pub period_name: String,
-    pub total_spend: i64,
+    pub total_spent: i64,
 }
 
-pub type SpendingTrendResponse = Vec<SpendingTrendItem>;
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SpendingTrendResponse {
+    pub periods: Vec<SpendingTrendItem>,
+    pub period_average: i64,
+}
 
 // ===== TopVendors =====
 

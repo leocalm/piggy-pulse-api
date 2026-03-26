@@ -75,6 +75,10 @@ components:
       $ref: './schemas/Dashboard.yaml#/CurrentPeriodHistoryPoint'
     CurrentPeriodHistoryResponse:
       $ref: './schemas/Dashboard.yaml#/CurrentPeriodHistoryResponse'
+    SpendingTrendItem:
+      $ref: './schemas/Dashboard.yaml#/SpendingTrendItem'
+    SpendingTrendResponse:
+      $ref: './schemas/Dashboard.yaml#/SpendingTrendResponse'
     DurationBased:
       $ref: './schemas/Period.yaml#/DurationBased'
     ManualEndDate:
@@ -317,6 +321,8 @@ paths:
     $ref: './paths/dashboard@net-position-history.yaml'
   /dashboard/current-period-history:
     $ref: './paths/dashboard@current-period-history.yaml'
+  /dashboard/spending-trend:
+    $ref: './paths/dashboard@spending-trend.yaml'
   /periods:
     $ref: './paths/periods.yaml'
   /periods/schedule:

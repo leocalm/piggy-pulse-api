@@ -91,14 +91,20 @@ impl<'a> DashboardService<'a> {
 
     pub async fn get_spending_trend(&self, period_id: &Uuid, user_id: &Uuid, limit: i64) -> Result<SpendingTrendResponse, AppError> {
         let rows = self.repository.get_spending_trend_v2(period_id, user_id, limit).await?;
-        Ok(rows
+        let periods: Vec<SpendingTrendItem> = rows
             .into_iter()
             .map(|r| SpendingTrendItem {
                 period_id: r.period_id,
                 period_name: r.period_name,
-                total_spend: r.total_spend,
+                total_spent: r.total_spend,
             })
-            .collect())
+            .collect();
+        let period_average = if periods.is_empty() {
+            0
+        } else {
+            periods.iter().map(|p| p.total_spent).sum::<i64>() / periods.len() as i64
+        };
+        Ok(SpendingTrendResponse { periods, period_average })
     }
 
     pub async fn get_top_vendors(&self, period_id: &Uuid, user_id: &Uuid, limit: i64) -> Result<TopVendorsResponse, AppError> {
