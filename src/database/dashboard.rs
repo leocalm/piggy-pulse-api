@@ -504,6 +504,8 @@ FROM account_balances ab
 WITH period_transactions AS (
     SELECT t.category_id, COALESCE(SUM(t.amount), 0)::bigint AS amount_paid
     FROM transaction t
+    JOIN  category c_inner    ON c_inner.id           = t.category_id
+                              AND c_inner.category_type = 'Outgoing'
     CROSS JOIN budget_period bp
     WHERE bp.id      = $1
       AND bp.user_id = $2
