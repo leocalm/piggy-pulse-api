@@ -1779,7 +1779,7 @@ LIMIT 1
     }
 
     /// Compute the total outgoing spend for an Allowance account since the start of its current
-    /// top-up cycle.  Returns 0 if the account has no top-up configuration.
+    /// top-up cycle.  Returns 0 if the account has no top-up configuration or no recognised cycle.
     pub async fn get_allowance_spent_this_cycle(&self, account_id: &Uuid, user_id: &Uuid) -> Result<i64, AppError> {
         #[derive(sqlx::FromRow)]
         struct SpentRow {
@@ -1799,9 +1799,22 @@ cycle_start AS (
             -- weekly: most recent occurrence of top_up_day (0=Sun … 6=Sat)
             WHEN 'weekly' THEN
                 CURRENT_DATE - ((EXTRACT(DOW FROM CURRENT_DATE)::int - cfg.top_up_day + 7) % 7) * INTERVAL '1 day'
-            -- bi-weekly: same day-of-week logic but jump back by 14 days if needed
-            WHEN 'bi-weekly' THEN
-                CURRENT_DATE - ((EXTRACT(DOW FROM CURRENT_DATE)::int - cfg.top_up_day + 7) % 7) * INTERVAL '1 day'
+            -- bi-weekly: find the most-recent matching weekday, then go back an extra 7 days
+            -- if that anchor falls within the current 7-day window (i.e. we are still in the first
+            -- week of the cycle) so that we always cover a full 14-day window.
+            WHEN 'bi-weekly' THEN (
+                WITH weekly_anchor AS (
+                    SELECT CURRENT_DATE
+                        - ((EXTRACT(DOW FROM CURRENT_DATE)::int - cfg.top_up_day + 7) % 7) * INTERVAL '1 day'
+                        AS anchor
+                )
+                SELECT
+                    CASE
+                        WHEN (CURRENT_DATE - anchor::date) < 7 THEN anchor::date - INTERVAL '7 days'
+                        ELSE anchor::date
+                    END
+                FROM weekly_anchor
+            )
             -- monthly: day cfg.top_up_day of the current month (or last month if not yet reached)
             WHEN 'monthly' THEN
                 CASE
@@ -1809,7 +1822,8 @@ cycle_start AS (
                     THEN DATE_TRUNC('month', CURRENT_DATE) + (cfg.top_up_day - 1) * INTERVAL '1 day'
                     ELSE DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') + (cfg.top_up_day - 1) * INTERVAL '1 day'
                 END
-            ELSE CURRENT_DATE
+            -- unknown / NULL cycle: return NULL so no transactions are matched
+            ELSE NULL
         END::date AS start_date
     FROM account_cfg cfg
 )
@@ -1823,8 +1837,9 @@ SELECT
     ), 0)::bigint AS spent
 FROM cycle_start cs
 LEFT JOIN transaction t
-    ON (t.from_account_id = $1 OR t.to_account_id = $1)
+    ON t.from_account_id = $1
     AND t.user_id = $2
+    AND cs.start_date IS NOT NULL
     AND t.occurred_at >= cs.start_date
 LEFT JOIN category cat ON cat.id = t.category_id
             "#,
