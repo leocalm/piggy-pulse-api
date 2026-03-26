@@ -140,3 +140,37 @@ pub struct FixedCategoriesResponse {
     pub total_paid: i64,
     pub categories: Vec<FixedCategoryItemResponse>,
 }
+
+#[derive(Serialize, Debug, Clone, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SubscriptionDisplayStatus {
+    Charged,
+    Today,
+    Upcoming,
+}
+
+#[derive(Serialize, Debug, Clone, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum DashboardBillingCycle {
+    Monthly,
+    Quarterly,
+    Yearly,
+}
+
+#[derive(Serialize, Debug, Clone, JsonSchema)]
+pub struct SubscriptionItemResponse {
+    pub id: String,
+    pub name: String,
+    pub billing_amount: i64,
+    pub billing_cycle: DashboardBillingCycle,
+    pub next_charge_date: String,
+    pub display_status: SubscriptionDisplayStatus,
+}
+
+#[derive(Serialize, Debug, Clone, JsonSchema)]
+pub struct SubscriptionsDashboardResponse {
+    pub active_count: i64,
+    pub monthly_total: i64,
+    pub yearly_total: i64,
+    pub subscriptions: Vec<SubscriptionItemResponse>,
+}

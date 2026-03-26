@@ -545,4 +545,68 @@ ORDER BY
             .map(|r| (r.category_id, r.category_name, r.budgeted_value, r.amount_paid))
             .collect())
     }
+
+    pub async fn dashboard_subscriptions(
+        &self,
+        budget_period_id: &Uuid,
+        user_id: &Uuid,
+    ) -> Result<Vec<(String, String, i64, String, String, String)>, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct SubRow {
+            id: String,
+            name: String,
+            billing_amount: i64,
+            billing_cycle: String,
+            next_charge_date: String,
+            display_status: String,
+        }
+
+        let rows = sqlx::query_as::<_, SubRow>(
+            r#"
+SELECT
+    s.id::text                                                            AS id,
+    s.name                                                                AS name,
+    s.billing_amount                                                      AS billing_amount,
+    s.billing_cycle::text                                                 AS billing_cycle,
+    s.next_charge_date::text                                              AS next_charge_date,
+    CASE
+        WHEN sbe.id IS NOT NULL          THEN 'charged'
+        WHEN s.next_charge_date = CURRENT_DATE THEN 'today'
+        ELSE 'upcoming'
+    END                                                                   AS display_status
+FROM subscription s
+JOIN budget_period bp ON bp.id = $1 AND bp.user_id = $2
+LEFT JOIN LATERAL (
+    SELECT id
+    FROM subscription_billing_event
+    WHERE subscription_id = s.id
+      AND date >= bp.start_date
+      AND date <= bp.end_date
+    LIMIT 1
+) sbe ON true
+WHERE s.user_id = $2
+  AND s.status  = 'active'
+  AND (
+      sbe.id IS NOT NULL
+      OR (s.next_charge_date >= bp.start_date AND s.next_charge_date <= bp.end_date)
+  )
+ORDER BY
+    CASE
+        WHEN sbe.id IS NOT NULL               THEN 0
+        WHEN s.next_charge_date = CURRENT_DATE THEN 1
+        ELSE 2
+    END,
+    s.next_charge_date ASC
+        "#,
+        )
+        .bind(budget_period_id)
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| (r.id, r.name, r.billing_amount, r.billing_cycle, r.next_charge_date, r.display_status))
+            .collect())
+    }
 }

@@ -10,7 +10,7 @@ use crate::dto::common::Date;
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum BillingCycle {
-    Weekly,
+    Quarterly,
     Monthly,
     Yearly,
 }
@@ -94,7 +94,7 @@ pub struct CreateSubscriptionRequest {
     #[validate(range(min = 1))]
     pub billing_amount: i64,
     pub billing_cycle: BillingCycle,
-    /// Day of month (1–31) for monthly/yearly; day of week (1–7, Mon=1) for weekly.
+    /// Day of month (1–31) for monthly/quarterly/yearly.
     #[validate(range(min = 1, max = 31))]
     pub billing_day: i16,
     pub next_charge_date: Date,
