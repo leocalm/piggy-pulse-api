@@ -489,4 +489,58 @@ FROM account_balances ab
             account_count: row.account_count,
         })
     }
+
+    pub async fn fixed_categories(&self, budget_period_id: &Uuid, user_id: &Uuid) -> Result<Vec<(String, String, i64, i64)>, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct FixedCategoryRow {
+            category_id: String,
+            category_name: String,
+            budgeted_value: i64,
+            amount_paid: i64,
+        }
+
+        let rows = sqlx::query_as::<_, FixedCategoryRow>(
+            r#"
+WITH period_transactions AS (
+    SELECT t.category_id, COALESCE(SUM(t.amount), 0)::bigint AS amount_paid
+    FROM transaction t
+    CROSS JOIN budget_period bp
+    WHERE bp.id      = $1
+      AND bp.user_id = $2
+      AND t.user_id  = $2
+      AND t.occurred_at >= bp.start_date
+      AND t.occurred_at <= bp.end_date
+    GROUP BY t.category_id
+)
+SELECT
+    c.id::text                                AS category_id,
+    c.name                                    AS category_name,
+    bc.budgeted_value::bigint                 AS budgeted_value,
+    COALESCE(pt.amount_paid, 0)::bigint       AS amount_paid
+FROM budget_category bc
+JOIN  category c               ON c.id  = bc.category_id
+LEFT JOIN period_transactions pt ON pt.category_id = c.id
+WHERE bc.user_id       = $2
+  AND c.category_type  = 'Outgoing'
+  AND c.behavior       = 'fixed'
+  AND c.is_archived    = false
+ORDER BY
+    CASE
+        WHEN COALESCE(pt.amount_paid, 0) >= bc.budgeted_value THEN 0
+        WHEN COALESCE(pt.amount_paid, 0) > 0                  THEN 1
+        ELSE 2
+    END,
+    bc.budgeted_value DESC
+            "#,
+        )
+        .bind(budget_period_id)
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| (r.category_id, r.category_name, r.budgeted_value, r.amount_paid))
+            .collect())
+    }
 }

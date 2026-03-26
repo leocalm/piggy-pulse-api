@@ -3,8 +3,8 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::RateLimit;
 use crate::models::dashboard::{
-    BudgetPerDayResponse, BudgetStabilityResponse, MonthProgressResponse, MonthlyBurnInResponse, NetPositionResponse, SpentPerCategoryListResponse,
-    TotalAssetsResponse,
+    BudgetPerDayResponse, BudgetStabilityResponse, FixedCategoriesResponse, FixedCategoryItemResponse, FixedCategoryStatus, MonthProgressResponse,
+    MonthlyBurnInResponse, NetPositionResponse, SpentPerCategoryListResponse, TotalAssetsResponse,
 };
 use crate::models::pagination::{CursorParams, TransactionFilters};
 use crate::models::transaction::TransactionResponse;
@@ -134,6 +134,52 @@ pub async fn get_net_position(
     Ok(Json(repo.get_net_position(&budget_period_uuid, &current_user.id).await?))
 }
 
+/// Get fixed-category expense tracking for a budget period.
+/// Returns each fixed-behavior budgeted category with the amount paid (from transactions)
+/// and a status of `paid`, `partial`, or `pending`.
+/// Returns 400 if `period_id` is missing or invalid.
+#[openapi(tag = "Dashboard")]
+#[get("/fixed-categories?<period_id>")]
+pub async fn get_fixed_categories(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    period_id: Option<String>,
+) -> Result<Json<FixedCategoriesResponse>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let budget_period_uuid = parse_period_id(period_id)?;
+    let rows = repo.fixed_categories(&budget_period_uuid, &current_user.id).await?;
+
+    let categories: Vec<FixedCategoryItemResponse> = rows
+        .into_iter()
+        .map(|(id, name, budgeted, paid)| {
+            let status = if paid >= budgeted {
+                FixedCategoryStatus::Paid
+            } else if paid > 0 {
+                FixedCategoryStatus::Partial
+            } else {
+                FixedCategoryStatus::Pending
+            };
+            FixedCategoryItemResponse {
+                id,
+                name,
+                budgeted,
+                paid,
+                status,
+            }
+        })
+        .collect();
+
+    let total_budgeted: i64 = categories.iter().map(|c| c.budgeted).sum();
+    let total_paid: i64 = categories.iter().map(|c| c.paid).sum();
+
+    Ok(Json(FixedCategoriesResponse {
+        total_budgeted,
+        total_paid,
+        categories,
+    }))
+}
+
 pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
     rocket_okapi::openapi_get_routes_spec![
         get_balance_per_day,
@@ -144,6 +190,7 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
         get_total_assets,
         get_budget_stability,
         get_net_position,
+        get_fixed_categories,
     ]
 }
 
