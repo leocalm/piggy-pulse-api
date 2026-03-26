@@ -75,6 +75,12 @@ components:
       $ref: './schemas/Dashboard.yaml#/CurrentPeriodHistoryPoint'
     CurrentPeriodHistoryResponse:
       $ref: './schemas/Dashboard.yaml#/CurrentPeriodHistoryResponse'
+    CashFlowResponse:
+      $ref: './schemas/Dashboard.yaml#/CashFlowResponse'
+    TopVendorItem:
+      $ref: './schemas/Dashboard.yaml#/TopVendorItem'
+    TopVendorsResponse:
+      $ref: './schemas/Dashboard.yaml#/TopVendorsResponse'
     DurationBased:
       $ref: './schemas/Period.yaml#/DurationBased'
     ManualEndDate:
@@ -317,6 +323,10 @@ paths:
     $ref: './paths/dashboard@net-position-history.yaml'
   /dashboard/current-period-history:
     $ref: './paths/dashboard@current-period-history.yaml'
+  /dashboard/cash-flow:
+    $ref: './paths/dashboard@cash-flow.yaml'
+  /dashboard/top-vendors:
+    $ref: './paths/dashboard@top-vendors.yaml'
   /periods:
     $ref: './paths/periods.yaml'
   /periods/schedule:

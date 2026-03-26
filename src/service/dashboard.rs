@@ -39,10 +39,8 @@ impl<'a> DashboardService<'a> {
         let days_in_period = row.days_in_period.max(1) as i64;
         let days_remaining = row.days_remaining.max(0) as i64;
 
-        // Projected spend: if some days have elapsed, extrapolate to full period
         let projected_spend = if days_elapsed > 0 { (row.spent * days_in_period) / days_elapsed } else { 0 };
 
-        // Fetch daily spend sparkline
         let daily_rows = self.repository.get_daily_spend_v2(row.start_date, row.end_date, user_id).await?;
         let daily_spend: Vec<i64> = daily_rows.into_iter().map(|r| r.amount).collect();
 
@@ -91,35 +89,32 @@ impl<'a> DashboardService<'a> {
 
     pub async fn get_spending_trend(&self, period_id: &Uuid, user_id: &Uuid, limit: i64) -> Result<SpendingTrendResponse, AppError> {
         let rows = self.repository.get_spending_trend_v2(period_id, user_id, limit).await?;
-        Ok(rows
+        let periods: Vec<SpendingTrendItem> = rows
             .into_iter()
             .map(|r| SpendingTrendItem {
                 period_id: r.period_id,
                 period_name: r.period_name,
-                total_spend: r.total_spend,
+                total_spent: r.total_spend,
             })
-            .collect())
+            .collect();
+        let period_average = if periods.is_empty() {
+            0
+        } else {
+            periods.iter().map(|p| p.total_spent).sum::<i64>() / periods.len() as i64
+        };
+        Ok(SpendingTrendResponse { periods, period_average })
     }
 
     pub async fn get_top_vendors(&self, period_id: &Uuid, user_id: &Uuid, limit: i64) -> Result<TopVendorsResponse, AppError> {
         let rows = self.repository.get_top_vendors_v2(period_id, user_id, limit).await?;
 
-        let total_spend: i64 = rows.iter().map(|r| r.total_spend).sum();
-
         Ok(rows
             .into_iter()
-            .map(|r| {
-                let percentage = if total_spend > 0 {
-                    (r.total_spend as f64 / total_spend as f64) * 100.0
-                } else {
-                    0.0
-                };
-                TopVendorItem {
-                    vendor_id: r.vendor_id,
-                    vendor_name: r.vendor_name,
-                    total_spend: r.total_spend,
-                    percentage,
-                }
+            .map(|r| TopVendorItem {
+                vendor_id: r.vendor_id,
+                vendor_name: r.vendor_name,
+                total_spent: r.total_spend,
+                transaction_count: r.transaction_count,
             })
             .collect())
     }

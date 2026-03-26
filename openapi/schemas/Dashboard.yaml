@@ -160,3 +160,56 @@ CurrentPeriodHistoryResponse:
   type: array
   items:
     $ref: '#/CurrentPeriodHistoryPoint'
+
+TopVendorItem:
+  type: object
+  required:
+    - vendorId
+    - vendorName
+    - totalSpend
+    - percentage
+  properties:
+    vendorId:
+      type: string
+      format: uuid
+      description: Unique identifier of the vendor
+      example: 123e4567-e89b-12d3-a456-426655440000
+    vendorName:
+      type: string
+      description: Name of the vendor
+      example: Supermarket
+    totalSpend:
+      type: integer
+      description: Total spent at this vendor in cents for the period
+      example: 15000
+      minimum: 0
+    percentage:
+      type: number
+      format: double
+      description: Percentage of total spend across all top vendors
+      example: 34.5
+
+TopVendorsResponse:
+  type: array
+  items:
+    $ref: '#/TopVendorItem'
+
+CashFlowResponse:
+  type: object
+  required:
+    - inflows
+    - outflows
+    - net
+  properties:
+    inflows:
+      type: integer
+      description: Total inflows in cents for the period
+      example: 500000
+    outflows:
+      type: integer
+      description: Total outflows in cents for the period
+      example: 350000
+    net:
+      type: integer
+      description: Net cash flow (inflows - outflows) in cents
+      example: 150000
