@@ -52,7 +52,7 @@ struct UpcomingRow {
 
 fn billing_cycle_from_db(s: &str) -> BillingCycle {
     match s {
-        "weekly" => BillingCycle::Weekly,
+        "quarterly" => BillingCycle::Quarterly,
         "yearly" => BillingCycle::Yearly,
         _ => BillingCycle::Monthly,
     }
@@ -60,7 +60,7 @@ fn billing_cycle_from_db(s: &str) -> BillingCycle {
 
 fn billing_cycle_to_db(c: BillingCycle) -> &'static str {
     match c {
-        BillingCycle::Weekly => "weekly",
+        BillingCycle::Quarterly => "quarterly",
         BillingCycle::Monthly => "monthly",
         BillingCycle::Yearly => "yearly",
     }

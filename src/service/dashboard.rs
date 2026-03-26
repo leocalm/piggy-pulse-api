@@ -3,7 +3,8 @@ use crate::dto::common::Date;
 use crate::dto::dashboard::{
     BudgetStabilityResponse, CashFlowResponse, CurrentPeriodHistoryPoint, CurrentPeriodHistoryResponse, CurrentPeriodResponse, FixedCategoriesResponse,
     FixedCategoryItem, FixedCategoryStatus, NetPositionHistoryPoint, NetPositionHistoryResponse, NetPositionResponse, SpendingTrendItem, SpendingTrendResponse,
-    TopVendorItem, TopVendorsResponse, UncategorizedResponse, UncategorizedTransaction,
+    SubscriptionBillingCycle, SubscriptionDashboardItem, SubscriptionDisplayStatus, SubscriptionsDashboardResponse, TopVendorItem, TopVendorsResponse,
+    UncategorizedResponse, UncategorizedTransaction,
 };
 use crate::error::app_error::AppError;
 use uuid::Uuid;
@@ -183,6 +184,59 @@ impl<'a> DashboardService<'a> {
                 }
             })
             .collect())
+    }
+
+    pub async fn get_subscriptions(&self, period_id: &Uuid, user_id: &Uuid) -> Result<SubscriptionsDashboardResponse, AppError> {
+        let rows = self.repository.get_subscriptions_v2(period_id, user_id).await?;
+
+        let subscriptions: Vec<SubscriptionDashboardItem> = rows
+            .into_iter()
+            .map(|r| {
+                let billing_cycle = match r.billing_cycle.as_str() {
+                    "quarterly" => SubscriptionBillingCycle::Quarterly,
+                    "yearly" => SubscriptionBillingCycle::Yearly,
+                    _ => SubscriptionBillingCycle::Monthly,
+                };
+                let display_status = match r.display_status.as_str() {
+                    "charged" => SubscriptionDisplayStatus::Charged,
+                    "today" => SubscriptionDisplayStatus::Today,
+                    _ => SubscriptionDisplayStatus::Upcoming,
+                };
+                SubscriptionDashboardItem {
+                    id: r.id,
+                    name: r.name,
+                    billing_amount: r.billing_amount,
+                    billing_cycle,
+                    next_charge_date: r.next_charge_date.format("%Y-%m-%d").to_string(),
+                    display_status,
+                }
+            })
+            .collect();
+
+        let active_count = subscriptions.len() as i64;
+        let monthly_total: i64 = subscriptions
+            .iter()
+            .map(|s| match s.billing_cycle {
+                SubscriptionBillingCycle::Monthly => s.billing_amount,
+                SubscriptionBillingCycle::Quarterly => s.billing_amount / 3,
+                SubscriptionBillingCycle::Yearly => s.billing_amount / 12,
+            })
+            .sum();
+        let yearly_total: i64 = subscriptions
+            .iter()
+            .map(|s| match s.billing_cycle {
+                SubscriptionBillingCycle::Monthly => s.billing_amount * 12,
+                SubscriptionBillingCycle::Quarterly => s.billing_amount * 4,
+                SubscriptionBillingCycle::Yearly => s.billing_amount,
+            })
+            .sum();
+
+        Ok(SubscriptionsDashboardResponse {
+            active_count,
+            monthly_total,
+            yearly_total,
+            subscriptions,
+        })
     }
 }
 

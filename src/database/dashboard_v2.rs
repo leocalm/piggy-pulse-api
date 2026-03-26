@@ -113,6 +113,17 @@ pub struct CurrentPeriodHistoryRow {
     pub cumulative_spent: i64,
 }
 
+/// One subscription item returned by the dashboard subscriptions query.
+#[derive(sqlx::FromRow)]
+pub struct SubscriptionDashboardRow {
+    pub id: Uuid,
+    pub name: String,
+    pub billing_amount: i64,
+    pub billing_cycle: String,
+    pub next_charge_date: NaiveDate,
+    pub display_status: String,
+}
+
 impl PostgresRepository {
     /// Fetch current-period dashboard data for a given period.
     /// Returns `AppError::NotFound` if the period does not exist for this user.
@@ -697,6 +708,55 @@ WHERE c.user_id = $2
   AND c.is_archived = false
 GROUP BY c.id, c.name, c.icon, bc.budgeted_value, bp.start_date, bp.end_date
 ORDER BY c.name
+            "#,
+        )
+        .bind(period_id)
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows)
+    }
+
+    pub async fn get_subscriptions_v2(&self, period_id: &Uuid, user_id: &Uuid) -> Result<Vec<SubscriptionDashboardRow>, AppError> {
+        self.get_budget_period(period_id, user_id).await?;
+
+        let rows = sqlx::query_as::<_, SubscriptionDashboardRow>(
+            r#"
+SELECT
+    s.id                                                                  AS id,
+    s.name                                                                AS name,
+    s.billing_amount                                                      AS billing_amount,
+    s.billing_cycle::text                                                 AS billing_cycle,
+    s.next_charge_date                                                    AS next_charge_date,
+    CASE
+        WHEN sbe.id IS NOT NULL               THEN 'charged'
+        WHEN s.next_charge_date = CURRENT_DATE THEN 'today'
+        ELSE 'upcoming'
+    END                                                                   AS display_status
+FROM subscription s
+JOIN budget_period bp ON bp.id = $1 AND bp.user_id = $2
+LEFT JOIN LATERAL (
+    SELECT id
+    FROM subscription_billing_event
+    WHERE subscription_id = s.id
+      AND date >= bp.start_date
+      AND date <= bp.end_date
+    LIMIT 1
+) sbe ON true
+WHERE s.user_id = $2
+  AND s.status  = 'active'
+  AND (
+      sbe.id IS NOT NULL
+      OR (s.next_charge_date >= bp.start_date AND s.next_charge_date <= bp.end_date)
+  )
+ORDER BY
+    CASE
+        WHEN sbe.id IS NOT NULL               THEN 0
+        WHEN s.next_charge_date = CURRENT_DATE THEN 1
+        ELSE 2
+    END,
+    s.next_charge_date ASC
             "#,
         )
         .bind(period_id)

@@ -3,8 +3,9 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::rate_limit::RateLimit;
 use crate::models::dashboard::{
-    BudgetPerDayResponse, BudgetStabilityResponse, FixedCategoriesResponse, FixedCategoryItemResponse, FixedCategoryStatus, MonthProgressResponse,
-    MonthlyBurnInResponse, NetPositionResponse, SpentPerCategoryListResponse, TotalAssetsResponse,
+    BudgetPerDayResponse, BudgetStabilityResponse, DashboardBillingCycle, FixedCategoriesResponse, FixedCategoryItemResponse, FixedCategoryStatus,
+    MonthProgressResponse, MonthlyBurnInResponse, NetPositionResponse, SpentPerCategoryListResponse, SubscriptionDisplayStatus, SubscriptionItemResponse,
+    SubscriptionsDashboardResponse, TotalAssetsResponse,
 };
 use crate::models::pagination::{CursorParams, TransactionFilters};
 use crate::models::transaction::TransactionResponse;
@@ -180,6 +181,73 @@ pub async fn get_fixed_categories(
     }))
 }
 
+/// Returns subscriptions relevant to the selected budget period.
+///
+/// A subscription is included if it has a billing event in the period or its
+/// next_charge_date falls within the period. Returns 400 if `period_id` is
+/// missing or invalid.
+#[openapi(tag = "Dashboard")]
+#[get("/subscriptions?<period_id>")]
+pub async fn get_dashboard_subscriptions(
+    pool: &State<PgPool>,
+    _rate_limit: RateLimit,
+    current_user: CurrentUser,
+    period_id: Option<String>,
+) -> Result<Json<SubscriptionsDashboardResponse>, AppError> {
+    let repo = PostgresRepository { pool: pool.inner().clone() };
+    let budget_period_uuid = parse_period_id(period_id)?;
+    let rows = repo.dashboard_subscriptions(&budget_period_uuid, &current_user.id).await?;
+
+    let subscriptions: Vec<SubscriptionItemResponse> = rows
+        .into_iter()
+        .map(|(id, name, billing_amount, billing_cycle, next_charge_date, display_status)| {
+            let cycle = match billing_cycle.as_str() {
+                "quarterly" => DashboardBillingCycle::Quarterly,
+                "yearly" => DashboardBillingCycle::Yearly,
+                _ => DashboardBillingCycle::Monthly,
+            };
+            let status = match display_status.as_str() {
+                "charged" => SubscriptionDisplayStatus::Charged,
+                "today" => SubscriptionDisplayStatus::Today,
+                _ => SubscriptionDisplayStatus::Upcoming,
+            };
+            SubscriptionItemResponse {
+                id,
+                name,
+                billing_amount,
+                billing_cycle: cycle,
+                next_charge_date,
+                display_status: status,
+            }
+        })
+        .collect();
+
+    let active_count = subscriptions.len() as i64;
+    let monthly_total: i64 = subscriptions
+        .iter()
+        .map(|s| match s.billing_cycle {
+            DashboardBillingCycle::Monthly => s.billing_amount,
+            DashboardBillingCycle::Quarterly => s.billing_amount / 3,
+            DashboardBillingCycle::Yearly => s.billing_amount / 12,
+        })
+        .sum();
+    let yearly_total: i64 = subscriptions
+        .iter()
+        .map(|s| match s.billing_cycle {
+            DashboardBillingCycle::Monthly => s.billing_amount * 12,
+            DashboardBillingCycle::Quarterly => s.billing_amount * 4,
+            DashboardBillingCycle::Yearly => s.billing_amount,
+        })
+        .sum();
+
+    Ok(Json(SubscriptionsDashboardResponse {
+        active_count,
+        monthly_total,
+        yearly_total,
+        subscriptions,
+    }))
+}
+
 pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
     rocket_okapi::openapi_get_routes_spec![
         get_balance_per_day,
@@ -191,6 +259,7 @@ pub fn routes() -> (Vec<rocket::Route>, okapi::openapi3::OpenApi) {
         get_budget_stability,
         get_net_position,
         get_fixed_categories,
+        get_dashboard_subscriptions,
     ]
 }
 

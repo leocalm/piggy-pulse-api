@@ -147,3 +147,41 @@ pub struct CurrentPeriodHistoryPoint {
 }
 
 pub type CurrentPeriodHistoryResponse = Vec<CurrentPeriodHistoryPoint>;
+
+// ===== Subscriptions =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub enum SubscriptionDisplayStatus {
+    Charged,
+    Today,
+    Upcoming,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub enum SubscriptionBillingCycle {
+    Monthly,
+    Quarterly,
+    Yearly,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscriptionDashboardItem {
+    pub id: Uuid,
+    pub name: String,
+    pub billing_amount: i64,
+    pub billing_cycle: SubscriptionBillingCycle,
+    pub next_charge_date: String,
+    pub display_status: SubscriptionDisplayStatus,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscriptionsDashboardResponse {
+    pub active_count: i64,
+    pub monthly_total: i64,
+    pub yearly_total: i64,
+    pub subscriptions: Vec<SubscriptionDashboardItem>,
+}
