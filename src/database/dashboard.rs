@@ -557,7 +557,7 @@ ORDER BY
             name: String,
             billing_amount: i64,
             billing_cycle: String,
-            next_charge_date: String,
+            next_charge_date: NaiveDate,
             display_status: String,
         }
 
@@ -568,7 +568,7 @@ SELECT
     s.name                                                                AS name,
     s.billing_amount                                                      AS billing_amount,
     s.billing_cycle::text                                                 AS billing_cycle,
-    s.next_charge_date::text                                              AS next_charge_date,
+    s.next_charge_date                                                    AS next_charge_date,
     CASE
         WHEN sbe.id IS NOT NULL          THEN 'charged'
         WHEN s.next_charge_date = CURRENT_DATE THEN 'today'
@@ -606,7 +606,16 @@ ORDER BY
 
         Ok(rows
             .into_iter()
-            .map(|r| (r.id, r.name, r.billing_amount, r.billing_cycle, r.next_charge_date, r.display_status))
+            .map(|r| {
+                (
+                    r.id,
+                    r.name,
+                    r.billing_amount,
+                    r.billing_cycle,
+                    r.next_charge_date.format("%Y-%m-%d").to_string(),
+                    r.display_status,
+                )
+            })
             .collect())
     }
 }
