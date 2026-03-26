@@ -104,6 +104,14 @@ pub struct NetPositionHistoryRow {
     pub debt_amount: i64,
 }
 
+/// One point in the current-period spending history (one calendar day).
+#[derive(sqlx::FromRow)]
+pub struct CurrentPeriodHistoryRow {
+    pub date: String,
+    pub daily_spent: i64,
+    pub cumulative_spent: i64,
+}
+
 impl PostgresRepository {
     /// Fetch current-period dashboard data for a given period.
     /// Returns `AppError::NotFound` if the period does not exist for this user.
@@ -603,6 +611,55 @@ FROM days d
 LEFT JOIN running_balances rb ON rb.day = d.day
 GROUP BY d.day
 ORDER BY d.day
+            "#,
+        )
+        .bind(period_id)
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows)
+    }
+
+    /// Fetch daily spending history for the elapsed days within a period.
+    /// Returns one row per calendar day from period start up to today (or period end, whichever
+    /// is earlier), with the daily amount spent and a cumulative running total.
+    pub async fn get_current_period_history_v2(&self, period_id: &Uuid, user_id: &Uuid) -> Result<Vec<CurrentPeriodHistoryRow>, AppError> {
+        // Verify period exists (will 404 if not found)
+        self.get_budget_period(period_id, user_id).await?;
+
+        let rows = sqlx::query_as::<_, CurrentPeriodHistoryRow>(
+            r#"
+WITH period AS (
+    SELECT start_date, end_date
+    FROM budget_period
+    WHERE id = $1 AND user_id = $2
+),
+days AS (
+    SELECT d::date AS day
+    FROM generate_series(
+        (SELECT start_date FROM period),
+        LEAST((SELECT end_date FROM period), CURRENT_DATE),
+        '1 day'
+    ) AS d
+),
+daily_spend AS (
+    SELECT
+        days.day,
+        COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::bigint AS daily_spent
+    FROM days
+    LEFT JOIN transaction t
+        ON t.occurred_at = days.day
+        AND t.user_id = $2
+    LEFT JOIN category c ON c.id = t.category_id
+    GROUP BY days.day
+)
+SELECT
+    to_char(ds.day, 'YYYY-MM-DD') AS date,
+    ds.daily_spent,
+    COALESCE(SUM(ds.daily_spent) OVER (ORDER BY ds.day ROWS UNBOUNDED PRECEDING), 0)::bigint AS cumulative_spent
+FROM daily_spend ds
+ORDER BY ds.day
             "#,
         )
         .bind(period_id)

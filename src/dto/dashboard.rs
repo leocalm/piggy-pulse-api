@@ -130,3 +130,15 @@ pub struct NetPositionHistoryPoint {
 }
 
 pub type NetPositionHistoryResponse = Vec<NetPositionHistoryPoint>;
+
+// ===== CurrentPeriodHistory =====
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CurrentPeriodHistoryPoint {
+    pub date: String,
+    pub cumulative_spent: i64,
+    pub daily_spent: i64,
+}
+
+pub type CurrentPeriodHistoryResponse = Vec<CurrentPeriodHistoryPoint>;
