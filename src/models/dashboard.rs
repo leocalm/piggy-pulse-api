@@ -116,3 +116,27 @@ pub struct NetPositionResponse {
     pub debt_balance: i64,
     pub account_count: i64,
 }
+
+#[derive(Serialize, Debug, Clone, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum FixedCategoryStatus {
+    Paid,
+    Partial,
+    Pending,
+}
+
+#[derive(Serialize, Debug, Clone, JsonSchema)]
+pub struct FixedCategoryItemResponse {
+    pub id: String,
+    pub name: String,
+    pub budgeted: i64,
+    pub paid: i64,
+    pub status: FixedCategoryStatus,
+}
+
+#[derive(Serialize, Debug, Clone, JsonSchema)]
+pub struct FixedCategoriesResponse {
+    pub total_budgeted: i64,
+    pub total_paid: i64,
+    pub categories: Vec<FixedCategoryItemResponse>,
+}
