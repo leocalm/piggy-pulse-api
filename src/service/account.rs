@@ -5,7 +5,7 @@ use crate::dto::accounts::{
 };
 use crate::dto::common::{Date, PaginatedResponse};
 use crate::error::app_error::AppError;
-use crate::models::account::{AccountBalancePerDay, AccountListResponse, AccountRequest, AccountWithMetrics};
+use crate::models::account::{AccountBalancePerDay, AccountListResponse, AccountRequest, AccountType as ModelAccountType, AccountWithMetrics};
 use crate::models::currency::CurrencyResponse;
 use crate::models::dashboard::BudgetPerDayResponse;
 use crate::models::pagination::CursorParams;
@@ -241,6 +241,32 @@ impl<'a> AccountService<'a> {
         };
 
         let account = &metrics.account;
+        let is_allowance = matches!(account.account_type, ModelAccountType::Allowance);
+        let is_credit_card = matches!(account.account_type, ModelAccountType::CreditCard);
+        let is_checking = matches!(account.account_type, ModelAccountType::Checking);
+
+        // Compute allowance-specific: spent this cycle
+        let spent_this_cycle = if is_allowance {
+            self.repository.get_allowance_spent_this_cycle(account_id, user_id).await.unwrap_or(0)
+        } else {
+            0
+        };
+
+        // Compute checking-specific: average daily balance over the period
+        let avg_daily_balance = if is_checking {
+            if let Some(pid) = &resolved_period_id {
+                let period = self.repository.get_budget_period(pid, user_id).await?;
+                self.repository
+                    .get_avg_daily_balance(account_id, period.start_date, period.end_date, user_id)
+                    .await
+                    .unwrap_or(0)
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+
         let base = AccountSummaryResponse {
             id: account.id,
             name: account.name.clone(),
@@ -265,6 +291,13 @@ impl<'a> AccountService<'a> {
             stability_context,
             categories_breakdown,
             transactions_breakdown,
+            top_up_amount: if is_allowance { account.top_up_amount } else { None },
+            top_up_cycle: if is_allowance { account.top_up_cycle.clone() } else { None },
+            top_up_day: if is_allowance { account.top_up_day } else { None },
+            spent_this_cycle,
+            statement_close_day: if is_credit_card { account.statement_close_day } else { None },
+            payment_due_day: if is_credit_card { account.payment_due_day } else { None },
+            avg_daily_balance,
         })
     }
 

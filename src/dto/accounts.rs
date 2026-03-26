@@ -178,6 +178,21 @@ pub struct AccountDetailsResponse {
     pub stability_context: StabilityContext,
     pub categories_breakdown: Vec<CategoryBreakdownItem>,
     pub transactions_breakdown: Vec<TransactionBreakdownItem>,
+    // Allowance-specific fields
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_up_amount: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_up_cycle: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_up_day: Option<i32>,
+    pub spent_this_cycle: i64,
+    // CreditCard-specific fields
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub statement_close_day: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payment_due_day: Option<i32>,
+    // Checking-specific fields
+    pub avg_daily_balance: i64,
 }
 
 impl fmt::Debug for AccountDetailsResponse {

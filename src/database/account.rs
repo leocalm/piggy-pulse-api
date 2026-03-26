@@ -1777,6 +1777,149 @@ LIMIT 1
 
         Ok((rows.into_iter().map(AccountWithMetrics::from).collect(), total_count))
     }
+
+    /// Compute the total outgoing spend for an Allowance account since the start of its current
+    /// top-up cycle.  Returns 0 if the account has no top-up configuration.
+    pub async fn get_allowance_spent_this_cycle(&self, account_id: &Uuid, user_id: &Uuid) -> Result<i64, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct SpentRow {
+            spent: i64,
+        }
+
+        let row = sqlx::query_as::<_, SpentRow>(
+            r#"
+WITH account_cfg AS (
+    SELECT top_up_cycle, top_up_day
+    FROM account
+    WHERE id = $1 AND user_id = $2 AND account_type = 'Allowance'
+),
+cycle_start AS (
+    SELECT
+        CASE cfg.top_up_cycle
+            -- weekly: most recent occurrence of top_up_day (0=Sun … 6=Sat)
+            WHEN 'weekly' THEN
+                CURRENT_DATE - ((EXTRACT(DOW FROM CURRENT_DATE)::int - cfg.top_up_day + 7) % 7) * INTERVAL '1 day'
+            -- bi-weekly: same day-of-week logic but jump back by 14 days if needed
+            WHEN 'bi-weekly' THEN
+                CURRENT_DATE - ((EXTRACT(DOW FROM CURRENT_DATE)::int - cfg.top_up_day + 7) % 7) * INTERVAL '1 day'
+            -- monthly: day cfg.top_up_day of the current month (or last month if not yet reached)
+            WHEN 'monthly' THEN
+                CASE
+                    WHEN EXTRACT(DAY FROM CURRENT_DATE)::int >= cfg.top_up_day
+                    THEN DATE_TRUNC('month', CURRENT_DATE) + (cfg.top_up_day - 1) * INTERVAL '1 day'
+                    ELSE DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') + (cfg.top_up_day - 1) * INTERVAL '1 day'
+                END
+            ELSE CURRENT_DATE
+        END::date AS start_date
+    FROM account_cfg cfg
+)
+SELECT
+    COALESCE(SUM(
+        CASE
+            WHEN cat.category_type = 'Outgoing' THEN t.amount::bigint
+            WHEN cat.category_type = 'Transfer' AND t.from_account_id = $1 THEN t.amount::bigint
+            ELSE 0
+        END
+    ), 0)::bigint AS spent
+FROM cycle_start cs
+LEFT JOIN transaction t
+    ON (t.from_account_id = $1 OR t.to_account_id = $1)
+    AND t.user_id = $2
+    AND t.occurred_at >= cs.start_date
+LEFT JOIN category cat ON cat.id = t.category_id
+            "#,
+        )
+        .bind(account_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map_or(0, |r| r.spent))
+    }
+
+    /// Compute the average daily balance for a Checking account over a given period.
+    /// Returns 0 if no period is provided or no history is available.
+    pub async fn get_avg_daily_balance(&self, account_id: &Uuid, start_date: NaiveDate, end_date: NaiveDate, user_id: &Uuid) -> Result<i64, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct AvgRow {
+            avg_balance: i64,
+        }
+
+        let today = chrono::Local::now().date_naive();
+        let effective_end = if end_date > today { today } else { end_date };
+
+        if effective_end < start_date {
+            return Ok(0);
+        }
+
+        let row = sqlx::query_as::<_, AvgRow>(
+            r#"
+WITH days AS (
+    SELECT d::date AS day
+    FROM generate_series($2::date, $3::date, '1 day') AS d
+),
+base_balance AS (
+    SELECT
+        a.balance + COALESCE(SUM(
+            CASE
+                WHEN c.category_type = 'Incoming'                              THEN  t.amount::bigint
+                WHEN c.category_type = 'Outgoing'                              THEN -t.amount::bigint
+                WHEN c.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
+                WHEN c.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
+                ELSE 0
+            END
+        ), 0) AS base_bal
+    FROM account a
+    LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id)
+                            AND t.occurred_at < $2
+                            AND t.user_id = $4
+    LEFT JOIN category c ON t.category_id = c.id
+    WHERE a.id = $1 AND a.user_id = $4
+    GROUP BY a.id, a.balance
+),
+daily_totals AS (
+    SELECT
+        t.occurred_at::date AS day,
+        SUM(
+            CASE
+                WHEN c.category_type = 'Incoming'                              THEN  t.amount::bigint
+                WHEN c.category_type = 'Outgoing'                              THEN -t.amount::bigint
+                WHEN c.category_type = 'Transfer' AND t.from_account_id = $1  THEN -t.amount::bigint
+                WHEN c.category_type = 'Transfer' AND t.to_account_id   = $1  THEN  t.amount::bigint
+                ELSE 0
+            END
+        ) AS daily_amount
+    FROM transaction t
+    JOIN category c ON c.id = t.category_id
+    WHERE (t.from_account_id = $1 OR t.to_account_id = $1)
+      AND t.user_id = $4
+      AND t.occurred_at >= $2
+      AND t.occurred_at <= $3
+    GROUP BY t.occurred_at::date
+),
+daily_balances AS (
+    SELECT
+        (bb.base_bal + SUM(COALESCE(dt.daily_amount, 0)) OVER (
+            ORDER BY d.day
+            ROWS UNBOUNDED PRECEDING
+        ))::bigint AS balance
+    FROM days d
+    CROSS JOIN base_balance bb
+    LEFT JOIN daily_totals dt ON dt.day = d.day
+)
+SELECT COALESCE(AVG(balance), 0)::bigint AS avg_balance
+FROM daily_balances
+            "#,
+        )
+        .bind(account_id)
+        .bind(start_date)
+        .bind(effective_end)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map_or(0, |r| r.avg_balance))
+    }
 }
 
 pub fn account_type_from_db<T: AsRef<str>>(value: T) -> AccountType {
