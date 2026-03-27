@@ -45,6 +45,8 @@ PeriodResponse:
     - length
     - remainingDays
     - numberOfTransactions
+    - totalSpent
+    - totalBudgeted
   properties:
     id:
       type: string
@@ -90,6 +92,18 @@ PeriodResponse:
       enum: [ active, upcoming, past ]
       description: Status of the period
       example: active
+    totalSpent:
+      type: integer
+      format: int64
+      description: Total amount spent in the period, in cents
+      example: 50000
+      minimum: 0
+    totalBudgeted:
+      type: integer
+      format: int64
+      description: Total budgeted amount for the period, in cents
+      example: 100000
+      minimum: 0
   discriminator:
     propertyName: periodType
     mapping:
@@ -153,11 +167,18 @@ AutomaticSchedule:
     - saturdayPolicy
     - sundayPolicy
     - namePattern
+    - recurrenceMethod
   properties:
     scheduleType:
       type: string
       enum: [ automatic ]
       description: Type of schedule
+    recurrenceMethod:
+      type: string
+      description: "How the period start date is determined"
+      enum: [dayOfMonth, businessDay, dayOfWeek]
+      default: dayOfMonth
+      example: dayOfMonth
     startDayOfTheMonth:
       type: integer
       description: Day of the month to start the schedule

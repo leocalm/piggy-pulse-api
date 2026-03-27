@@ -132,6 +132,7 @@ pub struct PeriodSchedule {
     pub sunday_adjustment: Option<WeekendAdjustment>,
     pub name_pattern: Option<String>,
     pub generate_ahead: Option<i32>,
+    pub recurrence_method: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
