@@ -1,0 +1,57 @@
+post:
+  tags:
+    - Settings
+  summary: Import all data from JSON backup
+  operationId: importData
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          description: Data backup in the same format as the export endpoint
+          properties:
+            accounts:
+              type: array
+              items:
+                type: object
+              description: List of account objects to import
+            categories:
+              type: array
+              items:
+                type: object
+              description: List of category objects to import
+            transactions:
+              type: array
+              items:
+                type: object
+              description: List of transaction objects to import
+  responses:
+    '200':
+      description: Import completed successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              imported:
+                type: object
+                properties:
+                  accounts:
+                    type: integer
+                    description: Number of accounts imported
+                    example: 3
+                  categories:
+                    type: integer
+                    description: Number of categories imported
+                    example: 10
+                  transactions:
+                    type: integer
+                    description: Number of transactions imported
+                    example: 150
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

@@ -5,6 +5,7 @@ ProfileResponse:
   required:
     - name
     - currency
+    - avatar
   properties:
     name:
       type: string
@@ -12,12 +13,17 @@ ProfileResponse:
     currency:
       type: string
       example: "EUR"
+    avatar:
+      type: string
+      description: Emoji used as the user's avatar
+      example: "🐷"
 
 UpdateProfileRequest:
   type: object
   required:
     - name
     - currency
+    - avatar
   properties:
     name:
       type: string
@@ -25,6 +31,10 @@ UpdateProfileRequest:
     currency:
       type: string
       example: "EUR"
+    avatar:
+      type: string
+      description: Emoji used as the user's avatar
+      example: "🐷"
 
 # ===== Preferences =====
 
@@ -43,6 +53,25 @@ NumberFormat:
   enum: ["1,234.56", "1.234,56", "1 234,56"]
   example: "1.234,56"
 
+ColorTheme:
+  type: string
+  enum: ["nebula", "sunrise", "sage_stone", "deep_ocean", "warm_rose", "moonlit"]
+  example: "nebula"
+
+DashboardLayout:
+  type: object
+  properties:
+    widgetOrder:
+      type: array
+      items:
+        type: string
+      example: ["balance", "spending", "budget"]
+    hiddenWidgets:
+      type: array
+      items:
+        type: string
+      example: []
+
 PreferencesResponse:
   type: object
   required:
@@ -50,6 +79,9 @@ PreferencesResponse:
     - dateFormat
     - numberFormat
     - language
+    - compactMode
+    - dashboardLayout
+    - colorTheme
   properties:
     theme:
       $ref: '#/Theme'
@@ -61,6 +93,14 @@ PreferencesResponse:
       type: string
       description: BCP 47 language tag
       example: "en"
+    compactMode:
+      type: boolean
+      description: Whether compact mode is enabled
+      example: false
+    dashboardLayout:
+      $ref: '#/DashboardLayout'
+    colorTheme:
+      $ref: '#/ColorTheme'
 
 UpdatePreferencesRequest:
   type: object
@@ -80,6 +120,15 @@ UpdatePreferencesRequest:
       type: string
       description: BCP 47 language tag
       example: "en"
+    compactMode:
+      type: boolean
+      description: Whether compact mode is enabled
+      default: false
+      example: false
+    dashboardLayout:
+      $ref: '#/DashboardLayout'
+    colorTheme:
+      $ref: '#/ColorTheme'
 
 # ===== Sessions =====
 

@@ -251,3 +251,122 @@ CashFlowResponse:
       type: integer
       description: Net cash flow (inflows - outflows) in cents
       example: 150000
+
+FixedCategoryStatus:
+  type: string
+  enum:
+    - paid
+    - partial
+    - pending
+
+FixedCategoryItem:
+  type: object
+  required:
+    - id
+    - name
+    - budgeted
+    - paid
+    - status
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+    budgeted:
+      type: integer
+      format: int64
+      description: Budgeted amount in cents
+    paid:
+      type: integer
+      format: int64
+      description: Amount paid (from transactions) in cents
+    status:
+      $ref: '#/FixedCategoryStatus'
+
+FixedCategoriesResponse:
+  type: object
+  required:
+    - totalBudgeted
+    - totalPaid
+    - categories
+  properties:
+    totalBudgeted:
+      type: integer
+      format: int64
+      description: Total budgeted across all fixed categories in cents
+    totalPaid:
+      type: integer
+      format: int64
+      description: Total paid across all fixed categories in cents
+    categories:
+      type: array
+      items:
+        $ref: '#/FixedCategoryItem'
+
+SubscriptionDisplayStatus:
+  type: string
+  enum:
+    - charged
+    - today
+    - upcoming
+
+DashboardBillingCycle:
+  type: string
+  enum:
+    - monthly
+    - quarterly
+    - yearly
+
+SubscriptionDashboardItem:
+  type: object
+  required:
+    - id
+    - name
+    - billingAmount
+    - billingCycle
+    - nextChargeDate
+    - displayStatus
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+    billingAmount:
+      type: integer
+      format: int64
+      description: Billing amount in cents
+    billingCycle:
+      $ref: '#/DashboardBillingCycle'
+    nextChargeDate:
+      type: string
+      format: date
+      description: ISO date string (YYYY-MM-DD)
+    displayStatus:
+      $ref: '#/SubscriptionDisplayStatus'
+
+SubscriptionsDashboardResponse:
+  type: object
+  required:
+    - activeCount
+    - monthlyTotal
+    - yearlyTotal
+    - subscriptions
+  properties:
+    activeCount:
+      type: integer
+      format: int64
+      description: Number of active subscriptions in this period
+    monthlyTotal:
+      type: integer
+      format: int64
+      description: Sum of monthly equivalents in cents
+    yearlyTotal:
+      type: integer
+      format: int64
+      description: Sum of yearly equivalents in cents
+    subscriptions:
+      type: array
+      items:
+        $ref: '#/SubscriptionDashboardItem'

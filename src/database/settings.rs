@@ -1,5 +1,5 @@
 use crate::database::postgres_repository::PostgresRepository;
-use crate::dto::settings::{DashboardLayout, DateFormat, NumberFormat, Theme};
+use crate::dto::settings::{ColorTheme, DashboardLayout, DateFormat, NumberFormat, Theme};
 use crate::error::app_error::AppError;
 use crate::models::settings::{
     PeriodModelRequest, PeriodModelResponse, PeriodSchedule, ProfileData, ProfileRequest, ScheduleConfigResponse, Settings, SettingsRequest, UserPreferences,
@@ -12,6 +12,7 @@ use uuid::Uuid;
 struct ProfileV2Row {
     name: String,
     currency: String,
+    avatar: String,
 }
 
 #[derive(sqlx::FromRow)]
@@ -22,6 +23,7 @@ struct PreferencesV2Row {
     language: String,
     compact_mode: bool,
     dashboard_layout: serde_json::Value,
+    color_theme: String,
 }
 
 #[derive(sqlx::FromRow)]
@@ -58,6 +60,28 @@ fn parse_number_format(s: &str) -> NumberFormat {
         "1.234,56" => NumberFormat::PeriodComma,
         "1 234,56" => NumberFormat::SpaceComma,
         _ => NumberFormat::CommaPeriod,
+    }
+}
+
+fn parse_color_theme(s: &str) -> ColorTheme {
+    match s {
+        "sunrise" => ColorTheme::Sunrise,
+        "sage_stone" => ColorTheme::SageStone,
+        "deep_ocean" => ColorTheme::DeepOcean,
+        "warm_rose" => ColorTheme::WarmRose,
+        "moonlit" => ColorTheme::Moonlit,
+        _ => ColorTheme::Nebula,
+    }
+}
+
+fn color_theme_str(ct: ColorTheme) -> &'static str {
+    match ct {
+        ColorTheme::Nebula => "nebula",
+        ColorTheme::Sunrise => "sunrise",
+        ColorTheme::SageStone => "sage_stone",
+        ColorTheme::DeepOcean => "deep_ocean",
+        ColorTheme::WarmRose => "warm_rose",
+        ColorTheme::Moonlit => "moonlit",
     }
 }
 
@@ -350,7 +374,8 @@ impl PostgresRepository {
         let row = sqlx::query_as::<_, ProfileV2Row>(
             r#"
             SELECT u.name,
-                   COALESCE(c.currency, '') AS currency
+                   COALESCE(c.currency, '') AS currency,
+                   u.avatar
             FROM users u
             LEFT JOIN settings s ON s.user_id = u.id
             LEFT JOIN currency c ON c.id = s.default_currency_id
@@ -364,14 +389,22 @@ impl PostgresRepository {
         Ok(crate::dto::settings::ProfileResponse {
             name: row.name,
             currency: row.currency,
+            avatar: row.avatar,
         })
     }
 
-    pub async fn update_profile_v2(&self, user_id: &Uuid, name: &str, currency_code: &str) -> Result<crate::dto::settings::ProfileResponse, AppError> {
+    pub async fn update_profile_v2(
+        &self,
+        user_id: &Uuid,
+        name: &str,
+        currency_code: &str,
+        avatar: &str,
+    ) -> Result<crate::dto::settings::ProfileResponse, AppError> {
         let mut tx = self.pool.begin().await?;
 
-        sqlx::query("UPDATE users SET name = $1 WHERE id = $2")
+        sqlx::query("UPDATE users SET name = $1, avatar = $2 WHERE id = $3")
             .bind(name)
+            .bind(avatar)
             .bind(user_id)
             .execute(&mut *tx)
             .await?;
@@ -407,7 +440,7 @@ impl PostgresRepository {
     pub async fn get_preferences_v2(&self, user_id: &Uuid) -> Result<crate::dto::settings::PreferencesResponse, AppError> {
         let row = sqlx::query_as::<_, PreferencesV2Row>(
             r#"
-            SELECT theme, date_format, number_format, language, compact_mode, dashboard_layout
+            SELECT theme, date_format, number_format, language, compact_mode, dashboard_layout, color_theme
             FROM settings
             WHERE user_id = $1
             "#,
@@ -425,6 +458,7 @@ impl PostgresRepository {
             language: row.language,
             compact_mode: row.compact_mode,
             dashboard_layout,
+            color_theme: parse_color_theme(&row.color_theme),
         })
     }
 
@@ -438,6 +472,7 @@ impl PostgresRepository {
         language: &str,
         compact_mode: bool,
         dashboard_layout: &DashboardLayout,
+        color_theme: ColorTheme,
     ) -> Result<crate::dto::settings::PreferencesResponse, AppError> {
         let layout_json = serde_json::to_value(dashboard_layout).unwrap_or_default();
 
@@ -445,8 +480,8 @@ impl PostgresRepository {
             r#"
             UPDATE settings
             SET theme = $1, date_format = $2, number_format = $3, language = $4,
-                compact_mode = $5, dashboard_layout = $6, updated_at = now()
-            WHERE user_id = $7
+                compact_mode = $5, dashboard_layout = $6, color_theme = $7, updated_at = now()
+            WHERE user_id = $8
             "#,
         )
         .bind(theme)
@@ -455,6 +490,7 @@ impl PostgresRepository {
         .bind(language)
         .bind(compact_mode)
         .bind(layout_json)
+        .bind(color_theme_str(color_theme))
         .bind(user_id)
         .execute(&self.pool)
         .await?;
