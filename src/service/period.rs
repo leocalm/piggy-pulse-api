@@ -330,7 +330,7 @@ fn schedule_request_to_params(request: &CreatePeriodScheduleRequest) -> Result<V
             sunday_adjustment: None,
             name_pattern: None,
             generate_ahead: None,
-            recurrence_method: None,
+            recurrence_method: Some("dayOfMonth"),
         }),
         CreatePeriodScheduleRequest::Automatic {
             start_day_of_the_month,
