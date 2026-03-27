@@ -354,11 +354,11 @@ fn validate_schedule_fields(start_day: i64, period_duration: i64, generate_ahead
     if !(1..=31).contains(&start_day) {
         return Err(AppError::BadRequest("startDayOfTheMonth must be between 1 and 31".to_string()));
     }
-    if period_duration < 1 {
-        return Err(AppError::BadRequest("periodDuration must be at least 1".to_string()));
+    if !(1..=i32::MAX as i64).contains(&period_duration) {
+        return Err(AppError::BadRequest("periodDuration must be between 1 and 2147483647".to_string()));
     }
-    if generate_ahead < 1 {
-        return Err(AppError::BadRequest("generateAhead must be at least 1".to_string()));
+    if !(1..=i32::MAX as i64).contains(&generate_ahead) {
+        return Err(AppError::BadRequest("generateAhead must be between 1 and 2147483647".to_string()));
     }
     Ok(())
 }
