@@ -959,7 +959,7 @@ ORDER BY a.id, d.day
             return Err(AppError::BadRequest("Account name already exists".to_string()));
         }
 
-        // We re-fetch the existing account to get the current currency
+        // We re-fetch the existing account to get the current currency and balance
         let existing_account = self
             .get_account_by_id(id, user_id)
             .await?
@@ -986,45 +986,76 @@ ORDER BY a.id, d.day
             payment_due_day: Option<i32>,
         }
 
-        let row = sqlx::query_as::<_, UpdateAccountRow>(
-            r#"
-            UPDATE account
-            SET name = $1, color = $2, icon = $3, account_type = $4::text::account_type, balance = $5, spend_limit = $6, next_transfer_amount = $7,
-                top_up_amount = $8, top_up_cycle = $9, top_up_day = $10, statement_close_day = $11, payment_due_day = $12
-            WHERE id = $13 AND user_id = $14
-            RETURNING
-                id,
-                name,
-                color,
-                icon,
-                account_type::text as account_type,
-                balance,
-                spend_limit,
-                is_archived,
-                next_transfer_amount,
-                top_up_amount,
-                top_up_cycle,
-                top_up_day::int as top_up_day,
-                statement_close_day::int as statement_close_day,
-                payment_due_day::int as payment_due_day
-            "#,
-        )
-        .bind(&request.name)
-        .bind(&request.color)
-        .bind(&request.icon)
-        .bind(&account_type_str)
-        .bind(request.balance)
-        .bind(request.spend_limit)
-        .bind(request.next_transfer_amount)
-        .bind(request.top_up_amount)
-        .bind(request.top_up_cycle.as_deref())
-        .bind(request.top_up_day)
-        .bind(request.statement_close_day)
-        .bind(request.payment_due_day)
-        .bind(id)
-        .bind(user_id)
-        .fetch_one(&self.pool)
-        .await;
+        // Build the update query conditionally based on whether balance is provided
+        let (sql, balance_to_use) = if let Some(account_balance) = request.balance {
+            (
+                r#"
+                UPDATE account
+                SET name = $1, color = $2, icon = $3, account_type = $4::text::account_type, balance = $5, spend_limit = $6, next_transfer_amount = $7,
+                    top_up_amount = $8, top_up_cycle = $9, top_up_day = $10, statement_close_day = $11, payment_due_day = $12
+                WHERE id = $13 AND user_id = $14
+                RETURNING
+                    id,
+                    name,
+                    color,
+                    icon,
+                    account_type::text as account_type,
+                    balance,
+                    spend_limit,
+                    is_archived,
+                    next_transfer_amount,
+                    top_up_amount,
+                    top_up_cycle,
+                    top_up_day::int as top_up_day,
+                    statement_close_day::int as statement_close_day,
+                    payment_due_day::int as payment_due_day
+                "#,
+                account_balance,
+            )
+        } else {
+            (
+                r#"
+                UPDATE account
+                SET name = $1, color = $2, icon = $3, account_type = $4::text::account_type, balance = balance, spend_limit = $6, next_transfer_amount = $7,
+                    top_up_amount = $8, top_up_cycle = $9, top_up_day = $10, statement_close_day = $11, payment_due_day = $12
+                WHERE id = $13 AND user_id = $14
+                RETURNING
+                    id,
+                    name,
+                    color,
+                    icon,
+                    account_type::text as account_type,
+                    balance,
+                    spend_limit,
+                    is_archived,
+                    next_transfer_amount,
+                    top_up_amount,
+                    top_up_cycle,
+                    top_up_day::int as top_up_day,
+                    statement_close_day::int as statement_close_day,
+                    payment_due_day::int as payment_due_day
+                "#,
+                existing_account.balance, // Use existing balance as dummy bind value
+            )
+        };
+
+        let row = sqlx::query_as::<_, UpdateAccountRow>(sql)
+            .bind(&request.name)
+            .bind(&request.color)
+            .bind(&request.icon)
+            .bind(&account_type_str)
+            .bind(balance_to_use)
+            .bind(request.spend_limit)
+            .bind(request.next_transfer_amount)
+            .bind(request.top_up_amount)
+            .bind(request.top_up_cycle.as_deref())
+            .bind(request.top_up_day)
+            .bind(request.statement_close_day)
+            .bind(request.payment_due_day)
+            .bind(id)
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await;
 
         let row = match row {
             Ok(row) => row,
