@@ -1,0 +1,4981 @@
+openapi: 3.1.0
+info:
+  title: PiggyPulse API
+  version: 2.0.0
+  description: PiggyPulse personal budgeting API
+  license:
+    name: AGPL-3.0
+    url: https://www.gnu.org/licenses/agpl-3.0.en.html
+servers:
+  - url: https://api.piggy-pulse.com/api/v2
+    description: Production
+security:
+  - sessionCookie: []
+  - api_key: []
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      operationId: healthCheck
+      security: []
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /dashboard/current-period:
+    get:
+      tags:
+        - Dashboard
+      summary: Get current period for dashboard
+      operationId: getDashboardCurrentPeriod
+      parameters:
+        - $ref: '#/components/parameters/PeriodId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentPeriod'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /dashboard/net-position:
+    get:
+      tags:
+        - Dashboard
+      summary: Get net position for dashboard
+      operationId: getDashboardNetPosition
+      parameters:
+        - $ref: '#/components/parameters/PeriodId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetPosition'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /dashboard/budget-stability:
+    get:
+      tags:
+        - Dashboard
+      summary: Get budget stability for dashboard
+      operationId: getDashboardBudgetStability
+      parameters:
+        - $ref: '#/components/parameters/PeriodId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetStability'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /dashboard/net-position-history:
+    get:
+      tags:
+        - Dashboard
+      summary: Get net position history for dashboard
+      operationId: getDashboardNetPositionHistory
+      parameters:
+        - $ref: '#/components/parameters/PeriodId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetPositionHistoryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /dashboard/current-period-history:
+    get:
+      tags:
+        - Dashboard
+      summary: Get current period spending history
+      operationId: getDashboardCurrentPeriodHistory
+      parameters:
+        - $ref: '#/components/parameters/PeriodId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentPeriodHistoryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /dashboard/cash-flow:
+    get:
+      tags:
+        - Dashboard
+      summary: Get cash flow for dashboard
+      operationId: getDashboardCashFlow
+      parameters:
+        - $ref: '#/components/parameters/PeriodId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashFlowResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /dashboard/spending-trend:
+    get:
+      tags:
+        - Dashboard
+      summary: Get spending trend for dashboard
+      operationId: getDashboardSpendingTrend
+      parameters:
+        - $ref: '#/components/parameters/PeriodId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpendingTrendResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /dashboard/top-vendors:
+    get:
+      tags:
+        - Dashboard
+      summary: Get top vendors by spend for dashboard
+      operationId: getDashboardTopVendors
+      parameters:
+        - $ref: '#/components/parameters/PeriodId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TopVendorsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /dashboard/fixed-categories:
+    get:
+      tags:
+        - Dashboard
+      summary: Get fixed-category expense tracking for dashboard
+      operationId: getDashboardFixedCategories
+      parameters:
+        - $ref: '#/components/parameters/PeriodId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FixedCategoriesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /dashboard/subscriptions:
+    get:
+      tags:
+        - Dashboard
+      summary: Get subscriptions relevant to the selected budget period
+      operationId: getDashboardSubscriptions
+      parameters:
+        - $ref: '#/components/parameters/PeriodId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionsDashboardResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /periods:
+    get:
+      tags:
+        - Periods
+      summary: Get Periods
+      operationId: getPeriods
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+        - Periods
+      summary: Create Period
+      operationId: createPeriod
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePeriodRequest'
+      responses:
+        '201':
+          description: Period created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /periods/schedule:
+    get:
+      tags:
+        - Schedule
+      summary: Get the schedule
+      operationId: getSchedule
+      description: Retrieve the schedule for automatic period creation
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodScheduleResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+        - Schedule
+      summary: Create a new schedule
+      operationId: createSchedule
+      description: Create the new schedule for automatic period creation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePeriodScheduleRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodScheduleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags:
+        - Schedule
+      summary: Update a schedule
+      operationId: updateSchedule
+      description: Update the schedule for automatic period creation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePeriodScheduleRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodScheduleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Schedule
+      summary: Delete a schedule
+      operationId: deleteSchedule
+      description: Delete the schedule for automatic period creation
+      responses:
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /periods/{id}:
+    get:
+      tags:
+        - Periods
+      summary: Get a Period
+      description: Get a Period
+      operationId: getPeriod
+      parameters:
+        - name: id
+          in: path
+          description: Period ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags:
+        - Periods
+      summary: Update a Period
+      description: Update a Period
+      operationId: updatePeriod
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePeriodRequest'
+      responses:
+        '200':
+          description: Period updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Periods
+      summary: Delete a Period
+      description: Delete a Period
+      operationId: deletePeriod
+      parameters:
+        - name: id
+          in: path
+          description: Period ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Period deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /accounts/options:
+    get:
+      tags:
+        - Accounts
+      summary: List account options
+      operationId: listAccountOptions
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountOptionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /accounts/summary:
+    get:
+      tags:
+        - Accounts
+      summary: List accounts summary
+      operationId: listAccountsSummary
+      parameters:
+        - $ref: '#/components/parameters/PeriodId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountSummaryListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /accounts:
+    get:
+      tags:
+        - Accounts
+      summary: List accounts
+      operationId: listAccounts
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+        - Accounts
+      summary: Create account
+      operationId: createAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountRequest'
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /accounts/{id}:
+    get:
+      tags:
+        - Accounts
+      summary: Get account
+      operationId: getAccount
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags:
+        - Accounts
+      summary: Update account
+      operationId: updateAccount
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAccountRequest'
+      responses:
+        '200':
+          description: Account updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Accounts
+      summary: Delete account
+      operationId: deleteAccount
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Account deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /accounts/{id}/details:
+    get:
+      tags:
+        - Accounts
+      summary: Get account details
+      operationId: getAccountDetails
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/PeriodId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountDetailsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /accounts/{id}/archive:
+    post:
+      tags:
+        - Accounts
+      summary: Archive account
+      operationId: archiveAccount
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Account archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /accounts/{id}/unarchive:
+    post:
+      tags:
+        - Accounts
+      summary: Unarchive account
+      operationId: unarchiveAccount
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Account unarchived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /accounts/{id}/balance-history:
+    get:
+      tags:
+        - Accounts
+      summary: Get account balance history
+      operationId: getAccountBalanceHistory
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/PeriodId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountBalanceHistoryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /accounts/{id}/adjust-balance:
+    post:
+      tags:
+        - Accounts
+      summary: Adjust account starting balance
+      operationId: adjustAccountBalance
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdjustBalanceRequest'
+      responses:
+        '200':
+          description: Balance adjusted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /vendors/options:
+    get:
+      tags:
+        - Vendors
+      summary: List vendor options
+      operationId: listVendorOptions
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorOptionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /vendors:
+    get:
+      tags:
+        - Vendors
+      summary: List vendors
+      operationId: listVendors
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+        - Vendors
+      summary: Create vendor
+      operationId: createVendor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVendorRequest'
+      responses:
+        '201':
+          description: Vendor created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /vendors/{id}:
+    put:
+      tags:
+        - Vendors
+      summary: Update vendor
+      operationId: updateVendor
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateVendorRequest'
+      responses:
+        '200':
+          description: Vendor updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Vendors
+      summary: Delete vendor
+      operationId: deleteVendor
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Vendor deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /vendors/{id}/archive:
+    post:
+      tags:
+        - Vendors
+      summary: Archive vendor
+      operationId: archiveVendor
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Vendor archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /vendors/{id}/unarchive:
+    post:
+      tags:
+        - Vendors
+      summary: Unarchive vendor
+      operationId: unarchiveVendor
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Vendor unarchived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /categories/overview:
+    get:
+      tags:
+        - Categories
+      summary: Get categories overview
+      operationId: getCategoriesOverview
+      parameters:
+        - $ref: '#/components/parameters/PeriodId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryOverviewResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /categories/options:
+    get:
+      tags:
+        - Categories
+      summary: List category options
+      operationId: listCategoryOptions
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryOptionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /categories:
+    get:
+      tags:
+        - Categories
+      summary: List categories
+      operationId: listCategories
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryManagementListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+        - Categories
+      summary: Create category
+      operationId: createCategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCategoryRequest'
+      responses:
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /categories/{id}:
+    put:
+      tags:
+        - Categories
+      summary: Update category
+      operationId: updateCategory
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCategoryRequest'
+      responses:
+        '200':
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Categories
+      summary: Delete category
+      operationId: deleteCategory
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Category deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /categories/{id}/archive:
+    post:
+      tags:
+        - Categories
+      summary: Archive category
+      operationId: archiveCategory
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Category archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /categories/{id}/unarchive:
+    post:
+      tags:
+        - Categories
+      summary: Unarchive category
+      operationId: unarchiveCategory
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Category unarchived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /targets:
+    get:
+      tags:
+        - Categories
+        - Targets
+      summary: Get category targets
+      operationId: getCategoryTargets
+      parameters:
+        - $ref: '#/components/parameters/PeriodId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryTargetsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+        - Categories
+        - Targets
+      summary: Create category target
+      operationId: createCategoryTarget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTargetRequest'
+      responses:
+        '201':
+          description: Target created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TargetItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /targets/{id}:
+    put:
+      tags:
+        - Categories
+        - Targets
+      summary: Update category target
+      operationId: updateCategoryTarget
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTargetRequest'
+      responses:
+        '200':
+          description: Target updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TargetItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /targets/{id}/exclude:
+    post:
+      tags:
+        - Categories
+        - Targets
+      summary: Exclude category from targets
+      operationId: excludeCategoryTarget
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Category excluded from targets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TargetItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /transactions:
+    get:
+      tags:
+        - Transactions
+      summary: List transactions
+      operationId: listTransactions
+      parameters:
+        - $ref: '#/components/parameters/PeriodId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Direction'
+        - $ref: '#/components/parameters/AccountId'
+        - $ref: '#/components/parameters/CategoryId'
+        - $ref: '#/components/parameters/VendorId'
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+        - Transactions
+      summary: Create transaction
+      operationId: createTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransactionRequest'
+      responses:
+        '201':
+          description: Transaction created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /transactions/{id}:
+    put:
+      tags:
+        - Transactions
+      summary: Update transaction
+      operationId: updateTransaction
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTransactionRequest'
+      responses:
+        '200':
+          description: Transaction updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Transactions
+      summary: Delete transaction
+      operationId: deleteTransaction
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Transaction deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /auth/2fa/enable:
+    post:
+      tags:
+        - Auth
+      summary: Begin 2FA setup
+      operationId: enableTwoFactor
+      description: Returns a TOTP secret and QR code URI. 2FA is not active until confirmed via /auth/2fa/verify.
+      responses:
+        '200':
+          description: TOTP secret and QR code URI returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TwoFactorEnableResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /auth/2fa/verify:
+    post:
+      tags:
+        - Auth
+      summary: Confirm 2FA setup or complete login challenge
+      operationId: verifyTwoFactor
+      description: |
+        Dual-purpose endpoint that supports both authenticated and unauthenticated contexts:
+
+        **Setup confirmation (authenticated):**
+        Called after `POST /auth/2fa/enable` to activate 2FA with a valid TOTP code.
+        Requires an active session cookie. Request body: `{ "code": "123456" }`.
+
+        **Login challenge (unauthenticated):**
+        Called after a login that returned `requiresTwoFactor: true`, using the
+        `twoFactorToken` from the login response. No session cookie required.
+        Request body: `{ "code": "123456", "twoFactorToken": "..." }`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TwoFactorCompleteRequest'
+      responses:
+        '200':
+          description: 2FA verified — returns authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /auth/2fa/disable:
+    post:
+      tags:
+        - Auth
+      summary: Disable 2FA
+      operationId: disableTwoFactor
+      description: Requires a valid TOTP code to confirm intent before disabling.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TwoFactorDisableRequest'
+      responses:
+        '204':
+          description: 2FA disabled successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /auth/register:
+    post:
+      tags:
+        - Auth
+      summary: Register a new account
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Account created and authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Login
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: |
+            Login result. If the account has 2FA enabled, returns a challenge token.
+            Otherwise returns the authenticated user and (for token clients) a bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '423':
+          description: Account Locked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: Logout
+      operationId: logout
+      responses:
+        '200':
+          description: Logged out successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Refresh bearer token
+      operationId: refreshToken
+      description: Exchanges the current bearer token for a new one with a refreshed expiry. Session-based clients (web) do not need this endpoint.
+      responses:
+        '200':
+          description: New bearer token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /auth/me:
+    get:
+      tags:
+        - Auth
+      summary: Get current user
+      operationId: getMe
+      responses:
+        '200':
+          description: Current authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /auth/forgot-password:
+    post:
+      tags:
+        - Auth
+      summary: Request password reset email
+      operationId: forgotPassword
+      security: []
+      description: Always returns 200 regardless of whether the email exists, to prevent user enumeration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '200':
+          description: Reset email sent if account exists
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /auth/reset-password:
+    post:
+      tags:
+        - Auth
+      summary: Reset password using token
+      operationId: resetPassword
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '204':
+          description: Password reset successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /auth/password:
+    put:
+      tags:
+        - Auth
+      summary: Change password
+      operationId: changePassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Password changed successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /settings/export/transactions:
+    get:
+      tags:
+        - Settings
+      summary: Export transactions as CSV
+      operationId: exportTransactions
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /settings/export/data:
+    get:
+      tags:
+        - Settings
+      summary: Export all data as JSON
+      operationId: exportAllData
+      responses:
+        '200':
+          description: Full data export as JSON file
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Complete user data export
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /settings/import/data:
+    post:
+      tags:
+        - Settings
+      summary: Import all data from JSON backup
+      operationId: importData
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Data backup in the same format as the export endpoint
+              properties:
+                accounts:
+                  type: array
+                  items:
+                    type: object
+                  description: List of account objects to import
+                categories:
+                  type: array
+                  items:
+                    type: object
+                  description: List of category objects to import
+                transactions:
+                  type: array
+                  items:
+                    type: object
+                  description: List of transaction objects to import
+      responses:
+        '200':
+          description: Import completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imported:
+                    type: object
+                    properties:
+                      accounts:
+                        type: integer
+                        description: Number of accounts imported
+                        example: 3
+                      categories:
+                        type: integer
+                        description: Number of categories imported
+                        example: 10
+                      transactions:
+                        type: integer
+                        description: Number of transactions imported
+                        example: 150
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /settings/sessions/{id}:
+    delete:
+      tags:
+        - Settings
+      summary: Revoke a session
+      operationId: revokeSession
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Session revoked
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /settings/profile:
+    get:
+      tags:
+        - Settings
+      summary: Get profile settings
+      operationId: getProfile
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags:
+        - Settings
+      summary: Update profile settings
+      operationId: updateProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /settings/preferences:
+    get:
+      tags:
+        - Settings
+      summary: Get preferences
+      operationId: getPreferences
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferencesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags:
+        - Settings
+      summary: Update preferences
+      operationId: updatePreferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePreferencesRequest'
+      responses:
+        '200':
+          description: Preferences updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferencesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /settings/sessions:
+    get:
+      tags:
+        - Settings
+      summary: List active sessions
+      operationId: listSessions
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /settings/reset-structure:
+    post:
+      tags:
+        - Settings
+      summary: Reset structure
+      operationId: resetStructure
+      description: Deletes all accounts, categories, vendors, periods and transactions while keeping the user account intact. Requires password confirmation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetStructureRequest'
+      responses:
+        '204':
+          description: Structure reset successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /settings/account:
+    delete:
+      tags:
+        - Settings
+      summary: Delete user account
+      operationId: deleteUserAccount
+      description: Permanently deletes the user account and all associated data. Requires password confirmation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteAccountRequest'
+      responses:
+        '204':
+          description: Account deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /overlays/{id}/transactions/{txId}/include:
+    post:
+      tags:
+        - Overlays
+      summary: Manually include a transaction in an overlay
+      operationId: includeOverlayTransaction
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - name: txId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Transaction ID
+      responses:
+        '204':
+          description: Transaction included
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /overlays/{id}/transactions/{txId}/exclude:
+    delete:
+      tags:
+        - Overlays
+      summary: Manually exclude a transaction from an overlay
+      operationId: excludeOverlayTransaction
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - name: txId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Transaction ID
+      responses:
+        '204':
+          description: Transaction excluded
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /overlays/{id}/transactions:
+    get:
+      tags:
+        - Overlays
+      summary: List overlay transactions
+      operationId: listOverlayTransactions
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverlayTransactionListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /overlays/{id}:
+    get:
+      tags:
+        - Overlays
+      summary: Get overlay by ID
+      operationId: getOverlay
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverlayResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags:
+        - Overlays
+      summary: Update overlay
+      operationId: updateOverlay
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOverlayRequest'
+      responses:
+        '200':
+          description: Overlay updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverlayResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Overlays
+      summary: Delete overlay
+      operationId: deleteOverlay
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Overlay deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /overlays:
+    get:
+      tags:
+        - Overlays
+      summary: List overlays
+      operationId: listOverlays
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverlayListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+        - Overlays
+      summary: Create overlay
+      operationId: createOverlay
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOverlayRequest'
+      responses:
+        '201':
+          description: Overlay created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverlayResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /currencies/{code}:
+    get:
+      tags:
+        - Currencies
+      summary: Get currency by code
+      operationId: getCurrency
+      security: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ISO 4217 currency code
+          example: EUR
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrencyResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /currencies:
+    get:
+      tags:
+        - Currencies
+      summary: List all currencies
+      operationId: listCurrencies
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrencyListResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /onboarding/status:
+    get:
+      tags:
+        - Onboarding
+      summary: Get onboarding status
+      operationId: getOnboardingStatus
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /onboarding/complete:
+    post:
+      tags:
+        - Onboarding
+      summary: Mark onboarding as complete
+      operationId: completeOnboarding
+      responses:
+        '204':
+          description: Onboarding completed
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /unlock:
+    get:
+      tags:
+        - Auth
+      summary: Unlock account via email token
+      operationId: unlockAccount
+      security: []
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Unlock token received via email
+      responses:
+        '200':
+          description: Account unlocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnlockResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /auth/2fa/backup-codes/regenerate:
+    post:
+      tags:
+        - Auth
+      summary: Regenerate backup codes
+      operationId: regenerateBackupCodes
+      description: Invalidates existing backup codes and generates a new set. Requires current TOTP code to confirm.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegenerateBackupCodesRequest'
+      responses:
+        '200':
+          description: New backup codes generated (shown once only)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupCodesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /auth/2fa/emergency-disable/request:
+    post:
+      tags:
+        - Auth
+      summary: Request emergency 2FA disable
+      operationId: emergencyDisableRequest
+      security: []
+      description: Sends an email with a disable token. Always returns 200 regardless of whether the account exists.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmergencyDisableRequestBody'
+      responses:
+        '200':
+          description: Email sent if account exists
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /auth/2fa/emergency-disable/confirm:
+    post:
+      tags:
+        - Auth
+      summary: Confirm emergency 2FA disable
+      operationId: emergencyDisableConfirm
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmergencyDisableConfirmRequest'
+      responses:
+        '204':
+          description: 2FA disabled via emergency flow
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /auth/2fa/status:
+    get:
+      tags:
+        - Auth
+      summary: Get 2FA status
+      operationId: getTwoFactorStatus
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TwoFactorStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: session
+      description: Session cookie for authentication
+    api_key:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+  responses:
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UnauthorizedErrorResponse'
+    BadRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BadRequestErrorResponse'
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/NotFoundErrorResponse'
+    InternalServerError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/InternalServerErrorResponse'
+    ServiceUnavailable:
+      description: Service unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ServiceUnavailableErrorResponse'
+    TooManyRequests:
+      description: Too Many Requests
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UnprocessableEntity:
+      description: Unprocessable Entity
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BadRequestErrorResponse'
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ConflictErrorResponse'
+  parameters:
+    PeriodId:
+      name: periodId
+      in: query
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: The ID of the period
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Cursor for pagination
+      schema:
+        type: string
+        format: uuid
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Limit for pagination
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Id:
+      name: id
+      in: path
+      required: true
+      description: Entity id
+      schema:
+        type: string
+        format: uuid
+    Direction:
+      name: direction
+      in: query
+      required: false
+      schema:
+        type: string
+        enum:
+          - income
+          - expense
+          - transfer
+      description: Filter by transaction direction based on category type
+    AccountId:
+      name: accountId
+      in: query
+      required: false
+      schema:
+        type: string
+        format: uuid
+      description: Filter by account ID
+      example: 123e4567-e89b-12d3-a456-426655440000
+    CategoryId:
+      name: categoryId
+      in: query
+      required: false
+      schema:
+        type: string
+        format: uuid
+      description: Filter by category ID
+      example: 123e4567-e89b-12d3-a456-426655440000
+    VendorId:
+      name: vendorId
+      in: query
+      required: false
+      schema:
+        type: string
+        format: uuid
+      description: Filter by vendor ID
+      example: 123e4567-e89b-12d3-a456-426655440000
+    FromDate:
+      name: fromDate
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date
+      description: Filter transactions from this date (inclusive)
+      example: '2024-01-01'
+    ToDate:
+      name: toDate
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date
+      description: Filter transactions up to this date (inclusive)
+      example: '2024-01-31'
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - database
+      properties:
+        status:
+          type: string
+          description: Status of the health check
+          example: OK
+        database:
+          type: string
+          description: Database status
+          example: connected
+    CurrentPeriod:
+      type: object
+      required:
+        - spent
+        - target
+        - daysRemaining
+        - daysInPeriod
+        - projectedSpend
+      properties:
+        spent:
+          type: integer
+          description: Amount spent in the current period, in cents
+          example: 10050
+          minimum: 0
+        target:
+          type: integer
+          description: Target amount for the current period, in cents
+          example: 10000
+          minimum: 0
+        daysRemaining:
+          type: integer
+          description: Number of days remaining in the current period
+          example: 10
+          minimum: 0
+        daysInPeriod:
+          type: integer
+          description: Number of days in the current period
+          example: 30
+          minimum: 0
+        projectedSpend:
+          type: integer
+          description: Projected spend for the current period, in cents
+          example: 10000
+          minimum: 0
+    NetPosition:
+      type: object
+      required:
+        - total
+        - differenceThisPeriod
+        - numberOfAccounts
+        - liquidAmount
+        - protectedAmount
+        - debtAmount
+      properties:
+        total:
+          type: integer
+          description: Total net position, in cents
+          example: 10000
+        differenceThisPeriod:
+          type: integer
+          description: Difference between the current period and the previous period, in cents
+          example: 1000
+        numberOfAccounts:
+          type: integer
+          description: Number of accounts in the net position
+          example: 2
+          minimum: 0
+        liquidAmount:
+          type: integer
+          description: Liquid amount in the net position, in cents
+          example: 10000
+          minimum: 0
+        protectedAmount:
+          type: integer
+          description: Protected amount in the net position, in cents
+          example: 10000
+          minimum: 0
+        debtAmount:
+          type: integer
+          description: Debt amount in the net position, in cents
+          example: 10000
+          minimum: 0
+    BudgetStability:
+      type: object
+      required:
+        - stability
+        - periodsWithinRange
+        - periodsStability
+      properties:
+        stability:
+          type: integer
+          description: Stability of the budget, as a percentage
+          example: 99
+          minimum: 0
+        periodsWithinRange:
+          type: integer
+          description: Number of periods within the budget stability range
+          example: 10
+          minimum: 0
+        periodsStability:
+          type: array
+          items:
+            type: boolean
+          description: List of periods within the budget stability range
+          example:
+            - true
+            - false
+            - true
+    NetPositionHistoryPoint:
+      type: object
+      required:
+        - date
+        - total
+        - liquidAmount
+        - protectedAmount
+        - debtAmount
+      properties:
+        date:
+          type: string
+          format: date
+          example: '2024-01-15'
+        total:
+          type: integer
+          description: Net position in cents at end of day
+          example: 150000
+        liquidAmount:
+          type: integer
+          description: Liquid assets in cents
+          example: 200000
+          minimum: 0
+        protectedAmount:
+          type: integer
+          description: Protected assets in cents
+          example: 50000
+          minimum: 0
+        debtAmount:
+          type: integer
+          description: Debt in cents
+          example: 100000
+          minimum: 0
+    NetPositionHistoryResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/NetPositionHistoryPoint'
+    CurrentPeriodHistoryPoint:
+      type: object
+      required:
+        - date
+        - cumulativeSpent
+        - dailySpent
+      properties:
+        date:
+          type: string
+          format: date
+          example: '2024-01-15'
+        cumulativeSpent:
+          type: integer
+          description: Cumulative spending in cents as of end of day
+          example: 45000
+          minimum: 0
+        dailySpent:
+          type: integer
+          description: Spending on that day in cents
+          example: 5000
+          minimum: 0
+    CurrentPeriodHistoryResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/CurrentPeriodHistoryPoint'
+    CashFlowResponse:
+      type: object
+      required:
+        - inflows
+        - outflows
+        - net
+      properties:
+        inflows:
+          type: integer
+          description: Total inflows in cents for the period
+          example: 500000
+        outflows:
+          type: integer
+          description: Total outflows in cents for the period
+          example: 350000
+        net:
+          type: integer
+          description: Net cash flow (inflows - outflows) in cents
+          example: 150000
+    SpendingTrendItem:
+      type: object
+      required:
+        - periodId
+        - periodName
+        - totalSpent
+      properties:
+        periodId:
+          type: string
+          format: uuid
+          description: Period ID
+          example: 123e4567-e89b-12d3-a456-426655440000
+        periodName:
+          type: string
+          description: Short period label
+          example: Mar
+        totalSpent:
+          type: integer
+          description: Total spending in cents for this period
+          example: 435000
+          minimum: 0
+    SpendingTrendResponse:
+      type: object
+      required:
+        - periods
+        - periodAverage
+      properties:
+        periods:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpendingTrendItem'
+        periodAverage:
+          type: integer
+          description: Average spend across the included periods, in cents
+          example: 435000
+          minimum: 0
+    TopVendorItem:
+      type: object
+      required:
+        - vendorId
+        - vendorName
+        - totalSpent
+        - transactionCount
+      properties:
+        vendorId:
+          type: string
+          format: uuid
+          description: Unique identifier of the vendor
+          example: 123e4567-e89b-12d3-a456-426655440000
+        vendorName:
+          type: string
+          description: Name of the vendor
+          example: Supermarket
+        totalSpent:
+          type: integer
+          description: Total spent at this vendor in cents for the period
+          example: 15000
+          minimum: 0
+        transactionCount:
+          type: integer
+          description: Number of transactions at this vendor
+          example: 12
+          minimum: 0
+    TopVendorsResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/TopVendorItem'
+    FixedCategoryStatus:
+      type: string
+      enum:
+        - paid
+        - partial
+        - pending
+    FixedCategoryItem:
+      type: object
+      required:
+        - id
+        - name
+        - budgeted
+        - paid
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        budgeted:
+          type: integer
+          format: int64
+          description: Budgeted amount in cents
+        paid:
+          type: integer
+          format: int64
+          description: Amount paid (from transactions) in cents
+        status:
+          $ref: '#/components/schemas/FixedCategoryStatus'
+    FixedCategoriesResponse:
+      type: object
+      required:
+        - totalBudgeted
+        - totalPaid
+        - categories
+      properties:
+        totalBudgeted:
+          type: integer
+          format: int64
+          description: Total budgeted across all fixed categories in cents
+        totalPaid:
+          type: integer
+          format: int64
+          description: Total paid across all fixed categories in cents
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/FixedCategoryItem'
+    SubscriptionDisplayStatus:
+      type: string
+      enum:
+        - charged
+        - today
+        - upcoming
+    DashboardBillingCycle:
+      type: string
+      enum:
+        - monthly
+        - quarterly
+        - yearly
+    SubscriptionDashboardItem:
+      type: object
+      required:
+        - id
+        - name
+        - billingAmount
+        - billingCycle
+        - nextChargeDate
+        - displayStatus
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        billingAmount:
+          type: integer
+          format: int64
+          description: Billing amount in cents
+        billingCycle:
+          $ref: '#/components/schemas/DashboardBillingCycle'
+        nextChargeDate:
+          type: string
+          format: date
+          description: ISO date string (YYYY-MM-DD)
+        displayStatus:
+          $ref: '#/components/schemas/SubscriptionDisplayStatus'
+    SubscriptionsDashboardResponse:
+      type: object
+      required:
+        - activeCount
+        - monthlyTotal
+        - yearlyTotal
+        - subscriptions
+      properties:
+        activeCount:
+          type: integer
+          format: int64
+          description: Number of active subscriptions in this period
+          minimum: 0
+        monthlyTotal:
+          type: integer
+          format: int64
+          description: Sum of monthly equivalents in cents
+        yearlyTotal:
+          type: integer
+          format: int64
+          description: Sum of yearly equivalents in cents
+        subscriptions:
+          type: array
+          items:
+            $ref: '#/components/schemas/SubscriptionDashboardItem'
+    DurationBased:
+      required:
+        - duration
+      properties:
+        periodType:
+          type: string
+          enum:
+            - duration
+        duration:
+          type: object
+          required:
+            - durationUnits
+            - durationUnit
+          properties:
+            durationUnits:
+              type: integer
+              description: Number of units in the period
+              example: 30
+              minimum: 1
+            durationUnit:
+              type: string
+              description: The unit of the period duration
+              enum:
+                - days
+                - weeks
+                - months
+              example: days
+    ManualEndDate:
+      required:
+        - manualEndDate
+      properties:
+        periodType:
+          type: string
+          enum:
+            - manualEndDate
+        manualEndDate:
+          type: string
+          format: date
+          description: Manual end date of the period
+          example: '2022-01-31'
+    PeriodResponse:
+      type: object
+      required:
+        - id
+        - startDate
+        - name
+        - periodType
+        - length
+        - remainingDays
+        - numberOfTransactions
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier of the period
+          example: 123e4567-e89b-12d3-a456-426655440000
+        startDate:
+          type: string
+          format: date
+          description: Start date of the period
+          example: '2022-01-01'
+        name:
+          type: string
+          description: Name of the period
+          example: January 2022
+        periodType:
+          type: string
+          enum:
+            - duration
+            - manualEndDate
+          description: Discriminator for the period type
+        length:
+          type: integer
+          description: Length of the period in days
+          example: 30
+          minimum: 1
+        remainingDays:
+          type:
+            - integer
+            - 'null'
+          description: Number of days remaining in the period
+          example: 27
+          minimum: 0
+        numberOfTransactions:
+          type: integer
+          description: Number of transactions in the period
+          example: 100
+          minimum: 0
+        percentageOfTargetUsed:
+          type:
+            - integer
+            - 'null'
+          description: Percentage of target used in the period. Null when no spending target is set.
+          example: 50
+          minimum: 0
+          maximum: 100
+        status:
+          type: string
+          enum:
+            - active
+            - upcoming
+            - past
+          description: Status of the period
+          example: active
+      discriminator:
+        propertyName: periodType
+        mapping:
+          duration: '#/components/schemas/DurationBased'
+          manualEndDate: '#/components/schemas/ManualEndDate'
+      oneOf:
+        - $ref: '#/components/schemas/DurationBased'
+        - $ref: '#/components/schemas/ManualEndDate'
+    PeriodListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/PeriodResponse'
+    CreatePeriodRequest:
+      type: object
+      required:
+        - startDate
+        - name
+        - periodType
+      properties:
+        startDate:
+          type: string
+          format: date
+          description: Start date of the period
+          example: '2022-01-01'
+        name:
+          type: string
+          description: Name of the period
+          example: January 2022
+        periodType:
+          type: string
+          enum:
+            - duration
+            - manualEndDate
+          description: Discriminator for the period type
+      discriminator:
+        propertyName: periodType
+        mapping:
+          duration: '#/components/schemas/DurationBased'
+          manualEndDate: '#/components/schemas/ManualEndDate'
+      oneOf:
+        - $ref: '#/components/schemas/DurationBased'
+        - $ref: '#/components/schemas/ManualEndDate'
+    UpdatePeriodRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreatePeriodRequest'
+    AutomaticSchedule:
+      type: object
+      required:
+        - scheduleType
+        - startDayOfTheMonth
+        - periodDuration
+        - generateAhead
+        - durationUnit
+        - saturdayPolicy
+        - sundayPolicy
+        - namePattern
+      properties:
+        scheduleType:
+          type: string
+          enum:
+            - automatic
+          description: Type of schedule
+        startDayOfTheMonth:
+          type: integer
+          description: Day of the month to start the schedule
+          example: 1
+          minimum: 1
+          maximum: 31
+        periodDuration:
+          type: integer
+          description: Duration of each period in days
+          example: 30
+          minimum: 1
+        generateAhead:
+          type: integer
+          description: Number of periods to generate ahead
+          example: 3
+          minimum: 1
+        durationUnit:
+          type: string
+          enum:
+            - days
+            - weeks
+            - months
+          description: Unit of the period duration
+          example: days
+        saturdayPolicy:
+          type: string
+          enum:
+            - keep
+            - monday
+            - friday
+          description: Policy for Saturdays in the schedule
+          example: keep
+          default: keep
+        sundayPolicy:
+          type: string
+          enum:
+            - keep
+            - monday
+            - friday
+          description: Policy for Sundays in the schedule
+          example: keep
+          default: keep
+        namePattern:
+          type: string
+          description: Pattern for the period name
+          example: '{MONTH} {YEAR}'
+    ManualSchedule:
+      type: object
+      required:
+        - scheduleType
+      properties:
+        scheduleType:
+          type: string
+          enum:
+            - manual
+          description: Type of schedule
+    PeriodScheduleResponse:
+      type: object
+      required:
+        - id
+        - scheduleType
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier of the schedule
+          example: 123e4567-e89b-12d3-a456-426655440000
+        scheduleType:
+          type: string
+          enum:
+            - manual
+            - automatic
+      discriminator:
+        propertyName: scheduleType
+        mapping:
+          manual: '#/components/schemas/ManualSchedule'
+          automatic: '#/components/schemas/AutomaticSchedule'
+      oneOf:
+        - $ref: '#/components/schemas/ManualSchedule'
+        - $ref: '#/components/schemas/AutomaticSchedule'
+    CreatePeriodScheduleRequest:
+      type: object
+      required:
+        - scheduleType
+      properties:
+        scheduleType:
+          type: string
+          enum:
+            - manual
+            - automatic
+      discriminator:
+        propertyName: scheduleType
+        mapping:
+          manual: '#/components/schemas/ManualSchedule'
+          automatic: '#/components/schemas/AutomaticSchedule'
+      oneOf:
+        - $ref: '#/components/schemas/ManualSchedule'
+        - $ref: '#/components/schemas/AutomaticSchedule'
+    UpdatePeriodScheduleRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreatePeriodScheduleRequest'
+    AccountBase:
+      type: object
+      required:
+        - id
+        - name
+        - type
+        - color
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Account ID
+          example: 123e4567-e89b-12d3-a456-426655440000
+        name:
+          type: string
+          description: Account name
+          example: Main Checking Account
+        color:
+          type: string
+          description: Account color in
+          pattern: ^#[0-9A-Fa-f]{6}$
+          example: '#000000'
+        type:
+          type: string
+          description: Account type
+          enum:
+            - Checking
+            - Savings
+            - CreditCard
+            - Allowance
+            - Wallet
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+          description: Account status
+          example: active
+    AccountResponse:
+      allOf:
+        - $ref: '#/components/schemas/AccountBase'
+        - type: object
+          required:
+            - initialBalance
+            - currency
+            - spendLimit
+          properties:
+            initialBalance:
+              type: integer
+              example: 10000
+            currency:
+              $ref: '#/components/schemas/CurrencyResponse'
+            spendLimit:
+              type:
+                - integer
+                - 'null'
+              description: Spend limit in cents. Always null for checking, savings, and wallet accounts.
+              minimum: 0
+              example: 50000
+    AccountListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/AccountResponse'
+    AccountOptionResponse:
+      type: object
+      required:
+        - id
+        - name
+        - color
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Account ID
+          example: 123e4567-e89b-12d3-a456-426655440000
+        name:
+          type: string
+          description: Account name
+          example: Main Checking Account
+        color:
+          type: string
+          description: Account color in
+          pattern: ^#[0-9A-Fa-f]{6}$
+          example: '#000000'
+    AccountOptionListResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/AccountOptionResponse'
+    AccountSummaryResponse:
+      allOf:
+        - $ref: '#/components/schemas/AccountBase'
+        - type: object
+          required:
+            - currentBalance
+            - netChangeThisPeriod
+            - nextTransfer
+            - balanceAfterNextTransfer
+            - numberOfTransactions
+          properties:
+            currentBalance:
+              type: integer
+              description: Current balance in cents
+              example: 10000
+            netChangeThisPeriod:
+              type: integer
+              description: Net change this period in cents
+              example: 1000
+            nextTransfer:
+              type:
+                - string
+                - 'null'
+              format: date
+              description: Next transfer date
+              example: '2023-01-02'
+            balanceAfterNextTransfer:
+              type:
+                - integer
+                - 'null'
+              description: Balance after next transfer in cents
+              example: 1000
+            numberOfTransactions:
+              type: integer
+              description: Number of transactions
+              example: 10
+              minimum: 0
+    AccountSummaryListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/AccountSummaryResponse'
+    AccountDetailsResponse:
+      allOf:
+        - $ref: '#/components/schemas/AccountSummaryResponse'
+        - type: object
+          required:
+            - inflow
+            - outflow
+            - stabilityContext
+            - categoriesBreakdown
+            - transactionsBreakdown
+            - spentThisCycle
+            - avgDailyBalance
+          properties:
+            inflow:
+              type: integer
+              description: Inflow in cents
+              example: 1000
+              minimum: 0
+            outflow:
+              type: integer
+              description: Outflow in cents
+              example: 1000
+              minimum: 0
+            stabilityContext:
+              $ref: '#/components/schemas/StabilityContext'
+            categoriesBreakdown:
+              $ref: '#/components/schemas/AccountCategoriesBreakdown'
+            transactionsBreakdown:
+              $ref: '#/components/schemas/AccountTransactionsBreakdown'
+            topUpAmount:
+              type:
+                - integer
+                - 'null'
+              description: Top-up amount in cents. Only present for Allowance accounts.
+              minimum: 0
+              example: 20000
+            topUpCycle:
+              type:
+                - string
+                - 'null'
+              description: Top-up frequency. Only present for Allowance accounts.
+              enum:
+                - weekly
+                - bi-weekly
+                - monthly
+                - null
+              example: monthly
+            topUpDay:
+              type:
+                - integer
+                - 'null'
+              description: Day of week (0–6) or day of month (1–31) for the top-up, depending on cycle. Only present for Allowance accounts.
+              example: 1
+            spentThisCycle:
+              type: integer
+              description: Amount spent in the current top-up cycle in cents. Always 0 for non-Allowance accounts.
+              minimum: 0
+              example: 5000
+            statementCloseDay:
+              type:
+                - integer
+                - 'null'
+              description: Day of month the statement closes (1–31). Only present for CreditCard accounts.
+              example: 25
+            paymentDueDay:
+              type:
+                - integer
+                - 'null'
+              description: Day of month the payment is due (1–31). Only present for CreditCard accounts.
+              example: 15
+            avgDailyBalance:
+              type: integer
+              description: Average daily balance this period in cents. Always 0 for non-Checking accounts.
+              example: 120000
+    CreateAccountRequest:
+      type: object
+      required:
+        - name
+        - type
+        - color
+        - initialBalance
+        - currencyId
+      properties:
+        name:
+          type: string
+          description: Account name
+          example: Main Checking Account
+        color:
+          type: string
+          description: Account color in
+          pattern: ^#[0-9A-Fa-f]{6}$
+          example: '#000000'
+        initialBalance:
+          type: integer
+          description: Initial balance in cents
+          example: 10000
+        currencyId:
+          type: string
+          format: uuid
+          description: Currency ID
+          example: 123e4567-e89b-12d3-a456-426655440000
+        type:
+          type: string
+          enum:
+            - Checking
+            - Savings
+            - CreditCard
+            - Allowance
+            - Wallet
+        spendLimit:
+          type:
+            - integer
+            - 'null'
+          description: Optional spend limit in cents. Only meaningful for creditCard and allowance accounts.
+          minimum: 0
+          example: 50000
+    UpdateAccountRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateAccountRequest'
+    AccountBalanceHistoryPoint:
+      type: object
+      required:
+        - date
+        - balance
+        - transactionCount
+      properties:
+        date:
+          type: string
+          format: date
+          example: '2024-01-15'
+        balance:
+          type: integer
+          description: Account balance in cents at end of day
+          example: 150000
+        transactionCount:
+          type: integer
+          minimum: 0
+          example: 3
+    AccountBalanceHistoryResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/AccountBalanceHistoryPoint'
+    AdjustBalanceRequest:
+      type: object
+      required:
+        - newBalance
+      properties:
+        newBalance:
+          type: integer
+          description: New absolute balance in cents
+          example: 150000
+    VendorBase:
+      type: object
+      required:
+        - id
+        - name
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Vendor ID
+          example: 123e4567-e89b-12d3-a456-426655440000
+        name:
+          type: string
+          description: Vendor name
+          example: Amazon
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+          description: Vendor status
+          example: active
+    VendorResponse:
+      allOf:
+        - $ref: '#/components/schemas/VendorBase'
+        - type: object
+          required:
+            - description
+          properties:
+            description:
+              type:
+                - string
+                - 'null'
+              description: Vendor description
+              example: Online shopping
+    VendorSummaryResponse:
+      allOf:
+        - $ref: '#/components/schemas/VendorResponse'
+        - type: object
+          required:
+            - numberOfTransactions
+          properties:
+            numberOfTransactions:
+              type: integer
+              description: Total number of transactions
+              example: 10
+              minimum: 0
+    VendorListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/VendorSummaryResponse'
+    VendorOptionResponse:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Vendor ID
+          example: 123e4567-e89b-12d3-a456-426655440000
+        name:
+          type: string
+          description: Vendor name
+          example: Amazon
+    VendorOptionListResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/VendorOptionResponse'
+    CreateVendorRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Vendor name
+          minLength: 3
+          example: Amazon
+        description:
+          type:
+            - string
+            - 'null'
+          description: Vendor description
+          maxLength: 500
+          example: Online shopping
+    UpdateVendorRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateVendorRequest'
+    CategoryBase:
+      type: object
+      required:
+        - id
+        - name
+        - type
+        - icon
+        - color
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Category ID
+          example: 123e4567-e89b-12d3-a456-426655440000
+        name:
+          type: string
+          description: Category name
+          example: Groceries
+        type:
+          type: string
+          enum:
+            - income
+            - expense
+            - transfer
+          description: Category type
+          example: expense
+        icon:
+          type: string
+          description: Category icon
+          example: 🛒
+        color:
+          type: string
+          description: Category color
+          example: '#FF0000'
+        parentId:
+          type:
+            - string
+            - 'null'
+          format: uuid
+          description: Parent category ID
+          example: 123e4567-e89b-12d3-a456-426655440000
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+          description: Category status
+          example: active
+        behavior:
+          type:
+            - string
+            - 'null'
+          enum:
+            - fixed
+            - variable
+            - subscription
+            - null
+          description: Category budget behavior
+          example: variable
+    CategoryResponse:
+      allOf:
+        - $ref: '#/components/schemas/CategoryBase'
+        - type: object
+          required:
+            - description
+          properties:
+            description:
+              type:
+                - string
+                - 'null'
+              description: Category description
+              example: Monthly grocery shopping
+    CategoryManagementListItem:
+      allOf:
+        - $ref: '#/components/schemas/CategoryBase'
+        - type: object
+          required:
+            - numberOfTransactions
+            - description
+          properties:
+            description:
+              type:
+                - string
+                - 'null'
+              description: Category description
+              example: Monthly grocery shopping
+            numberOfTransactions:
+              type: integer
+              description: Total number of transactions
+              example: 10
+              minimum: 0
+    CategoryManagementListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/CategoryManagementListItem'
+    CategorySummaryItem:
+      allOf:
+        - $ref: '#/components/schemas/CategoryBase'
+        - type: object
+          required:
+            - actual
+            - projected
+            - budgeted
+            - variance
+          properties:
+            actual:
+              type: integer
+              description: Actual spent in period in cents
+              example: 10000
+              minimum: 0
+            projected:
+              type: integer
+              description: Projected spend at current pace in cents
+              example: 12000
+              minimum: 0
+            budgeted:
+              type:
+                - integer
+                - 'null'
+              description: Budgeted amount in cents
+              example: 15000
+              minimum: 0
+            variance:
+              type: integer
+              description: Variance between budgeted and actual in cents
+              example: 5000
+    CategoryOverviewSummary:
+      type: object
+      required:
+        - periodName
+        - periodElapsedPercent
+        - totalSpent
+        - totalBudgeted
+        - variance
+      properties:
+        periodName:
+          type: string
+          description: Period name
+          example: January 2024
+        periodElapsedPercent:
+          type: integer
+          description: Percentage of period elapsed
+          example: 45
+          minimum: 0
+          maximum: 100
+        totalSpent:
+          type: integer
+          description: Total spent in period in cents
+          example: 50000
+          minimum: 0
+        totalBudgeted:
+          type:
+            - integer
+            - 'null'
+          description: Total budgeted in period in cents
+          example: 100000
+          minimum: 0
+        variance:
+          type: integer
+          description: Variance between budgeted and actual in cents
+          example: 50000
+    CategoryOverviewResponse:
+      type: object
+      required:
+        - summary
+        - categories
+      properties:
+        summary:
+          $ref: '#/components/schemas/CategoryOverviewSummary'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategorySummaryItem'
+    CategoryOptionResponse:
+      type: object
+      required:
+        - id
+        - name
+        - icon
+        - color
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Category ID
+          example: 123e4567-e89b-12d3-a456-426655440000
+        name:
+          type: string
+          description: Category name
+          example: Groceries
+        icon:
+          type: string
+          description: Category icon
+          example: 🛒
+        color:
+          type: string
+          description: Category color
+          example: '#FF0000'
+    CategoryOptionListResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/CategoryOptionResponse'
+    CreateCategoryRequest:
+      type: object
+      required:
+        - name
+        - type
+        - icon
+        - color
+      properties:
+        name:
+          type: string
+          description: Category name
+          example: Groceries
+        type:
+          type: string
+          enum:
+            - income
+            - expense
+            - transfer
+          description: Category type
+          example: expense
+        icon:
+          type: string
+          description: Category icon
+          example: 🛒
+        color:
+          type: string
+          description: Category color
+          example: '#FF0000'
+        description:
+          type:
+            - string
+            - 'null'
+          description: Category description
+          example: Monthly grocery shopping
+        parentId:
+          type:
+            - string
+            - 'null'
+          format: uuid
+          description: Parent category ID
+          example: 123e4567-e89b-12d3-a456-426655440000
+    UpdateCategoryRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateCategoryRequest'
+    TargetStatus:
+      type: string
+      enum:
+        - active
+        - excluded
+      description: Target status
+      example: active
+    TargetItem:
+      type: object
+      required:
+        - id
+        - name
+        - type
+        - parentId
+        - currentTarget
+        - projectedVariance
+        - status
+        - spentInPeriod
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Target ID
+          example: 123e4567-e89b-12d3-a456-426655440000
+        name:
+          type: string
+          description: Category name
+          example: Groceries
+        type:
+          type: string
+          enum:
+            - income
+            - expense
+            - transfer
+          description: Category type
+          example: expense
+        parentId:
+          type:
+            - string
+            - 'null'
+          format: uuid
+          description: Parent category ID
+          example: 123e4567-e89b-12d3-a456-426655440000
+        previousTarget:
+          type:
+            - integer
+            - 'null'
+          description: Previous target amount in cents
+          example: 10000
+          minimum: 0
+        currentTarget:
+          type:
+            - integer
+            - 'null'
+          description: Current target amount in cents
+          example: 15000
+          minimum: 0
+        projectedVariance:
+          type: integer
+          description: Projected variance in cents
+          example: 5000
+        status:
+          $ref: '#/components/schemas/TargetStatus'
+        spentInPeriod:
+          type: integer
+          description: Amount spent in period in cents
+          example: 8000
+          minimum: 0
+    TargetSummary:
+      type: object
+      required:
+        - periodName
+        - periodStart
+        - periodEnd
+        - currentPosition
+        - categoriesWithTargets
+        - periodProgress
+      properties:
+        periodName:
+          type: string
+          description: Period name
+          example: January 2024
+        periodStart:
+          type: string
+          format: date
+          description: Period start date
+          example: '2024-01-01'
+        periodEnd:
+          type:
+            - string
+            - 'null'
+          format: date
+          description: Period end date
+          example: '2024-01-31'
+        currentPosition:
+          type: integer
+          description: Current budget position in cents
+          example: 50000
+        categoriesWithTargets:
+          type: object
+          required:
+            - withTargets
+            - total
+          properties:
+            withTargets:
+              type: integer
+              description: Number of categories with targets
+              example: 2
+              minimum: 0
+            total:
+              type: integer
+              description: Total number of categories
+              example: 4
+              minimum: 0
+        periodProgress:
+          type: integer
+          description: Period progress as percentage
+          example: 45
+          minimum: 0
+          maximum: 100
+    CategoryTargetsResponse:
+      type: object
+      required:
+        - summary
+        - targets
+      properties:
+        summary:
+          $ref: '#/components/schemas/TargetSummary'
+        targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/TargetItem'
+    CreateTargetRequest:
+      type: object
+      required:
+        - categoryId
+        - value
+      properties:
+        categoryId:
+          type: string
+          format: uuid
+          description: Category ID
+          example: 123e4567-e89b-12d3-a456-426655440000
+        value:
+          type: integer
+          description: Target amount in cents
+          example: 15000
+          minimum: 0
+    UpdateTargetRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateTargetRequest'
+    AccountRef:
+      type: object
+      required:
+        - id
+        - name
+        - color
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 123e4567-e89b-12d3-a456-426655440000
+        name:
+          type: string
+          example: Main Checking
+        color:
+          type: string
+          example: '#38BDF8'
+    CategoryRef:
+      type: object
+      required:
+        - id
+        - name
+        - color
+        - icon
+        - type
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 123e4567-e89b-12d3-a456-426655440000
+        name:
+          type: string
+          example: Groceries
+        color:
+          type: string
+          example: '#6366F1'
+        icon:
+          type: string
+          example: cart
+        type:
+          type: string
+          enum:
+            - income
+            - expense
+            - transfer
+          example: expense
+    VendorRef:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 123e4567-e89b-12d3-a456-426655440000
+        name:
+          type: string
+          example: Amazon
+    TransactionBase:
+      type: object
+      required:
+        - id
+        - date
+        - description
+        - amount
+        - transactionType
+        - fromAccount
+        - category
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Transaction ID
+          example: 123e4567-e89b-12d3-a456-426655440000
+        date:
+          type: string
+          format: date
+          description: Transaction date
+          example: '2024-01-15'
+        description:
+          type: string
+          description: Transaction description
+          example: Grocery shopping
+        amount:
+          type: integer
+          description: Transaction amount in cents
+          example: 5000
+          minimum: 0
+        transactionType:
+          type: string
+          enum:
+            - regular
+            - transfer
+          description: Used as discriminator
+          example: regular
+        fromAccount:
+          $ref: '#/components/schemas/AccountRef'
+        category:
+          $ref: '#/components/schemas/CategoryRef'
+        vendor:
+          oneOf:
+            - $ref: '#/components/schemas/VendorRef'
+            - type: 'null'
+    RegularTransactionResponse:
+      type: object
+      required:
+        - transactionType
+      properties:
+        transactionType:
+          type: string
+          enum:
+            - regular
+        toAccount:
+          type: 'null'
+    TransferTransactionResponse:
+      type: object
+      required:
+        - transactionType
+        - toAccount
+      properties:
+        transactionType:
+          type: string
+          enum:
+            - transfer
+        toAccount:
+          $ref: '#/components/schemas/AccountRef'
+    TransactionResponse:
+      allOf:
+        - $ref: '#/components/schemas/TransactionBase'
+        - discriminator:
+            propertyName: transactionType
+            mapping:
+              regular: '#/components/schemas/RegularTransactionResponse'
+              transfer: '#/components/schemas/TransferTransactionResponse'
+          oneOf:
+            - $ref: '#/components/schemas/RegularTransactionResponse'
+            - $ref: '#/components/schemas/TransferTransactionResponse'
+    TransactionListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/TransactionResponse'
+    CreateTransactionRequest:
+      allOf:
+        - $ref: '#/components/schemas/TransactionRequestBase'
+        - discriminator:
+            propertyName: transactionType
+            mapping:
+              regular: '#/components/schemas/CreateRegularTransactionRequest'
+              transfer: '#/components/schemas/CreateTransferTransactionRequest'
+          oneOf:
+            - $ref: '#/components/schemas/CreateRegularTransactionRequest'
+            - $ref: '#/components/schemas/CreateTransferTransactionRequest'
+    UpdateTransactionRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateTransactionRequest'
+    UserResponse:
+      type: object
+      required:
+        - id
+        - email
+        - name
+        - currency
+        - twoFactorEnabled
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 123e4567-e89b-12d3-a456-426655440000
+        email:
+          type: string
+          example: user@example.com
+        name:
+          type: string
+          example: Leonardo
+        currency:
+          type: string
+          example: EUR
+        twoFactorEnabled:
+          type: boolean
+          example: false
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          example: correct-horse-battery-staple
+    LoginResponse:
+      discriminator:
+        propertyName: requiresTwoFactor
+        mapping:
+          'true': '#/components/schemas/TwoFactorChallengeResponse'
+          'false': '#/components/schemas/AuthenticatedResponse'
+      oneOf:
+        - $ref: '#/components/schemas/TwoFactorChallengeResponse'
+        - $ref: '#/components/schemas/AuthenticatedResponse'
+    TwoFactorChallengeResponse:
+      type: object
+      required:
+        - requiresTwoFactor
+        - twoFactorToken
+      properties:
+        requiresTwoFactor:
+          type: boolean
+          enum:
+            - true
+        twoFactorToken:
+          type: string
+          description: Short-lived opaque token used to complete 2FA verification
+          example: eyJhbGciOiJIUzI1NiJ9...
+    AuthenticatedResponse:
+      type: object
+      required:
+        - requiresTwoFactor
+        - user
+        - token
+      properties:
+        requiresTwoFactor:
+          type: boolean
+          enum:
+            - false
+        user:
+          $ref: '#/components/schemas/UserResponse'
+        token:
+          type:
+            - string
+            - 'null'
+          description: Bearer token. Present when authenticated via token (iOS). Null for session-based auth (web).
+          example: pp_tok_abc123...
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - name
+        - currencyId
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          example: correct-horse-battery-staple
+        name:
+          type: string
+          example: Leonardo
+        currencyId:
+          type: string
+          format: uuid
+          description: Default currency ID for the user
+          example: 123e4567-e89b-12d3-a456-426655440000
+    TwoFactorCompleteRequest:
+      type: object
+      required:
+        - twoFactorToken
+        - code
+      properties:
+        twoFactorToken:
+          type: string
+          description: The short-lived token returned from the login challenge
+          example: eyJhbGciOiJIUzI1NiJ9...
+        code:
+          type: string
+          description: 6-digit TOTP code from the authenticator app
+          minLength: 6
+          maxLength: 6
+          example: '123456'
+    RefreshResponse:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          description: New bearer token
+          example: pp_tok_abc123...
+    ForgotPasswordRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+    ResetPasswordRequest:
+      type: object
+      required:
+        - token
+        - password
+      properties:
+        token:
+          type: string
+          description: Password reset token received via email
+          example: abc123...
+        password:
+          type: string
+          format: password
+          example: correct-horse-battery-staple
+    TwoFactorEnableResponse:
+      type: object
+      required:
+        - secret
+        - qrCodeUri
+      properties:
+        secret:
+          type: string
+          description: TOTP secret for manual entry into authenticator app
+          example: JBSWY3DPEHPK3PXP
+        qrCodeUri:
+          type: string
+          description: otpauth:// URI for QR code generation
+          example: otpauth://totp/PiggyPulse:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=PiggyPulse
+    TwoFactorVerifyRequest:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          description: 6-digit TOTP code to confirm setup
+          minLength: 6
+          maxLength: 6
+          example: '123456'
+    TwoFactorDisableRequest:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          description: 6-digit TOTP code to confirm disabling 2FA
+          minLength: 6
+          maxLength: 6
+          example: '123456'
+    ProfileResponse:
+      type: object
+      required:
+        - name
+        - currency
+        - avatar
+      properties:
+        name:
+          type: string
+          example: Leonardo
+        currency:
+          type: string
+          example: EUR
+        avatar:
+          type: string
+          maxLength: 64
+          description: Emoji used as the user's avatar
+          example: 🐷
+    UpdateProfileRequest:
+      type: object
+      required:
+        - name
+        - currency
+        - avatar
+      properties:
+        name:
+          type: string
+          example: Leonardo
+        currency:
+          type: string
+          example: EUR
+        avatar:
+          type: string
+          maxLength: 64
+          description: Emoji used as the user's avatar
+          example: 🐷
+    PreferencesResponse:
+      type: object
+      required:
+        - theme
+        - dateFormat
+        - numberFormat
+        - language
+        - compactMode
+        - dashboardLayout
+        - colorTheme
+      properties:
+        theme:
+          $ref: '#/components/schemas/Theme'
+        dateFormat:
+          $ref: '#/components/schemas/DateFormat'
+        numberFormat:
+          $ref: '#/components/schemas/NumberFormat'
+        language:
+          type: string
+          description: BCP 47 language tag
+          example: en
+        compactMode:
+          type: boolean
+          description: Whether compact mode is enabled
+          example: false
+        dashboardLayout:
+          $ref: '#/components/schemas/DashboardLayout'
+        colorTheme:
+          $ref: '#/components/schemas/ColorTheme'
+    UpdatePreferencesRequest:
+      type: object
+      required:
+        - theme
+        - dateFormat
+        - numberFormat
+        - language
+      properties:
+        theme:
+          $ref: '#/components/schemas/Theme'
+        dateFormat:
+          $ref: '#/components/schemas/DateFormat'
+        numberFormat:
+          $ref: '#/components/schemas/NumberFormat'
+        language:
+          type: string
+          description: BCP 47 language tag
+          example: en
+        compactMode:
+          type: boolean
+          description: Whether compact mode is enabled
+          default: false
+          example: false
+        dashboardLayout:
+          $ref: '#/components/schemas/DashboardLayout'
+        colorTheme:
+          $ref: '#/components/schemas/ColorTheme'
+    Theme:
+      type: string
+      enum:
+        - light
+        - dark
+        - system
+      example: dark
+    DateFormat:
+      type: string
+      enum:
+        - DD/MM/YYYY
+        - MM/DD/YYYY
+        - YYYY-MM-DD
+      example: DD/MM/YYYY
+    NumberFormat:
+      type: string
+      enum:
+        - 1,234.56
+        - 1.234,56
+        - 1 234,56
+      example: 1.234,56
+    SessionResponse:
+      type: object
+      required:
+        - id
+        - createdAt
+        - isCurrent
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 123e4567-e89b-12d3-a456-426655440000
+        createdAt:
+          type: string
+          format: date-time
+          example: '2024-01-15T10:30:00Z'
+        isCurrent:
+          type: boolean
+          description: Whether this is the session making the request
+          example: true
+    SessionListResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/SessionResponse'
+    ChangePasswordRequest:
+      type: object
+      required:
+        - currentPassword
+        - newPassword
+      properties:
+        currentPassword:
+          type: string
+          format: password
+          example: old-password
+        newPassword:
+          type: string
+          format: password
+          example: correct-horse-battery-staple
+    DeleteAccountRequest:
+      type: object
+      required:
+        - password
+      properties:
+        password:
+          type: string
+          format: password
+          description: Current password to confirm intent
+          example: correct-horse-battery-staple
+    ResetStructureRequest:
+      type: object
+      required:
+        - password
+      properties:
+        password:
+          type: string
+          format: password
+          description: Current password to confirm intent
+          example: correct-horse-battery-staple
+    InclusionMode:
+      type: string
+      enum:
+        - manual
+        - rules
+        - all
+      example: rules
+    OverlayCategoryCap:
+      type: object
+      required:
+        - categoryId
+        - capAmount
+      properties:
+        categoryId:
+          type: string
+          format: uuid
+          example: 123e4567-e89b-12d3-a456-426655440000
+        capAmount:
+          type: integer
+          minimum: 0
+          description: Cap amount in cents
+          example: 10000
+    OverlayRules:
+      type: object
+      properties:
+        categoryIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        vendorIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        accountIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    OverlayResponse:
+      type: object
+      required:
+        - id
+        - name
+        - startDate
+        - endDate
+        - inclusionMode
+        - spentAmount
+        - transactionCount
+        - categoryCaps
+        - rules
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 123e4567-e89b-12d3-a456-426655440000
+        name:
+          type: string
+          example: Holiday spending
+        icon:
+          type:
+            - string
+            - 'null'
+          example: gift
+        startDate:
+          type: string
+          format: date
+          example: '2024-12-01'
+        endDate:
+          type: string
+          format: date
+          example: '2024-12-31'
+        inclusionMode:
+          $ref: '#/components/schemas/InclusionMode'
+        totalCapAmount:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+          description: Optional total cap in cents
+          example: 50000
+        spentAmount:
+          type: integer
+          minimum: 0
+          description: Total spent within this overlay in cents
+          example: 12000
+        transactionCount:
+          type: integer
+          minimum: 0
+          example: 8
+        categoryCaps:
+          type: array
+          items:
+            $ref: '#/components/schemas/OverlayCategoryCap'
+        rules:
+          $ref: '#/components/schemas/OverlayRules'
+    OverlayListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/OverlayResponse'
+    CreateOverlayRequest:
+      type: object
+      required:
+        - name
+        - startDate
+        - endDate
+        - inclusionMode
+      properties:
+        name:
+          type: string
+          example: Holiday spending
+        icon:
+          type:
+            - string
+            - 'null'
+          example: gift
+        startDate:
+          type: string
+          format: date
+          example: '2024-12-01'
+        endDate:
+          type: string
+          format: date
+          example: '2024-12-31'
+        inclusionMode:
+          $ref: '#/components/schemas/InclusionMode'
+        totalCapAmount:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+          example: 50000
+        categoryCaps:
+          type: array
+          items:
+            $ref: '#/components/schemas/OverlayCategoryCap'
+          default: []
+        rules:
+          $ref: '#/components/schemas/OverlayRules'
+    UpdateOverlayRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateOverlayRequest'
+    OverlayTransactionMembership:
+      type: object
+      required:
+        - isIncluded
+        - inclusionSource
+      properties:
+        isIncluded:
+          type: boolean
+          example: true
+        inclusionSource:
+          oneOf:
+            - $ref: '#/components/schemas/InclusionMode'
+            - type: 'null'
+    OverlayTransactionResponse:
+      allOf:
+        - $ref: '#/components/schemas/TransactionResponse'
+        - type: object
+          required:
+            - membership
+          properties:
+            membership:
+              $ref: '#/components/schemas/OverlayTransactionMembership'
+    OverlayTransactionListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/OverlayTransactionResponse'
+    CurrencyResponse:
+      type: object
+      required:
+        - id
+        - name
+        - symbol
+        - code
+        - decimalPlaces
+        - symbolPosition
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 123e4567-e89b-12d3-a456-426655440000
+        name:
+          type: string
+          example: Euro
+        symbol:
+          type: string
+          example: €
+        code:
+          type: string
+          description: ISO 4217 currency code
+          example: EUR
+        decimalPlaces:
+          type: integer
+          example: 2
+        symbolPosition:
+          type: string
+          enum:
+            - before
+            - after
+          example: before
+    CurrencyListResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/CurrencyResponse'
+    OnboardingStatus:
+      type: string
+      enum:
+        - not_started
+        - in_progress
+        - completed
+      example: in_progress
+    OnboardingStep:
+      type: string
+      enum:
+        - period
+        - accounts
+        - categories
+        - summary
+      example: accounts
+    OnboardingStatusResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          $ref: '#/components/schemas/OnboardingStatus'
+        currentStep:
+          oneOf:
+            - $ref: '#/components/schemas/OnboardingStep'
+            - type: 'null'
+    UnlockResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: Account unlocked successfully
+    TwoFactorStatusResponse:
+      type: object
+      required:
+        - enabled
+        - hasBackupCodes
+        - backupCodesRemaining
+      properties:
+        enabled:
+          type: boolean
+          example: true
+        hasBackupCodes:
+          type: boolean
+          example: true
+        backupCodesRemaining:
+          type: integer
+          example: 6
+    BackupCodesResponse:
+      type: array
+      items:
+        type: string
+      description: List of plaintext backup codes (only shown once on generation/regeneration)
+      example:
+        - ABCD-1234
+        - EFGH-5678
+    RegenerateBackupCodesRequest:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          description: Current TOTP code to confirm intent
+          minLength: 6
+          maxLength: 6
+          example: '123456'
+    EmergencyDisableRequestBody:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          description: Account email address — always returns 204 to prevent enumeration
+          example: user@example.com
+    EmergencyDisableConfirmRequest:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          description: Token received via email to confirm emergency 2FA disable
+          example: abc123...
+    ServiceUnavailableErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: Service Unavailable
+        code:
+          type: string
+          example: SERVICE_UNAVAILABLE
+    BadRequestErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: Bad Request
+        code:
+          type: string
+          example: BAD_REQUEST
+    UnauthorizedErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: Unauthorized
+        code:
+          type: string
+          example: UNAUTHORIZED
+    NotFoundErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: Not Found
+        code:
+          type: string
+          example: NOT_FOUND
+    InternalServerErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: Internal Server Error
+        code:
+          type: string
+          example: INTERNAL_SERVER_ERROR
+    PaginatedResponse:
+      type: object
+      required:
+        - data
+        - nextCursor
+        - totalCount
+        - hasMore
+      properties:
+        data:
+          type: array
+          items: {}
+        totalCount:
+          type: integer
+          description: Total number of items in the collection
+          example: 100
+        hasMore:
+          type: boolean
+          description: Whether there are more items to fetch
+        nextCursor:
+          type:
+            - string
+            - 'null'
+          description: Cursor for fetching the next page. Always null when hasMore is false.
+    ConflictErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: Conflict
+        code:
+          type: string
+          example: CONFLICT
+    LargestOutflow:
+      type: object
+      required:
+        - categoryName
+        - value
+      properties:
+        categoryName:
+          type: string
+          description: Category name
+          example: Groceries
+        value:
+          type: integer
+          description: Value in cents
+          example: 1000
+          minimum: 0
+    StabilityContext:
+      type: object
+      required:
+        - periodsOnTarget
+        - averageClosingBalance
+        - highestClosingBalance
+        - lowestClosingBalance
+        - largestSingleOutflow
+      properties:
+        periodsOnTarget:
+          type: integer
+          description: Periods on target
+          example: 10
+          minimum: 0
+        averageClosingBalance:
+          type: integer
+          description: Average closing balance in cents
+          example: 10000
+        highestClosingBalance:
+          type: integer
+          description: Highest closing balance in cents
+          example: 10000
+        lowestClosingBalance:
+          type: integer
+          description: Lowest closing balance in cents
+          example: 10000
+        largestSingleOutflow:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/LargestOutflow'
+    CategoryBreakdownItem:
+      type: object
+      required:
+        - categoryId
+        - categoryName
+        - value
+      properties:
+        categoryId:
+          type: string
+          format: uuid
+          description: Category ID
+          example: 123e4567-e89b-12d3-a456-426655440000
+        categoryName:
+          type: string
+          example: Groceries
+        value:
+          type: integer
+          minimum: 0
+          example: 1000
+    AccountCategoriesBreakdown:
+      type: array
+      items:
+        $ref: '#/components/schemas/CategoryBreakdownItem'
+    TransactionBreakdownItem:
+      type: object
+      required:
+        - date
+        - description
+        - categoryName
+        - amount
+        - balance
+      properties:
+        date:
+          type: string
+          format: date
+        description:
+          type: string
+        categoryName:
+          type: string
+        amount:
+          type: integer
+          minimum: 0
+        balance:
+          type: integer
+    AccountTransactionsBreakdown:
+      type: array
+      items:
+        $ref: '#/components/schemas/TransactionBreakdownItem'
+    TransactionRequestBase:
+      type: object
+      required:
+        - date
+        - description
+        - amount
+        - fromAccountId
+        - categoryId
+        - transactionType
+      properties:
+        date:
+          type: string
+          format: date
+          description: Transaction date
+          example: '2024-01-15'
+        description:
+          type: string
+          description: Transaction description
+          example: Grocery shopping
+        amount:
+          type: integer
+          description: Transaction amount in cents
+          example: 5000
+          minimum: 0
+        fromAccountId:
+          type: string
+          format: uuid
+          description: Source account ID
+          example: 123e4567-e89b-12d3-a456-426655440000
+        categoryId:
+          type: string
+          format: uuid
+          description: Category ID
+          example: 123e4567-e89b-12d3-a456-426655440000
+        vendorId:
+          type:
+            - string
+            - 'null'
+          format: uuid
+          description: Vendor ID (optional)
+          example: 123e4567-e89b-12d3-a456-426655440000
+        transactionType:
+          type: string
+          enum:
+            - regular
+            - transfer
+          description: Used as discriminator
+    CreateRegularTransactionRequest:
+      type: object
+      required:
+        - transactionType
+      properties:
+        transactionType:
+          type: string
+          enum:
+            - regular
+        toAccountId:
+          type: 'null'
+    CreateTransferTransactionRequest:
+      type: object
+      required:
+        - transactionType
+        - toAccountId
+      properties:
+        transactionType:
+          type: string
+          enum:
+            - transfer
+        toAccountId:
+          type: string
+          format: uuid
+          description: Destination account ID
+          example: 123e4567-e89b-12d3-a456-426655440000
+    ErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: Unauthorized
+        code:
+          type: string
+          example: UNAUTHORIZED
+    DashboardLayout:
+      type: object
+      properties:
+        widgetOrder:
+          type: array
+          items:
+            type: string
+          example:
+            - balance
+            - spending
+            - budget
+        hiddenWidgets:
+          type: array
+          items:
+            type: string
+          example: []
+        visibleAccountIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Account IDs to display as individual cards on the dashboard. If omitted, all active accounts are shown.
+    ColorTheme:
+      type: string
+      enum:
+        - nebula
+        - sunrise
+        - sage_stone
+        - deep_ocean
+        - warm_rose
+        - moonlit
+      example: nebula

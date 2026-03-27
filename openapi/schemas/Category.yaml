@@ -42,7 +42,7 @@ CategoryBase:
       example: "active"
     behavior:
       type: [string, "null"]
-      enum: [fixed, variable, subscription]
+      enum: [fixed, variable, subscription, null]
       description: Category budget behavior
       example: "variable"
 
