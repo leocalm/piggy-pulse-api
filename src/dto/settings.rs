@@ -22,6 +22,8 @@ pub struct UpdateProfileRequest {
     pub name: String,
     #[validate(regex(path = *ISO_4217_REGEX))]
     pub currency: String,
+    // max 64 chars — matches the maxLength constraint in openapi/schemas/Settings.yaml
+    #[validate(length(max = 64))]
     pub avatar: String,
 }
 
@@ -79,6 +81,10 @@ pub enum NumberFormat {
 pub struct DashboardLayout {
     pub widget_order: Vec<String>,
     pub hidden_widgets: Vec<String>,
+    /// Account IDs to display as individual cards on the dashboard.
+    /// If omitted (empty), all active accounts are shown.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub visible_account_ids: Vec<Uuid>,
 }
 
 #[derive(Serialize, Debug)]

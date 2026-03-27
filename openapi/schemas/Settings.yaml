@@ -15,6 +15,7 @@ ProfileResponse:
       example: "EUR"
     avatar:
       type: string
+      maxLength: 64
       description: Emoji used as the user's avatar
       example: "🐷"
 
@@ -33,6 +34,7 @@ UpdateProfileRequest:
       example: "EUR"
     avatar:
       type: string
+      maxLength: 64
       description: Emoji used as the user's avatar
       example: "🐷"
 
@@ -71,6 +73,12 @@ DashboardLayout:
       items:
         type: string
       example: []
+    visibleAccountIds:
+      type: array
+      items:
+        type: string
+        format: uuid
+      description: Account IDs to display as individual cards on the dashboard. If omitted, all active accounts are shown.
 
 PreferencesResponse:
   type: object

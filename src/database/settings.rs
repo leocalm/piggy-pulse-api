@@ -63,6 +63,8 @@ fn parse_number_format(s: &str) -> NumberFormat {
     }
 }
 
+// IMPORTANT: `parse_color_theme` and `color_theme_str` must stay in sync with the
+// CHECK constraint defined in migration 20260327000002_add_color_theme_to_settings.
 fn parse_color_theme(s: &str) -> ColorTheme {
     match s {
         "sunrise" => ColorTheme::Sunrise,
@@ -70,10 +72,15 @@ fn parse_color_theme(s: &str) -> ColorTheme {
         "deep_ocean" => ColorTheme::DeepOcean,
         "warm_rose" => ColorTheme::WarmRose,
         "moonlit" => ColorTheme::Moonlit,
-        _ => ColorTheme::Nebula,
+        "nebula" => ColorTheme::Nebula,
+        _ => {
+            tracing::warn!(value = s, "Unknown color_theme value in database; falling back to Nebula");
+            ColorTheme::Nebula
+        }
     }
 }
 
+// IMPORTANT: must stay in sync with the CHECK constraint in migration 20260327000002.
 fn color_theme_str(ct: ColorTheme) -> &'static str {
     match ct {
         ColorTheme::Nebula => "nebula",

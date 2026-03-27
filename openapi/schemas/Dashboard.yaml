@@ -358,6 +358,7 @@ SubscriptionsDashboardResponse:
       type: integer
       format: int64
       description: Number of active subscriptions in this period
+      minimum: 0
     monthlyTotal:
       type: integer
       format: int64
