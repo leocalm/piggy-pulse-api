@@ -85,6 +85,20 @@ components:
       $ref: './schemas/Dashboard.yaml#/TopVendorItem'
     TopVendorsResponse:
       $ref: './schemas/Dashboard.yaml#/TopVendorsResponse'
+    FixedCategoryStatus:
+      $ref: './schemas/Dashboard.yaml#/FixedCategoryStatus'
+    FixedCategoryItem:
+      $ref: './schemas/Dashboard.yaml#/FixedCategoryItem'
+    FixedCategoriesResponse:
+      $ref: './schemas/Dashboard.yaml#/FixedCategoriesResponse'
+    SubscriptionDisplayStatus:
+      $ref: './schemas/Dashboard.yaml#/SubscriptionDisplayStatus'
+    DashboardBillingCycle:
+      $ref: './schemas/Dashboard.yaml#/DashboardBillingCycle'
+    SubscriptionDashboardItem:
+      $ref: './schemas/Dashboard.yaml#/SubscriptionDashboardItem'
+    SubscriptionsDashboardResponse:
+      $ref: './schemas/Dashboard.yaml#/SubscriptionsDashboardResponse'
     DurationBased:
       $ref: './schemas/Period.yaml#/DurationBased'
     ManualEndDate:
@@ -333,6 +347,10 @@ paths:
     $ref: './paths/dashboard@spending-trend.yaml'
   /dashboard/top-vendors:
     $ref: './paths/dashboard@top-vendors.yaml'
+  /dashboard/fixed-categories:
+    $ref: './paths/dashboard@fixed-categories.yaml'
+  /dashboard/subscriptions:
+    $ref: './paths/dashboard@subscriptions.yaml'
   /periods:
     $ref: './paths/periods.yaml'
   /periods/schedule:
@@ -422,6 +440,8 @@ paths:
     $ref: './paths/settings@export@transactions.yaml'
   /settings/export/data:
     $ref: './paths/settings@export@data.yaml'
+  /settings/import/data:
+    $ref: './paths/settings@import@data.yaml'
   /settings/sessions/{id}:
     $ref: './paths/settings@sessions@{id}.yaml'
   /settings/profile:

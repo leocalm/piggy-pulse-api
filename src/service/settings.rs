@@ -23,7 +23,9 @@ impl<'a> SettingsService<'a> {
     }
 
     pub async fn update_profile(&self, user_id: &Uuid, request: &UpdateProfileRequest) -> Result<ProfileResponse, AppError> {
-        self.repository.update_profile_v2(user_id, &request.name, &request.currency).await
+        self.repository
+            .update_profile_v2(user_id, &request.name, &request.currency, &request.avatar)
+            .await
     }
 
     // ── Preferences ──────────────────────────────────────────────────────────
@@ -57,6 +59,7 @@ impl<'a> SettingsService<'a> {
                 &request.language,
                 request.compact_mode,
                 &request.dashboard_layout,
+                request.color_theme,
             )
             .await
     }

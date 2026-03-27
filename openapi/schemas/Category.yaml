@@ -40,6 +40,11 @@ CategoryBase:
       enum: ["active", "inactive"]
       description: Category status
       example: "active"
+    behavior:
+      type: [string, "null"]
+      enum: [fixed, variable, subscription, null]
+      description: Category budget behavior
+      example: "variable"
 
 CategoryResponse:
   allOf:
