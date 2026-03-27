@@ -6,7 +6,7 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::dto::common::{Date, PaginatedResponse};
 use crate::dto::period::{
     CreatePeriodRequest, CreatePeriodScheduleRequest, DurationUnit, PeriodDuration, PeriodGap, PeriodGapsResponse, PeriodKind, PeriodResponse,
-    PeriodScheduleResponse, PeriodStatus, ScheduleKind, UpdatePeriodRequest, UpdatePeriodScheduleRequest, WeekendPolicy,
+    PeriodScheduleResponse, PeriodStatus, RecurrenceMethod, ScheduleKind, UpdatePeriodRequest, UpdatePeriodScheduleRequest, WeekendPolicy,
 };
 use crate::error::app_error::AppError;
 use crate::models::budget_period::{BudgetPeriodRequest, PeriodSchedule};
@@ -46,6 +46,8 @@ impl<'a> PeriodService<'a> {
             number_of_transactions: 0, // just created, no transactions yet
             percentage_of_target_used: None,
             status: Some(status),
+            total_spent: 0,
+            total_budgeted: 0,
             kind,
         })
     }
@@ -250,9 +252,19 @@ fn row_to_response(row: &V2PeriodRow) -> PeriodResponse {
         number_of_transactions: row.transaction_count.unwrap_or(0),
         percentage_of_target_used: None,
         status: Some(status),
+        total_spent: row.total_spent.unwrap_or(0),
+        total_budgeted: row.total_budgeted.unwrap_or(0),
         kind: PeriodKind::ManualEndDate {
             manual_end_date: Date(row.end_date),
         },
+    }
+}
+
+fn recurrence_method_from_str(s: Option<&str>) -> RecurrenceMethod {
+    match s {
+        Some("businessDay") => RecurrenceMethod::BusinessDay,
+        Some("dayOfWeek") => RecurrenceMethod::DayOfWeek,
+        _ => RecurrenceMethod::DayOfMonth,
     }
 }
 
@@ -287,6 +299,7 @@ fn schedule_to_response(schedule: &PeriodSchedule) -> PeriodScheduleResponse {
                 })
                 .unwrap_or(crate::dto::period::WeekendPolicy::Keep),
             name_pattern: schedule.name_pattern.clone().unwrap_or_default(),
+            recurrence_method: recurrence_method_from_str(schedule.recurrence_method.as_deref()),
         }
     } else {
         ScheduleKind::Manual
@@ -295,6 +308,14 @@ fn schedule_to_response(schedule: &PeriodSchedule) -> PeriodScheduleResponse {
     PeriodScheduleResponse {
         id: schedule.id,
         schedule: kind,
+    }
+}
+
+fn recurrence_method_to_str(rm: &RecurrenceMethod) -> &'static str {
+    match rm {
+        RecurrenceMethod::DayOfMonth => "dayOfMonth",
+        RecurrenceMethod::BusinessDay => "businessDay",
+        RecurrenceMethod::DayOfWeek => "dayOfWeek",
     }
 }
 
@@ -309,6 +330,7 @@ fn schedule_request_to_params(request: &CreatePeriodScheduleRequest) -> Result<V
             sunday_adjustment: None,
             name_pattern: None,
             generate_ahead: None,
+            recurrence_method: Some("dayOfMonth"),
         }),
         CreatePeriodScheduleRequest::Automatic {
             start_day_of_the_month,
@@ -318,6 +340,7 @@ fn schedule_request_to_params(request: &CreatePeriodScheduleRequest) -> Result<V
             saturday_policy,
             sunday_policy,
             name_pattern,
+            recurrence_method,
         } => {
             validate_schedule_fields(*start_day_of_the_month, *period_duration, *generate_ahead)?;
             Ok(V2ScheduleParams {
@@ -329,6 +352,7 @@ fn schedule_request_to_params(request: &CreatePeriodScheduleRequest) -> Result<V
                 sunday_adjustment: Some(weekend_policy_to_str(sunday_policy)),
                 name_pattern: Some(name_pattern.as_str()),
                 generate_ahead: Some(*generate_ahead as i32),
+                recurrence_method: Some(recurrence_method_to_str(recurrence_method)),
             })
         }
     }

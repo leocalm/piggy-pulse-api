@@ -32,6 +32,15 @@ pub enum WeekendPolicy {
     Friday,
 }
 
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum RecurrenceMethod {
+    #[default]
+    DayOfMonth,
+    BusinessDay,
+    DayOfWeek,
+}
+
 // ===== PeriodDuration =====
 
 #[derive(Serialize, Deserialize, Debug, Validate)]
@@ -69,6 +78,8 @@ pub struct PeriodResponse {
     pub number_of_transactions: i64,
     pub percentage_of_target_used: Option<i64>,
     pub status: Option<PeriodStatus>,
+    pub total_spent: i64,
+    pub total_budgeted: i64,
     #[serde(flatten)]
     pub kind: PeriodKind,
 }
@@ -134,6 +145,8 @@ pub enum ScheduleKind {
         sunday_policy: WeekendPolicy,
         #[serde(rename = "namePattern")]
         name_pattern: String,
+        #[serde(rename = "recurrenceMethod")]
+        recurrence_method: RecurrenceMethod,
     },
 }
 
@@ -171,6 +184,8 @@ pub enum CreatePeriodScheduleRequest {
         sunday_policy: WeekendPolicy,
         #[serde(rename = "namePattern")]
         name_pattern: String,
+        #[serde(rename = "recurrenceMethod", default)]
+        recurrence_method: RecurrenceMethod,
     },
 }
 

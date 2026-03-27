@@ -15,6 +15,8 @@ pub struct V2PeriodRow {
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
     pub transaction_count: Option<i64>,
+    pub total_spent: Option<i64>,
+    pub total_budgeted: Option<i64>,
 }
 
 pub struct V2ScheduleParams<'a> {
@@ -26,6 +28,7 @@ pub struct V2ScheduleParams<'a> {
     pub sunday_adjustment: Option<&'a str>,
     pub name_pattern: Option<&'a str>,
     pub generate_ahead: Option<i32>,
+    pub recurrence_method: Option<&'a str>,
 }
 
 impl PostgresRepository {
@@ -185,7 +188,7 @@ impl PostgresRepository {
             r#"
             SELECT id, user_id, schedule_type, start_day, duration_value, duration_unit,
                    saturday_adjustment, sunday_adjustment, name_pattern,
-                   generate_ahead, created_at, updated_at
+                   generate_ahead, recurrence_method, created_at, updated_at
             FROM period_schedule
             WHERE user_id = $1
             "#,
@@ -213,7 +216,7 @@ impl PostgresRepository {
             WHERE user_id = $8
             RETURNING id, user_id, schedule_type, start_day, duration_value, duration_unit,
                       saturday_adjustment, sunday_adjustment, name_pattern,
-                      generate_ahead, created_at, updated_at
+                      generate_ahead, recurrence_method, created_at, updated_at
             "#,
         )
         .bind(request.start_day)
@@ -246,12 +249,13 @@ impl PostgresRepository {
             r#"
             INSERT INTO period_schedule (
                 user_id, schedule_type, start_day, duration_value, duration_unit,
-                saturday_adjustment, sunday_adjustment, name_pattern, generate_ahead
+                saturday_adjustment, sunday_adjustment, name_pattern, generate_ahead,
+                recurrence_method
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING id, user_id, schedule_type, start_day, duration_value, duration_unit,
                       saturday_adjustment, sunday_adjustment, name_pattern,
-                      generate_ahead, created_at, updated_at
+                      generate_ahead, recurrence_method, created_at, updated_at
             "#,
         )
         .bind(user_id)
@@ -263,6 +267,7 @@ impl PostgresRepository {
         .bind(params.sunday_adjustment)
         .bind(params.name_pattern)
         .bind(params.generate_ahead)
+        .bind(params.recurrence_method)
         .fetch_one(&self.pool)
         .await;
 
@@ -285,11 +290,12 @@ impl PostgresRepository {
                 sunday_adjustment = $6,
                 name_pattern = $7,
                 generate_ahead = $8,
+                recurrence_method = $9,
                 updated_at = now()
-            WHERE user_id = $9
+            WHERE user_id = $10
             RETURNING id, user_id, schedule_type, start_day, duration_value, duration_unit,
                       saturday_adjustment, sunday_adjustment, name_pattern,
-                      generate_ahead, created_at, updated_at
+                      generate_ahead, recurrence_method, created_at, updated_at
             "#,
         )
         .bind(params.schedule_type)
@@ -300,6 +306,7 @@ impl PostgresRepository {
         .bind(params.sunday_adjustment)
         .bind(params.name_pattern)
         .bind(params.generate_ahead)
+        .bind(params.recurrence_method)
         .bind(user_id)
         .fetch_one(&self.pool)
         .await?;
@@ -325,11 +332,15 @@ impl PostgresRepository {
         let row = sqlx::query_as::<_, V2PeriodRow>(
             r#"
             SELECT bp.id, bp.name, bp.start_date, bp.end_date,
-                   COUNT(DISTINCT t.id)::INT8 as transaction_count
+                   COUNT(DISTINCT t.id)::INT8 as transaction_count,
+                   COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::INT8 as total_spent,
+                   COALESCE(SUM(bc.budgeted_value), 0) as total_budgeted
             FROM budget_period bp
             LEFT JOIN transaction t ON t.user_id = bp.user_id
                 AND t.occurred_at >= bp.start_date
                 AND t.occurred_at <= bp.end_date
+            LEFT JOIN category c ON t.category_id = c.id
+            LEFT JOIN budget_category bc ON bc.user_id = bp.user_id
             WHERE bp.id = $1 AND bp.user_id = $2
             GROUP BY bp.id, bp.name, bp.start_date, bp.end_date
             "#,
@@ -354,11 +365,15 @@ impl PostgresRepository {
             sqlx::query_as::<_, V2PeriodRow>(
                 r#"
                 SELECT bp.id, bp.name, bp.start_date, bp.end_date,
-                       COUNT(DISTINCT t.id)::INT8 as transaction_count
+                       COUNT(DISTINCT t.id)::INT8 as transaction_count,
+                       COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::INT8 as total_spent,
+                       COALESCE(SUM(bc.budgeted_value), 0) as total_budgeted
                 FROM budget_period bp
                 LEFT JOIN transaction t ON t.user_id = bp.user_id
                     AND t.occurred_at >= bp.start_date
                     AND t.occurred_at <= bp.end_date
+                LEFT JOIN category c ON t.category_id = c.id
+                LEFT JOIN budget_category bc ON bc.user_id = bp.user_id
                 WHERE bp.user_id = $1
                     AND (bp.start_date, bp.id) > (
                         SELECT start_date, id FROM budget_period WHERE id = $2 AND user_id = $1
@@ -377,11 +392,15 @@ impl PostgresRepository {
             sqlx::query_as::<_, V2PeriodRow>(
                 r#"
                 SELECT bp.id, bp.name, bp.start_date, bp.end_date,
-                       COUNT(DISTINCT t.id)::INT8 as transaction_count
+                       COUNT(DISTINCT t.id)::INT8 as transaction_count,
+                       COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::INT8 as total_spent,
+                       COALESCE(SUM(bc.budgeted_value), 0) as total_budgeted
                 FROM budget_period bp
                 LEFT JOIN transaction t ON t.user_id = bp.user_id
                     AND t.occurred_at >= bp.start_date
                     AND t.occurred_at <= bp.end_date
+                LEFT JOIN category c ON t.category_id = c.id
+                LEFT JOIN budget_category bc ON bc.user_id = bp.user_id
                 WHERE bp.user_id = $1
                 GROUP BY bp.id, bp.name, bp.start_date, bp.end_date
                 ORDER BY bp.start_date ASC, bp.id ASC
