@@ -95,7 +95,7 @@ impl AppError {
         }
     }
 
-    pub fn password_hash(message: impl Into<String>, source: password_hash::Error) -> Self {
+    pub fn password_hash(message: impl Into<String>, source: argon2::password_hash::Error) -> Self {
         Self::PasswordHash {
             message: format!("{}: {}", message.into(), source),
         }
@@ -106,8 +106,8 @@ impl AppError {
     }
 }
 
-impl From<password_hash::Error> for AppError {
-    fn from(e: password_hash::Error) -> Self {
+impl From<argon2::password_hash::Error> for AppError {
+    fn from(e: argon2::password_hash::Error) -> Self {
         AppError::password_hash("Password hashing failed", e)
     }
 }

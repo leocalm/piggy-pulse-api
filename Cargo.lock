@@ -1817,7 +1817,6 @@ dependencies = [
  "lettre",
  "log",
  "okapi",
- "password-hash",
  "proptest",
  "qrcode",
  "rand 0.10.0",
