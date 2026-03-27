@@ -6,9 +6,9 @@ use aes_gcm::{
     aead::{Aead, KeyInit, OsRng},
 };
 use argon2::Argon2;
+use argon2::password_hash::{PasswordHasher, PasswordVerifier, SaltString};
 use base64::{Engine as _, engine::general_purpose};
 use data_encoding::BASE32_NOPAD;
-use password_hash::{PasswordHasher, PasswordVerifier, SaltString};
 use qrcode::QrCode;
 use rand::Rng;
 use sha2::{Digest, Sha256};
@@ -238,7 +238,7 @@ impl PostgresRepository {
 
         // Try to verify against each unused backup code
         for backup_code in backup_codes {
-            let parsed_hash = password_hash::PasswordHash::new(&backup_code.code_hash)
+            let parsed_hash = argon2::password_hash::PasswordHash::new(&backup_code.code_hash)
                 .map_err(|e| AppError::BadRequest(format!("Failed to parse backup code hash: {}", e)))?;
 
             let argon2 = Argon2::default();

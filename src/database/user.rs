@@ -2,8 +2,8 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::user::User;
 use argon2::Argon2;
-use password_hash::rand_core::OsRng;
-use password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, Salt, SaltString};
+use argon2::password_hash::rand_core::OsRng;
+use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, Salt, SaltString};
 use std::sync::LazyLock;
 use uuid::Uuid;
 
