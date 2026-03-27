@@ -76,7 +76,7 @@ pub struct AccountUpdateRequest {
     #[validate(length(min = 1))]
     pub icon: String,
     pub account_type: AccountType,
-    pub balance: i64,
+    pub balance: Option<i64>,
     pub spend_limit: Option<i32>,
     pub next_transfer_amount: Option<i64>,
     pub top_up_amount: Option<i64>,
