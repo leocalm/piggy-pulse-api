@@ -1,0 +1,72 @@
+get:
+  tags:
+    - Subscriptions
+  summary: Get subscription detail
+  operationId: getSubscription
+  parameters:
+    - $ref: '../parameters/Id.yaml'
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Subscription.yaml#/SubscriptionDetailResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+put:
+  tags:
+    - Subscriptions
+  summary: Update subscription
+  operationId: updateSubscription
+  parameters:
+    - $ref: '../parameters/Id.yaml'
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Subscription.yaml#/UpdateSubscriptionRequest'
+  responses:
+    '200':
+      description: Subscription updated
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Subscription.yaml#/SubscriptionResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '422':
+      $ref: '../responses/UnprocessableEntity.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+delete:
+  tags:
+    - Subscriptions
+  summary: Delete subscription
+  operationId: deleteSubscription
+  parameters:
+    - $ref: '../parameters/Id.yaml'
+  responses:
+    '204':
+      description: Subscription deleted
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
