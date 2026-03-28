@@ -46,4 +46,4 @@ base64 = "0.22"
 urlencoding = "2.1"
 
 [dev-dependencies]
-proptest = "1.6"
+proptest = "1.11"
