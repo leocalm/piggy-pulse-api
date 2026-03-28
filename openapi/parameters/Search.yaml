@@ -1,0 +1,7 @@
+name: search
+in: query
+required: false
+schema:
+  type: string
+description: "Search transactions by description or amount. Partial match, case-insensitive."
+example: "groceries"

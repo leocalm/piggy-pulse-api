@@ -97,6 +97,8 @@ pub struct TransactionFilters {
     pub vendor_ids: Vec<Uuid>,
     pub date_from: Option<NaiveDate>,
     pub date_to: Option<NaiveDate>,
+    /// Free-text search: matches against description (ILIKE) or amount (LIKE).
+    pub search: Option<String>,
 }
 
 impl TransactionFilters {
@@ -108,6 +110,7 @@ impl TransactionFilters {
             && self.vendor_ids.is_empty()
             && self.date_from.is_none()
             && self.date_to.is_none()
+            && self.search.is_none()
     }
 }
 

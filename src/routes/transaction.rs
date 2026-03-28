@@ -93,6 +93,7 @@ pub async fn list_all_transactions(
             vendor_ids,
             date_from,
             date_to,
+            search: None,
         }
     };
 
