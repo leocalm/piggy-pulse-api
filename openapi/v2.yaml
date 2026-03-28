@@ -317,6 +317,28 @@ components:
       $ref: './schemas/Overlay.yaml#/OverlayTransactionResponse'
     OverlayTransactionListResponse:
       $ref: './schemas/Overlay.yaml#/OverlayTransactionListResponse'
+    # Subscriptions
+    SubscriptionStatus:
+      $ref: './schemas/Subscription.yaml#/SubscriptionStatus'
+    BillingCycle:
+      $ref: './schemas/Subscription.yaml#/BillingCycle'
+    SubscriptionResponse:
+      $ref: './schemas/Subscription.yaml#/SubscriptionResponse'
+    BillingEventResponse:
+      $ref: './schemas/Subscription.yaml#/BillingEventResponse'
+    SubscriptionDetailResponse:
+      $ref: './schemas/Subscription.yaml#/SubscriptionDetailResponse'
+    SubscriptionListResponse:
+      $ref: './schemas/Subscription.yaml#/SubscriptionListResponse'
+    UpcomingChargeItem:
+      $ref: './schemas/Subscription.yaml#/UpcomingChargeItem'
+    UpcomingChargesResponse:
+      $ref: './schemas/Subscription.yaml#/UpcomingChargesResponse'
+    CreateSubscriptionRequest:
+      $ref: './schemas/Subscription.yaml#/CreateSubscriptionRequest'
+    UpdateSubscriptionRequest:
+      $ref: './schemas/Subscription.yaml#/UpdateSubscriptionRequest'
+
     # Misc
     CurrencyResponse:
       $ref: './schemas/Misc.yaml#/CurrencyResponse'
@@ -509,3 +531,13 @@ paths:
     $ref: './paths/auth@2fa@emergency-disable@confirm.yaml'
   /auth/2fa/status:
     $ref: './paths/auth@2fa@status.yaml'
+
+  # Subscriptions — static paths before parameterized
+  /subscriptions/upcoming:
+    $ref: './paths/subscriptions@upcoming.yaml'
+  /subscriptions:
+    $ref: './paths/subscriptions.yaml'
+  /subscriptions/{id}:
+    $ref: './paths/subscriptions@{id}.yaml'
+  /subscriptions/{id}/cancel:
+    $ref: './paths/subscriptions@{id}@cancel.yaml'
