@@ -163,6 +163,80 @@ CategoryOverviewResponse:
       items:
         $ref: '#/CategorySummaryItem'
 
+CategoryTransactionItem:
+  type: object
+  required:
+    - id
+    - date
+    - amount
+    - description
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Transaction ID
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    date:
+      type: string
+      format: date
+      description: Transaction date
+      example: "2026-03-15"
+    amount:
+      type: integer
+      format: int64
+      description: Transaction amount in cents
+      example: 2500
+    description:
+      type: string
+      description: Transaction description
+      example: "Weekly groceries"
+    vendorId:
+      type: [string, "null"]
+      format: uuid
+      description: Vendor ID
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    vendorName:
+      type: [string, "null"]
+      description: Vendor name
+      example: "Whole Foods"
+
+CategoryDetailResponse:
+  allOf:
+    - $ref: '#/CategoryResponse'
+    - type: object
+      required:
+        - periodSpend
+        - transactionCount
+        - budgeted
+        - trend
+        - recentTransactions
+      properties:
+        periodSpend:
+          type: integer
+          format: int64
+          description: Total spend in cents for the requested period
+          example: 12000
+        transactionCount:
+          type: integer
+          format: int64
+          description: Number of transactions in the requested period
+          example: 5
+        budgeted:
+          type: [integer, "null"]
+          format: int64
+          description: Budgeted amount in cents (null if no target set)
+          example: 15000
+        trend:
+          type: array
+          description: Spending trend across the last 6 periods
+          items:
+            $ref: '#/CategoryTrendItem'
+        recentTransactions:
+          type: array
+          description: Recent transactions in this category for the period
+          items:
+            $ref: '#/CategoryTransactionItem'
+
 CategoryOptionResponse:
   type: object
   required:

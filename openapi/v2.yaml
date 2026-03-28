@@ -166,6 +166,18 @@ components:
       $ref: './schemas/Vendor.yaml#/CreateVendorRequest'
     UpdateVendorRequest:
       $ref: './schemas/Vendor.yaml#/UpdateVendorRequest'
+    MergeVendorRequest:
+      $ref: './schemas/Vendor.yaml#/MergeVendorRequest'
+    VendorTrendItem:
+      $ref: './schemas/Vendor.yaml#/VendorTrendItem'
+    VendorTopCategoryItem:
+      $ref: './schemas/Vendor.yaml#/VendorTopCategoryItem'
+    VendorTransactionItem:
+      $ref: './schemas/Vendor.yaml#/VendorTransactionItem'
+    VendorDetailResponse:
+      $ref: './schemas/Vendor.yaml#/VendorDetailResponse'
+    VendorStatsResponse:
+      $ref: './schemas/Vendor.yaml#/VendorStatsResponse'
 
     # Categories
     CategoryBase:
@@ -190,6 +202,10 @@ components:
       $ref: './schemas/Category.yaml#/CreateCategoryRequest'
     UpdateCategoryRequest:
       $ref: './schemas/Category.yaml#/UpdateCategoryRequest'
+    CategoryTransactionItem:
+      $ref: './schemas/Category.yaml#/CategoryTransactionItem'
+    CategoryDetailResponse:
+      $ref: './schemas/Category.yaml#/CategoryDetailResponse'
 
     # Targets
     TargetStatus:
@@ -378,10 +394,16 @@ paths:
 
   /vendors/options:
     $ref: './paths/vendors@options.yaml'
+  /vendors/stats:
+    $ref: './paths/vendors@stats.yaml'
   /vendors:
     $ref: './paths/vendors.yaml'
   /vendors/{id}:
     $ref: './paths/vendors@{id}.yaml'
+  /vendors/{id}/detail:
+    $ref: './paths/vendors@{id}@detail.yaml'
+  /vendors/{id}/merge:
+    $ref: './paths/vendors@{id}@merge.yaml'
   /vendors/{id}/archive:
     $ref: './paths/vendors@{id}@archive.yaml'
   /vendors/{id}/unarchive:
@@ -395,6 +417,8 @@ paths:
     $ref: './paths/categories.yaml'
   /categories/{id}:
     $ref: './paths/categories@{id}.yaml'
+  /categories/{id}/detail:
+    $ref: './paths/categories@{id}@detail.yaml'
   /categories/{id}/archive:
     $ref: './paths/categories@{id}@archive.yaml'
   /categories/{id}/unarchive:

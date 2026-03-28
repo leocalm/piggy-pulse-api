@@ -1,9 +1,9 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::dto::categories::{
     CategoriesWithTargets, CategoryBase, CategoryDetailResponse, CategoryManagementListItem, CategoryManagementListResponse, CategoryOptionListResponse,
-    CategoryOptionResponse, CategoryOverviewResponse, CategoryOverviewSummary, CategoryResponse, CategoryStabilityDot, CategorySummaryItem,
-    CategoryTargetsResponse, CategoryTransactionItem, CategoryTrendItem, CategoryTrendResponse, CategoryType, CreateCategoryRequest, CreateTargetRequest,
-    TargetItem, TargetStatus, TargetSummary, UpdateTargetRequest, compute_color,
+    CategoryOptionResponse, CategoryOverviewResponse, CategoryOverviewSummary, CategoryResponse, CategorySummaryItem, CategoryTargetsResponse,
+    CategoryTransactionItem, CategoryTrendItem, CategoryTrendResponse, CategoryType, CreateCategoryRequest, CreateTargetRequest, TargetItem, TargetStatus,
+    TargetSummary, UpdateTargetRequest, compute_color,
 };
 use crate::dto::common::{Date, PaginatedResponse};
 use crate::error::app_error::AppError;
@@ -363,18 +363,13 @@ impl<'a> CategoryService<'a> {
             .await?
             .ok_or_else(|| AppError::NotFound("Category not found".to_string()))?;
 
-        let variance = db.budgeted.map(|b| b - db.period_spend).unwrap_or(0);
-
-        let stability_dots = db
-            .stability_rows
+        let trend = db
+            .trend_rows
             .into_iter()
-            .map(|r| {
-                let within_budget = r.budget.map(|b| r.spent <= b).unwrap_or(true);
-                CategoryStabilityDot {
-                    period_id: r.period_id,
-                    period_name: r.period_name,
-                    within_budget,
-                }
+            .map(|r| CategoryTrendItem {
+                period_id: r.period_id,
+                period_name: r.period_name,
+                total_spend: r.total_spend,
             })
             .collect();
 
@@ -393,11 +388,10 @@ impl<'a> CategoryService<'a> {
 
         Ok(CategoryDetailResponse {
             base: CategoryResponse::from_model(&db.category),
-            period_spent: db.period_spend,
-
+            period_spend: db.period_spend,
+            transaction_count: db.transaction_count,
             budgeted: db.budgeted,
-            variance,
-            stability_dots,
+            trend,
             recent_transactions,
         })
     }
