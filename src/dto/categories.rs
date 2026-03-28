@@ -154,14 +154,6 @@ pub struct CategoryOverviewResponse {
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct CategoryStabilityDot {
-    pub period_id: Uuid,
-    pub period_name: String,
-    pub within_budget: bool,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
 pub struct CategoryTransactionItem {
     pub id: Uuid,
     pub date: Date,
@@ -176,10 +168,10 @@ pub struct CategoryTransactionItem {
 pub struct CategoryDetailResponse {
     #[serde(flatten)]
     pub base: CategoryResponse,
-    pub period_spent: i64,
+    pub period_spend: i64,
+    pub transaction_count: i64,
     pub budgeted: Option<i64>,
-    pub variance: i64,
-    pub stability_dots: Vec<CategoryStabilityDot>,
+    pub trend: Vec<CategoryTrendItem>,
     pub recent_transactions: Vec<CategoryTransactionItem>,
 }
 

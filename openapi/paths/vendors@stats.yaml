@@ -1,0 +1,22 @@
+get:
+  tags:
+    - Vendors
+  summary: Get vendor stats for a period
+  operationId: getVendorStats
+  parameters:
+    - $ref: '../parameters/PeriodId.yaml'
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Vendor.yaml#/VendorStatsResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
