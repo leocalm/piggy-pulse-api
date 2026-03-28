@@ -11,7 +11,7 @@ use crate::error::app_error::AppError;
 use crate::models::pagination::TransactionFilters;
 use crate::service::transaction::{TransactionService, parse_date, parse_direction};
 
-#[get("/?<periodId>&<cursor>&<limit>&<direction>&<accountId>&<categoryId>&<vendorId>&<fromDate>&<toDate>")]
+#[get("/?<periodId>&<cursor>&<limit>&<direction>&<accountId>&<categoryId>&<vendorId>&<fromDate>&<toDate>&<search>")]
 #[allow(clippy::too_many_arguments)]
 #[allow(non_snake_case)]
 pub async fn list_transactions(
@@ -26,6 +26,7 @@ pub async fn list_transactions(
     vendorId: Option<String>,
     fromDate: Option<String>,
     toDate: Option<String>,
+    search: Option<String>,
 ) -> Result<Json<TransactionListResponse>, AppError> {
     // periodId is required
     let period_id_str = periodId.ok_or_else(|| AppError::BadRequest("periodId is required".to_string()))?;
@@ -66,6 +67,13 @@ pub async fn list_transactions(
 
     if let Some(ref td) = toDate {
         filters.date_to = Some(parse_date(td)?);
+    }
+
+    if let Some(s) = search {
+        let trimmed = s.trim().to_string();
+        if !trimmed.is_empty() {
+            filters.search = Some(trimmed);
+        }
     }
 
     let repo = PostgresRepository { pool: pool.inner().clone() };

@@ -276,6 +276,14 @@ fn build_filter_clause(filters: &TransactionFilters, start_offset: usize) -> (St
         binds.push(FilterBindValue::Date(date_to));
         n += 1;
     }
+    if let Some(ref search) = filters.search {
+        parts.push(format!(
+            "(t.description ILIKE '%' || ${n} || '%' OR CAST(t.amount AS TEXT) LIKE '%' || ${n} || '%')",
+            n = n
+        ));
+        binds.push(FilterBindValue::Text(search.clone()));
+        n += 1;
+    }
     let _ = n; // suppress unused warning
 
     (parts.join(" AND "), binds)

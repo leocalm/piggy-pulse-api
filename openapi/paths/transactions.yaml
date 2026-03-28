@@ -13,6 +13,7 @@ get:
     - $ref: '../parameters/VendorId.yaml'
     - $ref: '../parameters/FromDate.yaml'
     - $ref: '../parameters/ToDate.yaml'
+    - $ref: '../parameters/Search.yaml'
   responses:
     '200':
       description: OK
