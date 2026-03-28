@@ -163,6 +163,28 @@ CategoryOverviewResponse:
       items:
         $ref: '#/CategorySummaryItem'
 
+CategoryTrendItem:
+  type: object
+  required:
+    - periodId
+    - periodName
+    - totalSpend
+  properties:
+    periodId:
+      type: string
+      format: uuid
+      description: Period ID
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    periodName:
+      type: string
+      description: Period name
+      example: "March 2026"
+    totalSpend:
+      type: integer
+      format: int64
+      description: Total spend in cents for this period
+      example: 12000
+
 CategoryTransactionItem:
   type: object
   required:
