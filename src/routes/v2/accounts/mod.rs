@@ -1,6 +1,7 @@
 mod adjust_balance;
 mod archive;
 mod balance_history;
+mod batch_balance_history;
 mod create;
 mod delete;
 mod details;
@@ -23,6 +24,7 @@ pub fn routes() -> Vec<rocket::Route> {
         archive::archive_account,
         unarchive::unarchive_account,
         adjust_balance::adjust_balance,
+        batch_balance_history::get_batch_balance_history,
         balance_history::get_balance_history,
         details::get_account_details,
     ]

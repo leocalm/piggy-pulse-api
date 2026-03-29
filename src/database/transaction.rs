@@ -603,6 +603,58 @@ impl PostgresRepository {
         })
     }
 
+    pub async fn get_transaction_stats(&self, period_id: &Uuid, user_id: &Uuid) -> Result<crate::dto::transactions::TransactionStatsResponse, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct StatsRow {
+            category_type: String,
+            total_amount: i64,
+            txn_count: i64,
+        }
+
+        let rows = sqlx::query_as::<_, StatsRow>(
+            r#"
+            SELECT c.category_type::text,
+                   COALESCE(SUM(t.amount), 0) as total_amount,
+                   COUNT(t.id) as txn_count
+            FROM transaction t
+            JOIN category c ON t.category_id = c.id
+            CROSS JOIN budget_period bp
+            WHERE bp.id = $1
+                AND bp.user_id = $2
+                AND t.user_id = $2
+                AND t.occurred_at >= bp.start_date
+                AND t.occurred_at <= bp.end_date
+            GROUP BY c.category_type
+            "#,
+        )
+        .bind(period_id)
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut total_inflows = 0i64;
+        let mut total_outflows = 0i64;
+        let mut transaction_count = 0i64;
+
+        for row in rows {
+            let category_type = category_type_from_db(&row.category_type);
+            transaction_count += row.txn_count;
+
+            match category_type {
+                CategoryType::Incoming => total_inflows += row.total_amount,
+                CategoryType::Outgoing => total_outflows += row.total_amount,
+                CategoryType::Transfer => {}
+            }
+        }
+
+        Ok(crate::dto::transactions::TransactionStatsResponse {
+            total_inflows,
+            total_outflows,
+            net_amount: total_inflows - total_outflows,
+            transaction_count,
+        })
+    }
+
     pub async fn list_all_transactions(&self, user_id: &Uuid) -> Result<Vec<Transaction>, AppError> {
         let query = build_transaction_query("transaction t", &["t.user_id = $1"], "t.occurred_at DESC, t.created_at DESC, t.id DESC");
         let rows = sqlx::query_as::<_, TransactionRow>(&query).bind(user_id).fetch_all(&self.pool).await?;

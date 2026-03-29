@@ -5,6 +5,12 @@ post:
   operationId: cancelSubscription
   parameters:
     - $ref: '../parameters/Id.yaml'
+  requestBody:
+    required: false
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Subscription.yaml#/CancelSubscriptionRequest'
   responses:
     '200':
       description: Subscription cancelled

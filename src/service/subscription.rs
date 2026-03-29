@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use uuid::Uuid;
 
 use crate::database::postgres_repository::PostgresRepository;
@@ -47,9 +48,9 @@ impl<'a> SubscriptionService<'a> {
         }
     }
 
-    pub async fn cancel(&self, id: &Uuid, user_id: &Uuid) -> Result<SubscriptionResponse, AppError> {
+    pub async fn cancel(&self, id: &Uuid, user_id: &Uuid, cancellation_date: Option<&NaiveDate>) -> Result<SubscriptionResponse, AppError> {
         self.repository
-            .cancel_subscription(id, user_id)
+            .cancel_subscription(id, user_id, cancellation_date)
             .await?
             .ok_or_else(|| AppError::NotFound("Subscription not found or already cancelled".to_string()))
     }

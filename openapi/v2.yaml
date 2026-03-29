@@ -407,6 +407,8 @@ paths:
     $ref: './paths/accounts@options.yaml'
   /accounts/summary:
     $ref: './paths/accounts@summary.yaml'
+  /accounts/balance-history:
+    $ref: './paths/accounts@balance-history.yaml'
   /accounts:
     $ref: './paths/accounts.yaml'
   /accounts/{id}:
@@ -464,6 +466,8 @@ paths:
 
   /transactions:
     $ref: './paths/transactions.yaml'
+  /transactions/stats:
+    $ref: './paths/transactions@stats.yaml'
   /transactions/{id}:
     $ref: './paths/transactions@{id}.yaml'
 

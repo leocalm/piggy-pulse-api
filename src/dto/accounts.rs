@@ -175,6 +175,7 @@ pub struct AccountDetailsResponse {
     pub base: AccountSummaryResponse,
     pub inflow: i64,
     pub outflow: i64,
+    pub spend_limit: Option<i64>,
     pub stability_context: StabilityContext,
     pub categories_breakdown: Vec<CategoryBreakdownItem>,
     pub transactions_breakdown: Vec<TransactionBreakdownItem>,
@@ -216,6 +217,15 @@ pub struct AccountBalanceHistoryPoint {
 }
 
 pub type AccountBalanceHistoryResponse = Vec<AccountBalanceHistoryPoint>;
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchBalanceHistoryEntry {
+    pub account_id: Uuid,
+    pub points: Vec<AccountBalanceHistoryPoint>,
+}
+
+pub type BatchBalanceHistoryResponse = Vec<BatchBalanceHistoryEntry>;
 
 // ===== Account Requests =====
 

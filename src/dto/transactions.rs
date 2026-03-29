@@ -91,3 +91,14 @@ pub enum CreateTransactionRequest {
 }
 
 pub type UpdateTransactionRequest = CreateTransactionRequest;
+
+// ===== Stats =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionStatsResponse {
+    pub total_inflows: i64,
+    pub total_outflows: i64,
+    pub net_amount: i64,
+    pub transaction_count: i64,
+}

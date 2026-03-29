@@ -96,6 +96,32 @@ CreateAccountRequest:
       description: Optional spend limit in cents. Only meaningful for creditCard and allowance accounts.
       minimum: 0
       example: 50000
+    topUpAmount:
+      type: [integer, "null"]
+      description: Top-up amount in cents. Only meaningful for Allowance accounts.
+      minimum: 0
+      example: 20000
+    topUpCycle:
+      type: [string, "null"]
+      description: Top-up frequency. Only meaningful for Allowance accounts.
+      enum: ["weekly", "bi-weekly", "monthly", null]
+      example: "monthly"
+    topUpDay:
+      type: [integer, "null"]
+      description: Day of week (0–6) or day of month (1–31) for the top-up, depending on cycle. Only meaningful for Allowance accounts.
+      example: 1
+    statementCloseDay:
+      type: [integer, "null"]
+      description: Day of month the statement closes (1–31). Only meaningful for CreditCard accounts.
+      minimum: 1
+      maximum: 31
+      example: 25
+    paymentDueDay:
+      type: [integer, "null"]
+      description: Day of month the payment is due (1–31). Only meaningful for CreditCard accounts.
+      minimum: 1
+      maximum: 31
+      example: 15
 
 UpdateAccountRequest:
   allOf:
@@ -294,6 +320,11 @@ AccountDetailsResponse:
           description: Outflow in cents
           example: 1000
           minimum: 0
+        spendLimit:
+          type: [integer, "null"]
+          description: Optional spend limit in cents. Only present for CreditCard and Allowance accounts.
+          minimum: 0
+          example: 50000
         stabilityContext:
           $ref: '#/StabilityContext'
         categoriesBreakdown:
@@ -356,6 +387,28 @@ AccountBalanceHistoryResponse:
   type: array
   items:
     $ref: '#/AccountBalanceHistoryPoint'
+
+BatchBalanceHistoryEntry:
+  type: object
+  required:
+    - accountId
+    - points
+  properties:
+    accountId:
+      type: string
+      format: uuid
+      description: Account ID
+      example: "123e4567-e89b-12d3-a456-426655440000"
+    points:
+      type: array
+      items:
+        $ref: '#/AccountBalanceHistoryPoint'
+
+BatchBalanceHistoryResponse:
+  type: array
+  description: Balance history for all active accounts
+  items:
+    $ref: '#/BatchBalanceHistoryEntry'
 
 AdjustBalanceRequest:
   type: object
