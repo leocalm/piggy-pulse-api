@@ -61,6 +61,61 @@ OnboardingStatusResponse:
         - $ref: '#/OnboardingStep'
         - type: "null"
 
+# ===== Onboarding Templates =====
+
+CategoryTemplateCategory:
+  type: object
+  required:
+    - name
+    - type
+    - icon
+  properties:
+    name:
+      type: string
+      example: "Groceries"
+    type:
+      type: string
+      enum: ["income", "expense", "transfer"]
+      example: "expense"
+    behavior:
+      type: [string, "null"]
+      enum: [fixed, variable, subscription, null]
+      example: "variable"
+    icon:
+      type: string
+      example: "🛒"
+
+CategoryTemplateResponse:
+  type: object
+  required:
+    - id
+    - name
+    - description
+    - categories
+  properties:
+    id:
+      type: string
+      example: "essentials"
+    name:
+      type: string
+      example: "Essentials"
+    description:
+      type: string
+      example: "Core household expenses"
+    categories:
+      type: array
+      items:
+        $ref: '#/CategoryTemplateCategory'
+
+ApplyTemplateRequest:
+  type: object
+  required:
+    - templateId
+  properties:
+    templateId:
+      type: string
+      example: "essentials"
+
 # ===== Unlock =====
 
 UnlockResponse:

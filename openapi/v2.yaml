@@ -340,6 +340,12 @@ components:
       $ref: './schemas/Subscription.yaml#/UpdateSubscriptionRequest'
 
     # Misc
+    CategoryTemplateCategory:
+      $ref: './schemas/Misc.yaml#/CategoryTemplateCategory'
+    CategoryTemplateResponse:
+      $ref: './schemas/Misc.yaml#/CategoryTemplateResponse'
+    ApplyTemplateRequest:
+      $ref: './schemas/Misc.yaml#/ApplyTemplateRequest'
     CurrencyResponse:
       $ref: './schemas/Misc.yaml#/CurrencyResponse'
     CurrencyListResponse:
@@ -521,6 +527,10 @@ paths:
     $ref: './paths/onboarding@status.yaml'
   /onboarding/complete:
     $ref: './paths/onboarding@complete.yaml'
+  /onboarding/category-templates:
+    $ref: './paths/onboarding@category-templates.yaml'
+  /onboarding/apply-template:
+    $ref: './paths/onboarding@apply-template.yaml'
   /unlock:
     $ref: './paths/unlock.yaml'
   /auth/2fa/backup-codes/regenerate:
