@@ -254,12 +254,17 @@ RETURNING id, name, category_id, vendor_id, billing_amount,
         Ok(result.rows_affected() > 0)
     }
 
-    pub async fn cancel_subscription(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<SubscriptionResponse>, AppError> {
+    pub async fn cancel_subscription(
+        &self,
+        id: &Uuid,
+        user_id: &Uuid,
+        cancellation_date: Option<&chrono::NaiveDate>,
+    ) -> Result<Option<SubscriptionResponse>, AppError> {
         let row = sqlx::query_as::<_, SubscriptionRow>(
             r#"
 UPDATE subscription
 SET status = 'cancelled',
-    cancelled_at = NOW(),
+    cancelled_at = COALESCE($3::date, NOW()::date)::timestamp AT TIME ZONE 'UTC',
     updated_at = NOW()
 WHERE id = $1 AND user_id = $2 AND status != 'cancelled'
 RETURNING id, name, category_id, vendor_id, billing_amount,
@@ -269,6 +274,7 @@ RETURNING id, name, category_id, vendor_id, billing_amount,
         )
         .bind(id)
         .bind(user_id)
+        .bind(cancellation_date)
         .fetch_optional(&self.pool)
         .await?;
 

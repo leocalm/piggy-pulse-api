@@ -1,7 +1,8 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::dto::accounts::{
     AccountBalanceHistoryPoint, AccountBalanceHistoryResponse, AccountDetailsResponse, AccountListResponse as V2AccountListResponse, AccountResponse,
-    AccountStatus, AccountSummaryListResponse, AccountSummaryResponse, CategoryBreakdownItem, LargestOutflow, StabilityContext, TransactionBreakdownItem,
+    AccountStatus, AccountSummaryListResponse, AccountSummaryResponse, BatchBalanceHistoryEntry, BatchBalanceHistoryResponse, CategoryBreakdownItem,
+    LargestOutflow, StabilityContext, TransactionBreakdownItem,
 };
 use crate::dto::common::{Date, PaginatedResponse};
 use crate::error::app_error::AppError;
@@ -148,6 +149,39 @@ impl<'a> AccountService<'a> {
         Ok(vec![])
     }
 
+    pub async fn get_batch_balance_history(&self, period_id: &Uuid, user_id: &Uuid) -> Result<BatchBalanceHistoryResponse, AppError> {
+        let period = self.repository.get_budget_period(period_id, user_id).await?;
+        let accounts = self.repository.list_active_account_ids(user_id).await?;
+
+        let mut result = Vec::with_capacity(accounts.len());
+        for account_id in &accounts {
+            let points = self
+                .repository
+                .get_account_balance_history(account_id, period.start_date, period.end_date, user_id)
+                .await?;
+
+            let filtered: Vec<AccountBalanceHistoryPoint> = points
+                .into_iter()
+                .filter(|p| p.transaction_count > 0)
+                .filter_map(|p| {
+                    let date = chrono::NaiveDate::parse_from_str(&p.date, "%Y-%m-%d").ok()?;
+                    Some(AccountBalanceHistoryPoint {
+                        date: Date(date),
+                        balance: p.balance,
+                        transaction_count: p.transaction_count,
+                    })
+                })
+                .collect();
+
+            result.push(BatchBalanceHistoryEntry {
+                account_id: *account_id,
+                points: filtered,
+            });
+        }
+
+        Ok(result)
+    }
+
     pub async fn get_account_details(&self, account_id: &Uuid, period_id: Option<Uuid>, user_id: &Uuid) -> Result<AccountDetailsResponse, AppError> {
         let metrics = self
             .repository
@@ -288,6 +322,7 @@ impl<'a> AccountService<'a> {
             base,
             inflow,
             outflow,
+            spend_limit: account.spend_limit.map(|s| s as i64),
             stability_context,
             categories_breakdown,
             transactions_breakdown,

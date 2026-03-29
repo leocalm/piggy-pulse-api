@@ -114,3 +114,9 @@ pub struct UpdateSubscriptionRequest {
     pub billing_day: i16,
     pub next_charge_date: Date,
 }
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelSubscriptionRequest {
+    pub cancellation_date: Option<Date>,
+}

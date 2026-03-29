@@ -289,3 +289,12 @@ UpdateSubscriptionRequest:
       format: date
       description: Date of the next expected charge
       example: "2026-04-15"
+
+CancelSubscriptionRequest:
+  type: object
+  properties:
+    cancellationDate:
+      type: [string, "null"]
+      format: date
+      description: Date the subscription was cancelled (or will be cancelled). Defaults to today if omitted.
+      example: "2026-04-01"

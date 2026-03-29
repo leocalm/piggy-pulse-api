@@ -1553,6 +1553,14 @@ LIMIT 1
 
     // ===== V2-specific methods =====
 
+    pub async fn list_active_account_ids(&self, user_id: &Uuid) -> Result<Vec<Uuid>, AppError> {
+        let ids: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM account WHERE user_id = $1 AND is_archived = FALSE ORDER BY created_at DESC")
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(ids)
+    }
+
     /// Simple paginated list of accounts (no period metrics). Returns (accounts, total_count).
     pub async fn list_accounts_v2(&self, cursor: Option<Uuid>, limit: i64, user_id: &Uuid) -> Result<(Vec<Account>, i64), AppError> {
         let total_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM account WHERE user_id = $1 AND is_archived = FALSE")

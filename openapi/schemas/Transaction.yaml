@@ -237,3 +237,32 @@ CreateTransactionRequest:
 UpdateTransactionRequest:
   allOf:
     - $ref: '#/CreateTransactionRequest'
+
+TransactionStatsResponse:
+  type: object
+  required:
+    - totalInflows
+    - totalOutflows
+    - netAmount
+    - transactionCount
+  properties:
+    totalInflows:
+      type: integer
+      format: int64
+      description: Sum of all income transaction amounts in the period (in cents)
+      example: 500000
+    totalOutflows:
+      type: integer
+      format: int64
+      description: Sum of all expense transaction amounts in the period (in cents)
+      example: 350000
+    netAmount:
+      type: integer
+      format: int64
+      description: Net amount (inflows minus outflows) in cents
+      example: 150000
+    transactionCount:
+      type: integer
+      format: int64
+      description: Total number of transactions in the period (excluding transfers)
+      example: 42
