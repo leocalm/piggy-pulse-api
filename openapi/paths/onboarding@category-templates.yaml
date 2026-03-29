@@ -1,0 +1,18 @@
+get:
+  tags:
+    - Onboarding
+  summary: List category templates
+  operationId: listCategoryTemplates
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '../schemas/Misc.yaml#/CategoryTemplateResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

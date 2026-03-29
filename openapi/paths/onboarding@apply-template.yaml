@@ -1,0 +1,26 @@
+post:
+  tags:
+    - Onboarding
+  summary: Apply a category template
+  operationId: applyTemplate
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Misc.yaml#/ApplyTemplateRequest'
+  responses:
+    '201':
+      description: Template applied; returns created categories
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '../schemas/Category.yaml#/CategoryResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
