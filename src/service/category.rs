@@ -63,8 +63,13 @@ impl<'a> CategoryService<'a> {
                 .map(|b| crate::models::category::category_behavior_to_db(b.to_v1()).to_string()),
         };
 
-        let category = self.repository.create_category(&v1_request, user_id).await?;
-        Ok(CategoryResponse::from_model(&category))
+        let category = if let Some(target_value) = request.target {
+            self.repository.create_category_with_target(&v1_request, target_value, user_id).await?
+        } else {
+            self.repository.create_category(&v1_request, user_id).await?
+        };
+
+        Ok(CategoryResponse::from_model_with_target(&category, request.target))
     }
 
     pub async fn update_category(&self, id: &Uuid, request: &CreateCategoryRequest, user_id: &Uuid) -> Result<CategoryResponse, AppError> {
@@ -83,8 +88,19 @@ impl<'a> CategoryService<'a> {
                 .map(|b| crate::models::category::category_behavior_to_db(b.to_v1()).to_string()),
         };
 
-        let category = self.repository.update_category(id, &v1_request, user_id).await?;
-        Ok(CategoryResponse::from_model(&category))
+        let category = if let Some(target_value) = request.target {
+            self.repository.update_category_with_target(id, &v1_request, target_value, user_id).await?
+        } else {
+            self.repository.update_category(id, &v1_request, user_id).await?
+        };
+
+        let effective_target = if request.target.is_some() {
+            request.target
+        } else {
+            self.repository.get_target_for_category(&category.id, user_id).await?.map(|t| t.budgeted_value)
+        };
+
+        Ok(CategoryResponse::from_model_with_target(&category, effective_target))
     }
 
     pub async fn delete_category(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
