@@ -141,6 +141,7 @@ pub struct CategoryOverviewSummary {
     pub period_elapsed_percent: i64,
     pub total_spent: i64,
     pub total_budgeted: Option<i64>,
+    pub total_budgeted_incoming: Option<i64>,
     pub variance: i64,
 }
 
@@ -335,6 +336,7 @@ pub struct TargetSummary {
     pub period_start: Date,
     pub period_end: Option<Date>,
     pub current_position: i64,
+    pub income_target: i64,
     pub categories_with_targets: CategoriesWithTargets,
     pub period_progress: i64,
 }

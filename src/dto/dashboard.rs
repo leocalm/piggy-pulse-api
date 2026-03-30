@@ -10,6 +10,7 @@ use crate::dto::common::Date;
 pub struct CurrentPeriodResponse {
     pub spent: i64,
     pub target: i64,
+    pub income_target: i64,
     pub days_remaining: i64,
     pub days_in_period: i64,
     pub projected_spend: i64,

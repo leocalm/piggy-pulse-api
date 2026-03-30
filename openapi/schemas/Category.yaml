@@ -147,8 +147,13 @@ CategoryOverviewSummary:
       minimum: 0
     totalBudgeted:
       type: [integer, "null"]
-      description: Total budgeted in period in cents
+      description: Total outgoing budgeted in period in cents
       example: 100000
+      minimum: 0
+    totalBudgetedIncoming:
+      type: [integer, "null"]
+      description: Total incoming budgeted in period in cents
+      example: 600000
       minimum: 0
     variance:
       type: integer
@@ -412,6 +417,7 @@ TargetSummary:
     - periodStart
     - periodEnd
     - currentPosition
+    - incomeTarget
     - categoriesWithTargets
     - periodProgress
   properties:
@@ -431,8 +437,13 @@ TargetSummary:
       example: "2024-01-31"
     currentPosition:
       type: integer
-      description: Current budget position in cents
+      description: Current expense budget position in cents
       example: 50000
+    incomeTarget:
+      type: integer
+      description: Total income target in cents
+      example: 600000
+      minimum: 0
     categoriesWithTargets:
       type: object
       required:

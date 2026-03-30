@@ -48,6 +48,7 @@ impl<'a> DashboardService<'a> {
         Ok(CurrentPeriodResponse {
             spent: row.spent,
             target: row.target,
+            income_target: row.income_target,
             days_remaining,
             days_in_period,
             projected_spend,

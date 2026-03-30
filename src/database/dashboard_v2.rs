@@ -10,6 +10,7 @@ use crate::service::dashboard::is_outside_tolerance;
 pub struct CurrentPeriodRow {
     pub spent: i64,
     pub target: i64,
+    pub income_target: i64,
     pub days_remaining: i32,
     pub days_in_period: i32,
     pub days_elapsed: i32,
@@ -148,12 +149,23 @@ spent AS (
 target AS (
     SELECT COALESCE(SUM(bc.budgeted_value), 0)::bigint AS value
     FROM budget_category bc
+    JOIN category cat ON bc.category_id = cat.id
     WHERE bc.user_id = $2
       AND bc.is_excluded = false
+      AND cat.category_type = 'Outgoing'
+),
+income_target AS (
+    SELECT COALESCE(SUM(bc.budgeted_value), 0)::bigint AS value
+    FROM budget_category bc
+    JOIN category cat ON bc.category_id = cat.id
+    WHERE bc.user_id = $2
+      AND bc.is_excluded = false
+      AND cat.category_type = 'Incoming'
 )
 SELECT
     spent.value AS spent,
     target.value AS target,
+    income_target.value AS income_target,
     GREATEST(0, (p.end_date - CURRENT_DATE + 1)::int) AS days_remaining,
     GREATEST(1, (p.end_date - p.start_date + 1)::int) AS days_in_period,
     GREATEST(0, LEAST((CURRENT_DATE - p.start_date + 1)::int, (p.end_date - p.start_date + 1)::int)) AS days_elapsed,
@@ -162,6 +174,7 @@ SELECT
 FROM period p
 CROSS JOIN spent
 CROSS JOIN target
+CROSS JOIN income_target
             "#,
         )
         .bind(period_id)
@@ -319,9 +332,12 @@ FROM account_balances ab
         let closed_period_rows = sqlx::query_as::<_, ClosedPeriodRow>(
             r#"
             WITH total_budget AS (
-                SELECT COALESCE(SUM(budgeted_value), 0)::bigint AS value
-                FROM budget_category
-                WHERE user_id = $1
+                SELECT COALESCE(SUM(bc.budgeted_value), 0)::bigint AS value
+                FROM budget_category bc
+                JOIN category cat ON bc.category_id = cat.id
+                WHERE bc.user_id = $1
+                  AND cat.category_type = 'Outgoing'
+                  AND bc.is_excluded = false
             )
             SELECT
                 tb.value AS total_budget,
