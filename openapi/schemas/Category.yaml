@@ -57,6 +57,11 @@ CategoryResponse:
           type: [string, "null"]
           description: Category description
           example: "Monthly grocery shopping"
+        target:
+          type: [integer, "null"]
+          description: Budget target in cents (null if no target set)
+          minimum: 0
+          example: 15000
 
 CategoryManagementListItem:
   allOf:
@@ -329,6 +334,11 @@ CreateCategoryRequest:
       format: uuid
       description: Parent category ID
       example: "123e4567-e89b-12d3-a456-426655440000"
+    target:
+      type: [integer, "null"]
+      description: Budget target amount in cents (optional). Creates or updates the target for this category.
+      minimum: 0
+      example: 15000
 
 UpdateCategoryRequest:
   allOf:

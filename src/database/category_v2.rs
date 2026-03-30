@@ -303,6 +303,25 @@ impl PostgresRepository {
         }))
     }
 
+    /// Upsert a target for a category (insert or update on conflict).
+    pub async fn upsert_target(&self, category_id: &Uuid, value: i64, user_id: &Uuid) -> Result<(), AppError> {
+        sqlx::query(
+            r#"
+            INSERT INTO budget_category (user_id, category_id, budgeted_value, is_excluded)
+            VALUES ($1, $2, $3, FALSE)
+            ON CONFLICT (user_id, category_id)
+            DO UPDATE SET budgeted_value = EXCLUDED.budgeted_value
+            "#,
+        )
+        .bind(user_id)
+        .bind(category_id)
+        .bind(i32::try_from(value).map_err(|_| AppError::BadRequest("Target value out of range".to_string()))?)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
     /// Create a new target (budget_category row)
     pub async fn create_target(&self, category_id: &Uuid, value: i64, user_id: &Uuid) -> Result<Uuid, AppError> {
         let id: Uuid = sqlx::query_scalar(

@@ -103,6 +103,7 @@ pub struct CategoryResponse {
     #[serde(flatten)]
     pub base: CategoryBase,
     pub description: Option<String>,
+    pub target: Option<i64>,
 }
 
 // ===== CategoryManagementListItem / Response =====
@@ -214,6 +215,8 @@ pub struct CreateCategoryRequest {
     pub behavior: Option<CategoryBehavior>,
     pub description: Option<String>,
     pub parent_id: Option<Uuid>,
+    #[validate(range(min = 0))]
+    pub target: Option<i64>,
 }
 
 pub type UpdateCategoryRequest = CreateCategoryRequest;
@@ -286,6 +289,15 @@ impl CategoryResponse {
         CategoryResponse {
             base: CategoryBase::from_model(c),
             description: c.description.clone(),
+            target: None,
+        }
+    }
+
+    pub fn from_model_with_target(c: &crate::models::category::Category, target: Option<i64>) -> Self {
+        CategoryResponse {
+            base: CategoryBase::from_model(c),
+            description: c.description.clone(),
+            target,
         }
     }
 }
