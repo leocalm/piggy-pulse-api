@@ -283,6 +283,185 @@ impl PostgresRepository {
         Ok(Category::from(row))
     }
 
+    /// Create a category and upsert its target atomically within a single transaction.
+    pub async fn create_category_with_target(&self, request: &CategoryRequest, target_value: i64, user_id: &Uuid) -> Result<Category, AppError> {
+        let mut tx = self.pool.begin().await?;
+
+        // Validate parent (same logic as create_category, but against tx)
+        if let Some(parent_id) = request.parent_id {
+            let parent: Option<CategoryRow> = sqlx::query_as(
+                r#"
+                SELECT id, name, COALESCE(color, '') as color, COALESCE(icon, '') as icon,
+                       parent_id, category_type::text as category_type, is_archived,
+                       description, is_system, behavior::text as behavior
+                FROM category WHERE id = $1 AND user_id = $2
+                "#,
+            )
+            .bind(parent_id)
+            .bind(user_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+
+            if let Some(parent) = parent {
+                if parent.parent_id.is_some() {
+                    return Err(AppError::BadRequest(
+                        "Cannot create a subcategory under another subcategory. Maximum depth is 1.".to_string(),
+                    ));
+                }
+                let parent_type = category_type_from_db(&parent.category_type);
+                if parent_type != request.category_type {
+                    return Err(AppError::BadRequest("Subcategory must have the same type as its parent.".to_string()));
+                }
+            } else {
+                return Err(AppError::NotFound("Parent category not found".to_string()));
+            }
+        }
+
+        let row = sqlx::query_as::<_, CategoryRow>(
+            r#"
+            INSERT INTO category (user_id, name, color, icon, parent_id, category_type, is_archived, description, behavior)
+            VALUES ($1, $2, $3, $4, $5, $6::text::category_type, FALSE, $7, $8::text::category_behavior)
+            RETURNING id, name, COALESCE(color, '') as color, COALESCE(icon, '') as icon,
+                      parent_id, category_type::text as category_type, is_archived,
+                      description, is_system, behavior::text as behavior
+            "#,
+        )
+        .bind(user_id)
+        .bind(&request.name)
+        .bind(&request.color)
+        .bind(&request.icon)
+        .bind(request.parent_id)
+        .bind(request.category_type_to_db())
+        .bind(&request.description)
+        .bind(request.behavior.as_deref())
+        .fetch_one(&mut *tx)
+        .await;
+
+        let row = match row {
+            Ok(row) => row,
+            Err(err) if is_unique_violation(&err) => {
+                return Err(AppError::BadRequest("Category name already exists".to_string()));
+            }
+            Err(err) => return Err(err.into()),
+        };
+
+        let category = Category::from(row);
+
+        // Upsert target within same transaction
+        sqlx::query(
+            r#"
+            INSERT INTO budget_category (user_id, category_id, budgeted_value, is_excluded)
+            VALUES ($1, $2, $3, FALSE)
+            ON CONFLICT (user_id, category_id) DO UPDATE SET budgeted_value = EXCLUDED.budgeted_value
+            "#,
+        )
+        .bind(user_id)
+        .bind(category.id)
+        .bind(i32::try_from(target_value).map_err(|_| AppError::BadRequest("Target value out of range".to_string()))?)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        Ok(category)
+    }
+
+    /// Update a category and upsert its target atomically within a single transaction.
+    pub async fn update_category_with_target(&self, id: &Uuid, request: &CategoryRequest, target_value: i64, user_id: &Uuid) -> Result<Category, AppError> {
+        let mut tx = self.pool.begin().await?;
+
+        // Guard: system categories cannot be updated
+        let is_system: bool = sqlx::query_scalar("SELECT is_system FROM category WHERE id = $1 AND user_id = $2")
+            .bind(id)
+            .bind(user_id)
+            .fetch_optional(&mut *tx)
+            .await?
+            .unwrap_or(false);
+        if is_system {
+            return Err(AppError::BadRequest("System categories cannot be modified.".to_string()));
+        }
+
+        // Validate parent_id
+        if let Some(parent_id) = request.parent_id {
+            if parent_id == *id {
+                return Err(AppError::BadRequest("A category cannot be its own parent.".to_string()));
+            }
+            let parent: Option<CategoryRow> = sqlx::query_as(
+                r#"
+                SELECT id, name, COALESCE(color, '') as color, COALESCE(icon, '') as icon,
+                       parent_id, category_type::text as category_type, is_archived,
+                       description, is_system, behavior::text as behavior
+                FROM category WHERE id = $1 AND user_id = $2
+                "#,
+            )
+            .bind(parent_id)
+            .bind(user_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+
+            if let Some(parent) = parent {
+                if parent.parent_id.is_some() {
+                    return Err(AppError::BadRequest(
+                        "Cannot create a subcategory under another subcategory. Maximum depth is 1.".to_string(),
+                    ));
+                }
+                let parent_type = category_type_from_db(&parent.category_type);
+                if parent_type != request.category_type {
+                    return Err(AppError::BadRequest("Subcategory must have the same type as its parent.".to_string()));
+                }
+                if parent.is_archived {
+                    return Err(AppError::BadRequest("Cannot set parent to an archived category.".to_string()));
+                }
+            } else {
+                return Err(AppError::NotFound("Parent category not found".to_string()));
+            }
+        }
+
+        let row = sqlx::query_as::<_, CategoryRow>(
+            r#"
+            UPDATE category
+            SET name = $1, color = $2, icon = $3, parent_id = $4, category_type = $5::text::category_type,
+                description = $6, behavior = $9::text::category_behavior
+            WHERE id = $7 AND user_id = $8
+            RETURNING id, name, COALESCE(color, '') as color, COALESCE(icon, '') as icon,
+                      parent_id, category_type::text as category_type, is_archived,
+                      description, is_system, behavior::text as behavior
+            "#,
+        )
+        .bind(&request.name)
+        .bind(&request.color)
+        .bind(&request.icon)
+        .bind(request.parent_id)
+        .bind(request.category_type_to_db())
+        .bind(&request.description)
+        .bind(id)
+        .bind(user_id)
+        .bind(request.behavior.as_deref())
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Category not found".to_string()))?;
+
+        let category = Category::from(row);
+
+        // Upsert target within same transaction
+        sqlx::query(
+            r#"
+            INSERT INTO budget_category (user_id, category_id, budgeted_value, is_excluded)
+            VALUES ($1, $2, $3, FALSE)
+            ON CONFLICT (user_id, category_id) DO UPDATE SET budgeted_value = EXCLUDED.budgeted_value
+            "#,
+        )
+        .bind(user_id)
+        .bind(id)
+        .bind(i32::try_from(target_value).map_err(|_| AppError::BadRequest("Target value out of range".to_string()))?)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        Ok(category)
+    }
+
     pub async fn get_category_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Category>, AppError> {
         let row = sqlx::query_as::<_, CategoryRow>(
             r#"

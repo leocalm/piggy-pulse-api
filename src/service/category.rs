@@ -63,11 +63,11 @@ impl<'a> CategoryService<'a> {
                 .map(|b| crate::models::category::category_behavior_to_db(b.to_v1()).to_string()),
         };
 
-        let category = self.repository.create_category(&v1_request, user_id).await?;
-
-        if let Some(target_value) = request.target {
-            self.repository.upsert_target(&category.id, target_value, user_id).await?;
-        }
+        let category = if let Some(target_value) = request.target {
+            self.repository.create_category_with_target(&v1_request, target_value, user_id).await?
+        } else {
+            self.repository.create_category(&v1_request, user_id).await?
+        };
 
         Ok(CategoryResponse::from_model_with_target(&category, request.target))
     }
@@ -88,11 +88,11 @@ impl<'a> CategoryService<'a> {
                 .map(|b| crate::models::category::category_behavior_to_db(b.to_v1()).to_string()),
         };
 
-        let category = self.repository.update_category(id, &v1_request, user_id).await?;
-
-        if let Some(target_value) = request.target {
-            self.repository.upsert_target(&category.id, target_value, user_id).await?;
-        }
+        let category = if let Some(target_value) = request.target {
+            self.repository.update_category_with_target(id, &v1_request, target_value, user_id).await?
+        } else {
+            self.repository.update_category(id, &v1_request, user_id).await?
+        };
 
         let effective_target = if request.target.is_some() {
             request.target
