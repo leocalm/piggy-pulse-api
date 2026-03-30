@@ -288,36 +288,7 @@ impl<'a> OnboardingService<'a> {
             return Ok(Some(OnboardingStep::Period));
         }
 
-        let has_accounts: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM account WHERE user_id = $1 AND is_archived = FALSE)")
-            .bind(user_id)
-            .fetch_one(&self.repository.pool)
-            .await
-            .map_err(AppError::from)?;
-
-        if !has_accounts {
-            return Ok(Some(OnboardingStep::Accounts));
-        }
-
-        let has_incoming: bool = sqlx::query_scalar(
-            "SELECT EXISTS(SELECT 1 FROM category WHERE user_id = $1 AND is_archived = FALSE AND is_system = FALSE AND category_type = 'Incoming'::category_type)",
-        )
-        .bind(user_id)
-        .fetch_one(&self.repository.pool)
-        .await
-        .map_err(AppError::from)?;
-
-        let has_outgoing: bool = sqlx::query_scalar(
-            "SELECT EXISTS(SELECT 1 FROM category WHERE user_id = $1 AND is_archived = FALSE AND is_system = FALSE AND category_type = 'Outgoing'::category_type)",
-        )
-        .bind(user_id)
-        .fetch_one(&self.repository.pool)
-        .await
-        .map_err(AppError::from)?;
-
-        if !has_incoming || !has_outgoing {
-            return Ok(Some(OnboardingStep::Categories));
-        }
-
+        // Accounts and Categories are optional — users can add them after onboarding
         Ok(Some(OnboardingStep::Summary))
     }
 }
