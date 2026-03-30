@@ -141,6 +141,7 @@ impl<'a> CategoryService<'a> {
 
         let mut total_spent: i64 = 0;
         let mut total_budgeted: Option<i64> = None;
+        let mut total_budgeted_incoming: Option<i64> = None;
 
         let categories: Vec<CategorySummaryItem> = category_data
             .iter()
@@ -153,6 +154,9 @@ impl<'a> CategoryService<'a> {
                     if let Some(b) = budgeted {
                         *total_budgeted.get_or_insert(0) += b;
                     }
+                }
+                if let Some(b) = budgeted.filter(|_| row.category.category_type == V1CategoryType::Incoming) {
+                    *total_budgeted_incoming.get_or_insert(0) += b;
                 }
 
                 let projected = if period_elapsed_percent > 0 {
@@ -180,6 +184,7 @@ impl<'a> CategoryService<'a> {
                 period_elapsed_percent,
                 total_spent,
                 total_budgeted,
+                total_budgeted_incoming,
                 variance,
             },
             categories,
@@ -231,6 +236,7 @@ impl<'a> CategoryService<'a> {
         let mut with_targets: i64 = 0;
         let total = target_rows.len() as i64;
         let mut current_position: i64 = 0;
+        let mut income_target: i64 = 0;
 
         let targets: Vec<TargetItem> = target_rows
             .iter()
@@ -250,8 +256,11 @@ impl<'a> CategoryService<'a> {
                     _ => 0,
                 };
 
-                if let Some(target) = current_target {
+                if let Some(target) = current_target.filter(|_| row.category_type == V1CategoryType::Outgoing) {
                     current_position += target - spent;
+                }
+                if let Some(target) = current_target.filter(|_| row.category_type == V1CategoryType::Incoming) {
+                    income_target += target;
                 }
 
                 TargetItem {
@@ -274,6 +283,7 @@ impl<'a> CategoryService<'a> {
                 period_start: Date(period.start_date),
                 period_end: Some(Date(period.end_date)),
                 current_position,
+                income_target,
                 categories_with_targets: CategoriesWithTargets { with_targets, total },
                 period_progress,
             },

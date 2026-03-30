@@ -334,13 +334,12 @@ impl PostgresRepository {
             SELECT bp.id, bp.name, bp.start_date, bp.end_date,
                    COUNT(DISTINCT t.id)::INT8 as transaction_count,
                    COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::INT8 as total_spent,
-                   COALESCE(SUM(bc.budgeted_value), 0) as total_budgeted
+                   COALESCE((SELECT SUM(bc2.budgeted_value) FROM budget_category bc2 JOIN category cat ON bc2.category_id = cat.id WHERE bc2.user_id = bp.user_id AND cat.category_type = 'Outgoing' AND bc2.is_excluded = FALSE), 0) as total_budgeted
             FROM budget_period bp
             LEFT JOIN transaction t ON t.user_id = bp.user_id
                 AND t.occurred_at >= bp.start_date
                 AND t.occurred_at <= bp.end_date
             LEFT JOIN category c ON t.category_id = c.id
-            LEFT JOIN budget_category bc ON bc.user_id = bp.user_id
             WHERE bp.id = $1 AND bp.user_id = $2
             GROUP BY bp.id, bp.name, bp.start_date, bp.end_date
             "#,
@@ -367,13 +366,12 @@ impl PostgresRepository {
                 SELECT bp.id, bp.name, bp.start_date, bp.end_date,
                        COUNT(DISTINCT t.id)::INT8 as transaction_count,
                        COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::INT8 as total_spent,
-                       COALESCE(SUM(bc.budgeted_value), 0) as total_budgeted
+                       COALESCE((SELECT SUM(bc2.budgeted_value) FROM budget_category bc2 JOIN category cat ON bc2.category_id = cat.id WHERE bc2.user_id = bp.user_id AND cat.category_type = 'Outgoing' AND bc2.is_excluded = FALSE), 0) as total_budgeted
                 FROM budget_period bp
                 LEFT JOIN transaction t ON t.user_id = bp.user_id
                     AND t.occurred_at >= bp.start_date
                     AND t.occurred_at <= bp.end_date
                 LEFT JOIN category c ON t.category_id = c.id
-                LEFT JOIN budget_category bc ON bc.user_id = bp.user_id
                 WHERE bp.user_id = $1
                     AND (bp.start_date, bp.id) > (
                         SELECT start_date, id FROM budget_period WHERE id = $2 AND user_id = $1
@@ -394,13 +392,12 @@ impl PostgresRepository {
                 SELECT bp.id, bp.name, bp.start_date, bp.end_date,
                        COUNT(DISTINCT t.id)::INT8 as transaction_count,
                        COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::INT8 as total_spent,
-                       COALESCE(SUM(bc.budgeted_value), 0) as total_budgeted
+                       COALESCE((SELECT SUM(bc2.budgeted_value) FROM budget_category bc2 JOIN category cat ON bc2.category_id = cat.id WHERE bc2.user_id = bp.user_id AND cat.category_type = 'Outgoing' AND bc2.is_excluded = FALSE), 0) as total_budgeted
                 FROM budget_period bp
                 LEFT JOIN transaction t ON t.user_id = bp.user_id
                     AND t.occurred_at >= bp.start_date
                     AND t.occurred_at <= bp.end_date
                 LEFT JOIN category c ON t.category_id = c.id
-                LEFT JOIN budget_category bc ON bc.user_id = bp.user_id
                 WHERE bp.user_id = $1
                 GROUP BY bp.id, bp.name, bp.start_date, bp.end_date
                 ORDER BY bp.start_date ASC, bp.id ASC
@@ -584,13 +581,12 @@ impl PostgresRepository {
                     bp.created_at,
                     COUNT(DISTINCT t.id) as transaction_count,
                     COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::INT8 as total_spent,
-                    COALESCE(SUM(bc.budgeted_value), 0) as total_budgeted
+                    COALESCE((SELECT SUM(bc2.budgeted_value) FROM budget_category bc2 JOIN category cat ON bc2.category_id = cat.id WHERE bc2.user_id = bp.user_id AND cat.category_type = 'Outgoing' AND bc2.is_excluded = FALSE), 0) as total_budgeted
                 FROM budget_period bp
                 LEFT JOIN transaction t ON t.user_id = bp.user_id
                     AND t.occurred_at >= bp.start_date
                     AND t.occurred_at <= bp.end_date
                 LEFT JOIN category c ON t.category_id = c.id
-                LEFT JOIN budget_category bc ON bc.user_id = bp.user_id
                 WHERE bp.user_id = $1
                     AND (bp.start_date, bp.id) > (
                         SELECT start_date, id FROM budget_period WHERE id = $2
@@ -618,13 +614,12 @@ impl PostgresRepository {
                     bp.created_at,
                     COUNT(DISTINCT t.id) as transaction_count,
                     COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::INT8 as total_spent,
-                    COALESCE(SUM(bc.budgeted_value), 0) as total_budgeted
+                    COALESCE((SELECT SUM(bc2.budgeted_value) FROM budget_category bc2 JOIN category cat ON bc2.category_id = cat.id WHERE bc2.user_id = bp.user_id AND cat.category_type = 'Outgoing' AND bc2.is_excluded = FALSE), 0) as total_budgeted
                 FROM budget_period bp
                 LEFT JOIN transaction t ON t.user_id = bp.user_id
                     AND t.occurred_at >= bp.start_date
                     AND t.occurred_at <= bp.end_date
                 LEFT JOIN category c ON t.category_id = c.id
-                LEFT JOIN budget_category bc ON bc.user_id = bp.user_id
                 WHERE bp.user_id = $1
                 GROUP BY bp.id, bp.user_id, bp.name, bp.start_date, bp.end_date, bp.is_auto_generated, bp.created_at
                 ORDER BY bp.start_date ASC, bp.id ASC
@@ -694,13 +689,12 @@ impl PostgresRepository {
                 bp.created_at,
                 COUNT(DISTINCT t.id) as transaction_count,
                 COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::INT8 as total_spent,
-                COALESCE(SUM(bc.budgeted_value), 0) as total_budgeted
+                COALESCE((SELECT SUM(bc2.budgeted_value) FROM budget_category bc2 JOIN category cat ON bc2.category_id = cat.id WHERE bc2.user_id = bp.user_id AND cat.category_type = 'Outgoing' AND bc2.is_excluded = FALSE), 0) as total_budgeted
             FROM budget_period bp
             LEFT JOIN transaction t ON t.user_id = bp.user_id
                 AND t.occurred_at >= bp.start_date
                 AND t.occurred_at <= bp.end_date
             LEFT JOIN category c ON t.category_id = c.id
-            LEFT JOIN budget_category bc ON bc.user_id = bp.user_id
             WHERE bp.user_id = $1
                 AND bp.start_date <= now()
                 AND bp.end_date >= now()

@@ -3,6 +3,7 @@ CurrentPeriod:
   required:
     - spent
     - target
+    - incomeTarget
     - daysRemaining
     - daysInPeriod
     - projectedSpend
@@ -14,8 +15,13 @@ CurrentPeriod:
       minimum: 0
     target:
       type: integer
-      description: Target amount for the current period, in cents
+      description: Expense target amount for the current period, in cents
       example: 10000
+      minimum: 0
+    incomeTarget:
+      type: integer
+      description: Income target amount for the current period, in cents
+      example: 60000
       minimum: 0
     daysRemaining:
       type: integer
