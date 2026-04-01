@@ -153,6 +153,7 @@ SELECT COALESCE(SUM(
         WHEN 'monthly' THEN billing_amount
         WHEN 'quarterly' THEN ROUND(billing_amount / 3.0)
         WHEN 'yearly' THEN ROUND(billing_amount / 12.0)
+        ELSE 0
     END
 ), 0)::bigint
 FROM subscription
@@ -167,7 +168,9 @@ WHERE category_id = $1 AND user_id = $2 AND status = 'active'
         Ok(total)
     }
 
-    /// Upsert the budget_category target for a category (used by auto-computation)
+    /// Upsert the budget_category target for a category (used by auto-computation).
+    /// On insert, sets is_excluded = FALSE. On update, preserves the existing is_excluded value
+    /// so we don't silently un-exclude a category the user intentionally excluded.
     pub async fn upsert_category_target(&self, category_id: &Uuid, value: i64, user_id: &Uuid) -> Result<(), AppError> {
         let i32_value = i32::try_from(value).map_err(|_| AppError::BadRequest("Target value out of range".to_string()))?;
         sqlx::query(
@@ -175,7 +178,7 @@ WHERE category_id = $1 AND user_id = $2 AND status = 'active'
 INSERT INTO budget_category (user_id, category_id, budgeted_value, is_excluded)
 VALUES ($1, $2, $3, FALSE)
 ON CONFLICT (user_id, category_id)
-DO UPDATE SET budgeted_value = EXCLUDED.budgeted_value, is_excluded = FALSE
+DO UPDATE SET budgeted_value = EXCLUDED.budgeted_value
             "#,
         )
         .bind(user_id)

@@ -79,9 +79,8 @@ impl<'a> CategoryService<'a> {
         // For subscription categories, auto-compute target from active subscriptions
         let final_target = if request.behavior == Some(CategoryBehavior::Subscription) {
             let computed = self.repository.compute_monthly_target_for_category(&category.id, user_id).await?;
-            if computed > 0 {
-                self.repository.upsert_category_target(&category.id, computed, user_id).await?;
-            }
+            // Always upsert so behavior is consistent with update_category path
+            self.repository.upsert_category_target(&category.id, computed, user_id).await?;
             if computed > 0 { Some(computed) } else { None }
         } else {
             effective_target
@@ -427,6 +426,18 @@ impl<'a> CategoryService<'a> {
             .get_target_by_id(target_id, user_id)
             .await?
             .ok_or_else(|| AppError::NotFound("Target not found".to_string()))?;
+
+        let cat_for_exclude = self
+            .repository
+            .get_category_by_id(&target_row.category_id, user_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Category not found".to_string()))?;
+
+        if cat_for_exclude.behavior == Some(V1CategoryBehavior::Subscription) {
+            return Err(AppError::Conflict(
+                "Target for subscription categories is auto-computed from active subscriptions.".to_string(),
+            ));
+        }
 
         if target_row.is_excluded {
             return Err(AppError::Conflict("Target is already excluded".to_string()));
