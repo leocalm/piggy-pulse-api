@@ -94,7 +94,12 @@ fn row_to_response(row: SubscriptionRow) -> SubscriptionResponse {
 // ─── Repository methods ───────────────────────────────────────────────────────
 
 impl PostgresRepository {
-    pub async fn list_subscriptions(&self, user_id: &Uuid, status_filter: Option<SubscriptionStatus>) -> Result<Vec<SubscriptionResponse>, AppError> {
+    pub async fn list_subscriptions(
+        &self,
+        user_id: &Uuid,
+        status_filter: Option<SubscriptionStatus>,
+        category_id: Option<Uuid>,
+    ) -> Result<Vec<SubscriptionResponse>, AppError> {
         let status_str: Option<&str> = status_filter.map(|s| match s {
             SubscriptionStatus::Active => "active",
             SubscriptionStatus::Cancelled => "cancelled",
@@ -109,15 +114,80 @@ SELECT id, name, category_id, vendor_id, billing_amount,
 FROM subscription
 WHERE user_id = $1
   AND ($2::text IS NULL OR status::text = $2)
+  AND ($3::uuid IS NULL OR category_id = $3)
 ORDER BY created_at DESC
             "#,
         )
         .bind(user_id)
         .bind(status_str)
+        .bind(category_id)
         .fetch_all(&self.pool)
         .await?;
 
         Ok(rows.into_iter().map(row_to_response).collect())
+    }
+
+    /// Count active subscriptions for a given category
+    pub async fn count_active_subscriptions_for_category(&self, category_id: &Uuid, user_id: &Uuid) -> Result<i64, AppError> {
+        let count: i64 = sqlx::query_scalar(
+            r#"
+SELECT COUNT(*)
+FROM subscription
+WHERE category_id = $1 AND user_id = $2 AND status = 'active'
+            "#,
+        )
+        .bind(category_id)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(count)
+    }
+
+    /// Compute the monthly-normalized target from active subscriptions for a category
+    pub async fn compute_monthly_target_for_category(&self, category_id: &Uuid, user_id: &Uuid) -> Result<i64, AppError> {
+        let total: i64 = sqlx::query_scalar(
+            r#"
+SELECT COALESCE(SUM(
+    CASE billing_cycle::text
+        WHEN 'monthly' THEN billing_amount
+        WHEN 'quarterly' THEN ROUND(billing_amount / 3.0)
+        WHEN 'yearly' THEN ROUND(billing_amount / 12.0)
+        ELSE 0
+    END
+), 0)::bigint
+FROM subscription
+WHERE category_id = $1 AND user_id = $2 AND status = 'active'
+            "#,
+        )
+        .bind(category_id)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(total)
+    }
+
+    /// Upsert the budget_category target for a category (used by auto-computation).
+    /// On insert, sets is_excluded = FALSE. On update, preserves the existing is_excluded value
+    /// so we don't silently un-exclude a category the user intentionally excluded.
+    pub async fn upsert_category_target(&self, category_id: &Uuid, value: i64, user_id: &Uuid) -> Result<(), AppError> {
+        let i32_value = i32::try_from(value).map_err(|_| AppError::BadRequest("Target value out of range".to_string()))?;
+        sqlx::query(
+            r#"
+INSERT INTO budget_category (user_id, category_id, budgeted_value, is_excluded)
+VALUES ($1, $2, $3, FALSE)
+ON CONFLICT (user_id, category_id)
+DO UPDATE SET budgeted_value = EXCLUDED.budgeted_value
+            "#,
+        )
+        .bind(user_id)
+        .bind(category_id)
+        .bind(i32_value)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
     }
 
     pub async fn get_subscription(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<SubscriptionResponse>, AppError> {

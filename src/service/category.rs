@@ -1,13 +1,13 @@
 use crate::database::postgres_repository::PostgresRepository;
 use crate::dto::categories::{
-    CategoriesWithTargets, CategoryBase, CategoryDetailResponse, CategoryManagementListItem, CategoryManagementListResponse, CategoryOptionListResponse,
-    CategoryOptionResponse, CategoryOverviewResponse, CategoryOverviewSummary, CategoryResponse, CategorySummaryItem, CategoryTargetsResponse,
-    CategoryTransactionItem, CategoryTrendItem, CategoryTrendResponse, CategoryType, CreateCategoryRequest, CreateTargetRequest, TargetItem, TargetStatus,
-    TargetSummary, UpdateTargetRequest, compute_color,
+    CategoriesWithTargets, CategoryBase, CategoryBehavior, CategoryDetailResponse, CategoryManagementListItem, CategoryManagementListResponse,
+    CategoryOptionListResponse, CategoryOptionResponse, CategoryOverviewResponse, CategoryOverviewSummary, CategoryResponse, CategorySummaryItem,
+    CategoryTargetsResponse, CategoryTransactionItem, CategoryTrendItem, CategoryTrendResponse, CategoryType, CreateCategoryRequest, CreateTargetRequest,
+    TargetItem, TargetStatus, TargetSummary, UpdateTargetRequest, compute_color,
 };
 use crate::dto::common::{Date, PaginatedResponse};
 use crate::error::app_error::AppError;
-use crate::models::category::{CategoryRequest, CategoryType as V1CategoryType};
+use crate::models::category::{CategoryBehavior as V1CategoryBehavior, CategoryRequest, CategoryType as V1CategoryType};
 use uuid::Uuid;
 
 pub struct CategoryService<'a> {
@@ -63,16 +63,49 @@ impl<'a> CategoryService<'a> {
                 .map(|b| crate::models::category::category_behavior_to_db(b.to_v1()).to_string()),
         };
 
-        let category = if let Some(target_value) = request.target {
+        // For subscription categories, ignore manual target (will be auto-computed)
+        let effective_target = if request.behavior == Some(CategoryBehavior::Subscription) {
+            None
+        } else {
+            request.target
+        };
+
+        let category = if let Some(target_value) = effective_target {
             self.repository.create_category_with_target(&v1_request, target_value, user_id).await?
         } else {
             self.repository.create_category(&v1_request, user_id).await?
         };
 
-        Ok(CategoryResponse::from_model_with_target(&category, request.target))
+        // For subscription categories, auto-compute target from active subscriptions
+        let final_target = if request.behavior == Some(CategoryBehavior::Subscription) {
+            let computed = self.repository.compute_monthly_target_for_category(&category.id, user_id).await?;
+            // Always upsert so behavior is consistent with update_category path
+            self.repository.upsert_category_target(&category.id, computed, user_id).await?;
+            if computed > 0 { Some(computed) } else { None }
+        } else {
+            effective_target
+        };
+
+        Ok(CategoryResponse::from_model_with_target(&category, final_target))
     }
 
     pub async fn update_category(&self, id: &Uuid, request: &CreateCategoryRequest, user_id: &Uuid) -> Result<CategoryResponse, AppError> {
+        // Behavior change protection: block changing away from subscription if active subs exist
+        let existing = self
+            .repository
+            .get_category_by_id(id, user_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Category not found".to_string()))?;
+
+        if existing.behavior == Some(V1CategoryBehavior::Subscription) && request.behavior != Some(CategoryBehavior::Subscription) {
+            let active_count = self.repository.count_active_subscriptions_for_category(id, user_id).await?;
+            if active_count > 0 {
+                return Err(AppError::Conflict(
+                    "Cannot change behavior while active subscriptions exist. Cancel all subscriptions attached to this category first.".to_string(),
+                ));
+            }
+        }
+
         let v1_type = request.category_type.to_v1();
         let v1_behavior = request.behavior.map(|b| b.to_v1());
         let computed_color = compute_color(v1_type, v1_behavior);
@@ -88,19 +121,31 @@ impl<'a> CategoryService<'a> {
                 .map(|b| crate::models::category::category_behavior_to_db(b.to_v1()).to_string()),
         };
 
-        let category = if let Some(target_value) = request.target {
+        // For subscription categories, ignore manual target (auto-computed)
+        let effective_target = if request.behavior == Some(CategoryBehavior::Subscription) {
+            None
+        } else {
+            request.target
+        };
+
+        let category = if let Some(target_value) = effective_target {
             self.repository.update_category_with_target(id, &v1_request, target_value, user_id).await?
         } else {
             self.repository.update_category(id, &v1_request, user_id).await?
         };
 
-        let effective_target = if request.target.is_some() {
-            request.target
+        // For subscription categories, auto-compute target from active subscriptions
+        let final_target = if request.behavior == Some(CategoryBehavior::Subscription) {
+            let computed = self.repository.compute_monthly_target_for_category(&category.id, user_id).await?;
+            self.repository.upsert_category_target(&category.id, computed, user_id).await?;
+            if computed > 0 { Some(computed) } else { None }
+        } else if effective_target.is_some() {
+            effective_target
         } else {
             self.repository.get_target_for_category(&category.id, user_id).await?.map(|t| t.budgeted_value)
         };
 
-        Ok(CategoryResponse::from_model_with_target(&category, effective_target))
+        Ok(CategoryResponse::from_model_with_target(&category, final_target))
     }
 
     pub async fn delete_category(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
@@ -298,6 +343,12 @@ impl<'a> CategoryService<'a> {
             .await?
             .ok_or_else(|| AppError::NotFound("Category not found".to_string()))?;
 
+        if cat.behavior == Some(V1CategoryBehavior::Subscription) {
+            return Err(AppError::Conflict(
+                "Target for subscription categories is auto-computed from active subscriptions.".to_string(),
+            ));
+        }
+
         let existing = self.repository.get_target_for_category(&request.category_id, user_id).await?;
         if existing.is_some() {
             return Err(AppError::Conflict("Target already exists for this category".to_string()));
@@ -319,6 +370,25 @@ impl<'a> CategoryService<'a> {
     }
 
     pub async fn update_target(&self, target_id: &Uuid, request: &UpdateTargetRequest, user_id: &Uuid) -> Result<TargetItem, AppError> {
+        // Check if the target belongs to a subscription category
+        let target_row_check = self
+            .repository
+            .get_target_by_id(target_id, user_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Target not found".to_string()))?;
+
+        let cat_check = self
+            .repository
+            .get_category_by_id(&target_row_check.category_id, user_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Category not found".to_string()))?;
+
+        if cat_check.behavior == Some(V1CategoryBehavior::Subscription) {
+            return Err(AppError::Conflict(
+                "Target for subscription categories is auto-computed from active subscriptions.".to_string(),
+            ));
+        }
+
         self.repository.update_target(target_id, request.value, user_id).await?;
 
         let target_row = self
@@ -356,6 +426,18 @@ impl<'a> CategoryService<'a> {
             .get_target_by_id(target_id, user_id)
             .await?
             .ok_or_else(|| AppError::NotFound("Target not found".to_string()))?;
+
+        let cat_for_exclude = self
+            .repository
+            .get_category_by_id(&target_row.category_id, user_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Category not found".to_string()))?;
+
+        if cat_for_exclude.behavior == Some(V1CategoryBehavior::Subscription) {
+            return Err(AppError::Conflict(
+                "Target for subscription categories is auto-computed from active subscriptions.".to_string(),
+            ));
+        }
 
         if target_row.is_excluded {
             return Err(AppError::Conflict("Target is already excluded".to_string()));
