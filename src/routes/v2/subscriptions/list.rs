@@ -10,12 +10,12 @@ use crate::dto::subscriptions::{SubscriptionListResponse, SubscriptionStatus};
 use crate::error::app_error::AppError;
 use crate::service::subscription::SubscriptionService;
 
-#[get("/?<status>&<category_id>")]
+#[get("/?<status>&<categoryId>")]
 pub async fn list_subscriptions(
     pool: &State<PgPool>,
     user: CurrentUser,
     status: Option<String>,
-    category_id: Option<String>,
+    #[allow(non_snake_case)] categoryId: Option<String>,
 ) -> Result<Json<SubscriptionListResponse>, AppError> {
     let status_filter = match status.as_deref() {
         Some("active") => Some(SubscriptionStatus::Active),
@@ -25,7 +25,7 @@ pub async fn list_subscriptions(
         None => None,
     };
 
-    let category_uuid = match category_id {
+    let category_uuid = match categoryId {
         Some(ref id) => Some(Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid categoryId", e))?),
         None => None,
     };
