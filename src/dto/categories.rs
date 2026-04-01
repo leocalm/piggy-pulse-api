@@ -104,6 +104,7 @@ pub struct CategoryResponse {
     pub base: CategoryBase,
     pub description: Option<String>,
     pub target: Option<i64>,
+    pub auto_computed_target: bool,
 }
 
 // ===== CategoryManagementListItem / Response =====
@@ -287,18 +288,22 @@ impl CategoryBase {
 
 impl CategoryResponse {
     pub fn from_model(c: &crate::models::category::Category) -> Self {
+        let is_subscription = c.behavior == Some(crate::models::category::CategoryBehavior::Subscription);
         CategoryResponse {
             base: CategoryBase::from_model(c),
             description: c.description.clone(),
             target: None,
+            auto_computed_target: is_subscription,
         }
     }
 
     pub fn from_model_with_target(c: &crate::models::category::Category, target: Option<i64>) -> Self {
+        let is_subscription = c.behavior == Some(crate::models::category::CategoryBehavior::Subscription);
         CategoryResponse {
             base: CategoryBase::from_model(c),
             description: c.description.clone(),
             target,
+            auto_computed_target: is_subscription,
         }
     }
 }
