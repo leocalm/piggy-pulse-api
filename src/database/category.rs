@@ -352,7 +352,7 @@ impl PostgresRepository {
             r#"
             INSERT INTO budget_category (user_id, category_id, budgeted_value, is_excluded)
             VALUES ($1, $2, $3, FALSE)
-            ON CONFLICT (user_id, category_id) DO UPDATE SET budgeted_value = EXCLUDED.budgeted_value
+            ON CONFLICT (user_id, category_id) DO UPDATE SET budgeted_value = EXCLUDED.budgeted_value, is_excluded = FALSE
             "#,
         )
         .bind(user_id)
@@ -448,7 +448,7 @@ impl PostgresRepository {
             r#"
             INSERT INTO budget_category (user_id, category_id, budgeted_value, is_excluded)
             VALUES ($1, $2, $3, FALSE)
-            ON CONFLICT (user_id, category_id) DO UPDATE SET budgeted_value = EXCLUDED.budgeted_value
+            ON CONFLICT (user_id, category_id) DO UPDATE SET budgeted_value = EXCLUDED.budgeted_value, is_excluded = FALSE
             "#,
         )
         .bind(user_id)
@@ -1099,7 +1099,7 @@ ORDER BY actual_value DESC, c.name
                 c.behavior::text as behavior
             FROM category c
             WHERE c.user_id = $1
-              AND c.is_system = FALSE
+              AND (c.is_system = FALSE OR c.category_type = 'Transfer')
             ORDER BY c.created_at DESC, c.id DESC
             "#,
         )
