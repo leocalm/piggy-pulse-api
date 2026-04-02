@@ -264,7 +264,12 @@ period_change AS (
       AND t.occurred_at <= LEAST(bp.end_date, CURRENT_DATE)
 )
 SELECT
-    COALESCE(SUM(ab.current_balance), 0)::bigint AS total_net_position,
+    COALESCE(SUM(
+        CASE
+            WHEN ab.account_type = 'CreditCard' THEN -ab.current_balance
+            ELSE ab.current_balance
+        END
+    ), 0)::bigint AS total_net_position,
     (SELECT value FROM period_change)::bigint AS change_this_period,
     COALESCE(
         SUM(
