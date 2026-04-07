@@ -142,6 +142,99 @@ impl<'r> FromRequest<'r> for CurrentUser {
     }
 }
 
+/// Like `CurrentUser` but accepts bearer tokens that are expired (access)
+/// as long as they are still within the `refresh_expires_at` window.
+/// Used exclusively by the token refresh endpoint.
+#[derive(Debug, Clone, Serialize)]
+pub struct RefreshableUser {
+    pub id: Uuid,
+    pub username: String,
+    pub session_id: Option<Uuid>,
+    pub api_token_id: Option<Uuid>,
+    pub auth_method: AuthMethod,
+}
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for RefreshableUser {
+    type Error = AppError;
+
+    async fn from_request(req: &'r Request<'_>) -> RequestOutcome<Self, Self::Error> {
+        let pool = match req.rocket().state::<PgPool>() {
+            Some(pool) => pool,
+            None => return Outcome::Error((Status::InternalServerError, AppError::Unauthorized)),
+        };
+
+        let repo = PostgresRepository { pool: pool.clone() };
+
+        // Check Authorization header for Bearer token
+        if let Some(auth_header) = req.headers().get_one("Authorization")
+            && let Some(raw_token) = auth_header.strip_prefix("Bearer ")
+        {
+            let hash = hex::encode(sha2::Sha256::digest(raw_token.as_bytes()));
+
+            match repo.find_by_access_hash(&hash).await {
+                Ok(Some(token)) => {
+                    // Allow expired access tokens as long as refresh window is still valid
+                    if token.refresh_expires_at <= chrono::Utc::now() {
+                        return Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials));
+                    }
+
+                    if token.revoked_at.is_some() {
+                        return Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials));
+                    }
+
+                    match repo.get_user_by_id(&token.user_id).await {
+                        Ok(Some(user)) => {
+                            return Outcome::Success(RefreshableUser {
+                                id: user.id,
+                                username: user.email,
+                                session_id: None,
+                                api_token_id: Some(token.id),
+                                auth_method: AuthMethod::Bearer,
+                            });
+                        }
+                        Ok(None) => {
+                            return Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials));
+                        }
+                        Err(err) => {
+                            return Outcome::Error((Status::InternalServerError, err));
+                        }
+                    }
+                }
+                Ok(None) => {
+                    return Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials));
+                }
+                Err(err) => {
+                    return Outcome::Error((Status::InternalServerError, err));
+                }
+            }
+        }
+
+        // Fall through to cookie-based auth (same as CurrentUser)
+        let cookies = req.cookies();
+        if let Some(cookie) = cookies.get_private("user")
+            && let Some((session_id, user_id)) = parse_session_cookie_value(cookie.value())
+        {
+            match repo.get_active_session_user(&session_id, &user_id).await {
+                Ok(Some(user)) => {
+                    return Outcome::Success(RefreshableUser {
+                        id: user.id,
+                        username: user.email,
+                        session_id: Some(session_id),
+                        api_token_id: None,
+                        auth_method: AuthMethod::Cookie,
+                    });
+                }
+                Ok(None) | Err(_) => {
+                    return Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials));
+                }
+            }
+        }
+
+        Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials))
+    }
+}
+
 impl<'a> OpenApiFromRequest<'a> for CurrentUser {
     fn from_request_input(_gen: &mut OpenApiGenerator, _name: String, _required: bool) -> rocket_okapi::Result<RequestHeaderInput> {
         // Document the cookie-based authentication requirement

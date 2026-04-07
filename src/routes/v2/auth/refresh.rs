@@ -4,7 +4,7 @@ use rocket::post;
 use rocket::serde::json::Json;
 use sqlx::PgPool;
 
-use crate::auth::{AuthMethod, CurrentUser};
+use crate::auth::{AuthMethod, RefreshableUser};
 use crate::config::Config;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::dto::auth::RefreshResponse;
@@ -20,7 +20,7 @@ pub async fn refresh(
     cookies: &CookieJar<'_>,
     user_agent: UserAgent,
     client_ip: ClientIp,
-    user: CurrentUser,
+    user: RefreshableUser,
 ) -> Result<Json<RefreshResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let auth = AuthService::new(&repo, config);
