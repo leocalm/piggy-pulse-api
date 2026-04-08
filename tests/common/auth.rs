@@ -46,7 +46,8 @@ pub async fn create_user_and_login(client: &Client) -> (String, String) {
     // Set default currency (required as first onboarding step before accounts can be created)
     let profile_payload = serde_json::json!({
         "name": name,
-        "currency": "EUR"
+        "currency": "EUR",
+        "avatar": "🐷"
     });
     let profile_resp = client
         .put(format!("{}/settings/profile", super::V2_BASE))

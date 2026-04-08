@@ -614,8 +614,8 @@ impl PostgresRepository {
         let rows = sqlx::query_as::<_, StatsRow>(
             r#"
             SELECT c.category_type::text,
-                   COALESCE(SUM(t.amount), 0) as total_amount,
-                   COUNT(t.id) as txn_count
+                   COALESCE(SUM(t.amount), 0)::BIGINT as total_amount,
+                   COUNT(t.id)::BIGINT as txn_count
             FROM transaction t
             JOIN category c ON t.category_id = c.id
             CROSS JOIN budget_period bp
