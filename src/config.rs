@@ -232,7 +232,7 @@ fn default_frontend_unlock_url() -> String {
     "http://localhost:3000/auth/unlock".to_string()
 }
 
-pub const DEFAULT_API_BASE_PATH: &str = "/api/v1";
+pub const DEFAULT_API_BASE_PATH: &str = "/v1";
 
 impl Default for DatabaseConfig {
     fn default() -> Self {

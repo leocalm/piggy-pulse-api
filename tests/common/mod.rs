@@ -11,9 +11,7 @@ use rocket::local::asynchronous::Client;
 #[allow(dead_code)]
 pub const TEST_DB_URL: &str = "postgres://postgres:test_password@127.0.0.1:5433/piggy_pulse_test";
 #[allow(dead_code)]
-pub const V2_BASE: &str = "/api/v2";
-#[allow(dead_code)]
-pub const V1_BASE: &str = "/api/v1";
+pub const V2_BASE: &str = "/v2";
 #[allow(dead_code)]
 pub const TEST_PASSWORD: &str = "CorrectHorseBatteryStaple!2026";
 
