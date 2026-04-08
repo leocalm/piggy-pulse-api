@@ -57,6 +57,15 @@ async fn get_tx_stats(client: &Client, period_id: &str) -> Value {
     get_json(client, &format!("{}/transactions/stats?periodId={}", V2_BASE, period_id)).await
 }
 
+/// Get the system Transfer category ID for the authenticated user.
+async fn get_system_transfer_category_id(client: &Client) -> String {
+    let body = get_json(client, &format!("{}/categories/options", V2_BASE)).await;
+    let options = body.as_array().expect("category options array");
+    // The system Transfer category is the one named "Transfer"
+    let transfer = options.iter().find(|c| c["name"] == "Transfer").expect("system Transfer category should exist");
+    transfer["id"].as_str().expect("category id").to_string()
+}
+
 /// Get cash-flow for a period (inflows, outflows, net).
 async fn get_cash_flow(client: &Client, period_id: &str) -> Value {
     get_json(client, &format!("{}/dashboard/cash-flow?periodId={}", V2_BASE, period_id)).await
@@ -320,7 +329,7 @@ async fn test_transfer_moves_balance_between_accounts() {
     let period_id = create_period(&client, "2026-04-01", "2026-04-30").await;
     let checking_id = create_account(&client, "DI Xfer Checking", 200_000).await; // EUR 2000
     let savings_id = create_account(&client, "DI Xfer Savings", 500_000).await; // EUR 5000
-    let transfer_cat = create_category(&client, "DI Xfer Cat", "transfer").await;
+    let transfer_cat = get_system_transfer_category_id(&client).await;
 
     // Pre-transfer net position
     let net_before = get_json(&client, &format!("{}/dashboard/net-position?periodId={}", V2_BASE, period_id)).await;

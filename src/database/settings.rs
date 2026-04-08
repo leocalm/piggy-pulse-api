@@ -680,11 +680,13 @@ impl PostgresRepository {
             // System categories (e.g. Transfer) may already exist after reset-structure.
             // Map the old ID to the existing system category instead of inserting a duplicate.
             if is_system {
-                let existing: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM category WHERE user_id = $1 AND name = $2 AND is_system = true")
-                    .bind(user_id)
-                    .bind(name)
-                    .fetch_optional(&mut *tx)
-                    .await?;
+                let existing: Option<(Uuid,)> =
+                    sqlx::query_as("SELECT id FROM category WHERE user_id = $1 AND name = $2 AND category_type = $3::text::category_type AND is_system = true")
+                        .bind(user_id)
+                        .bind(name)
+                        .bind(category_type)
+                        .fetch_optional(&mut *tx)
+                        .await?;
                 if let Some((existing_id,)) = existing {
                     category_id_map.insert(old_id.to_string(), existing_id);
                     continue;

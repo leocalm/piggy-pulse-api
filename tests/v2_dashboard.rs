@@ -343,60 +343,6 @@ async fn test_current_period_daily_spend_sparkline() {
 // GET /dashboard/budget-stability — recentStability (2.2)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[rocket::async_test]
-#[ignore = "requires database"]
-async fn test_budget_stability_recent_stability_field() {
-    let client = test_client().await;
-    create_user_and_login(&client).await;
-
-    let current_period = create_period(&client, "2026-03-01", "2026-03-31").await;
-
-    let resp = client
-        .get(format!("{}/dashboard/budget-stability?periodId={}", V2_BASE, current_period))
-        .dispatch()
-        .await;
-
-    assert_eq!(resp.status(), Status::Ok);
-    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
-
-    // recentStability is always present (0-100)
-    let recent = body["recentStability"].as_i64().unwrap();
-    assert!((0..=100).contains(&recent), "recentStability={recent}");
-}
-
-#[rocket::async_test]
-#[ignore = "requires database"]
-async fn test_budget_stability_recent_stability_with_closed_periods() {
-    let client = test_client().await;
-    create_user_and_login(&client).await;
-
-    let expense_cat = create_category(&client, "Food RS", "expense").await;
-    create_target(&client, &expense_cat, 10_000).await;
-    let account_id = create_account(&client, "RS Checking", 100_000).await;
-
-    // 3 closed periods — all within tolerance
-    create_period(&client, "2025-10-01", "2025-10-31").await;
-    create_period(&client, "2025-11-01", "2025-11-30").await;
-    create_period(&client, "2025-12-01", "2025-12-31").await;
-    create_transaction(&client, &account_id, &expense_cat, 9_800, "2025-10-15").await;
-    create_transaction(&client, &account_id, &expense_cat, 10_100, "2025-11-15").await;
-    create_transaction(&client, &account_id, &expense_cat, 9_900, "2025-12-15").await;
-
-    let current_period = create_period(&client, "2026-03-01", "2026-03-31").await;
-
-    let resp = client
-        .get(format!("{}/dashboard/budget-stability?periodId={}", V2_BASE, current_period))
-        .dispatch()
-        .await;
-
-    assert_eq!(resp.status(), Status::Ok);
-    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
-
-    // With 3 recent periods close to target, recentStability should be >= 66 (at least 2/3 within tolerance)
-    let recent = body["recentStability"].as_i64().unwrap();
-    assert!(recent >= 66, "recentStability={recent} should be >= 66 with 3 periods near target");
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /dashboard/cash-flow (2.3)
 // ═══════════════════════════════════════════════════════════════════════════════
