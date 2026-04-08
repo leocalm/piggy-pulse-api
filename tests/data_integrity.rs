@@ -716,6 +716,7 @@ async fn test_register_weak_password_rejected() {
 #[rocket::async_test]
 #[ignore = "requires database"]
 async fn test_login_wrong_password_returns_401() {
+    common::clear_login_rate_limits().await;
     let client = test_client().await;
     let (_user_id, email) = create_user_and_login(&client).await;
 
@@ -733,12 +734,7 @@ async fn test_login_wrong_password_returns_401() {
         .dispatch()
         .await;
 
-    // 401 = wrong credentials, 423 = progressive backoff locked
-    assert!(
-        resp.status() == Status::Unauthorized || resp.status() == Status::Locked,
-        "expected 401 or 423, got {}",
-        resp.status()
-    );
+    assert_eq!(resp.status(), Status::Unauthorized);
 }
 
 #[rocket::async_test]
@@ -909,6 +905,7 @@ async fn test_reset_structure_allows_rebuilding_data() {
 #[rocket::async_test]
 #[ignore = "requires database"]
 async fn test_delete_account_removes_all_user_data() {
+    common::clear_login_rate_limits().await;
     let client = test_client().await;
     let (_user_id, email) = create_user_and_login(&client).await;
 
@@ -937,10 +934,5 @@ async fn test_delete_account_removes_all_user_data() {
         .body(login_payload.to_string())
         .dispatch()
         .await;
-    // 401 = credentials invalid (user deleted), 423 = progressive backoff locked
-    assert!(
-        resp.status() == Status::Unauthorized || resp.status() == Status::Locked,
-        "expected 401 or 423 after account deletion, got {}",
-        resp.status()
-    );
+    assert_eq!(resp.status(), Status::Unauthorized);
 }

@@ -35,11 +35,9 @@ async fn test_category_detail_happy() {
 
     assert_eq!(body["id"], cat_id);
     assert_eq!(body["name"], "Groceries Detail");
-    assert_eq!(body["periodSpent"], 13_000);
+    assert_eq!(body["periodSpend"], 13_000);
     assert_eq!(body["budgeted"], 20_000);
-    // variance = budgeted - periodSpent = 20000 - 13000 = 7000
-    assert_eq!(body["variance"], 7_000);
-    assert!(body["stabilityDots"].is_array());
+    assert!(body["trend"].is_array());
     assert!(body["recentTransactions"].is_array());
     assert_eq!(body["recentTransactions"].as_array().unwrap().len(), 2);
 }
@@ -64,9 +62,8 @@ async fn test_category_detail_no_budget() {
     assert_eq!(resp.status(), Status::Ok);
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
 
-    assert_eq!(body["periodSpent"], 3_000);
+    assert_eq!(body["periodSpend"], 3_000);
     assert!(body["budgeted"].is_null());
-    assert_eq!(body["variance"], 0);
 }
 
 #[rocket::async_test]
@@ -122,23 +119,23 @@ async fn test_category_detail_stability_dots_within_budget() {
     assert_eq!(resp.status(), Status::Ok);
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
 
-    let dots = body["stabilityDots"].as_array().unwrap();
-    // Should have at least 2 stability dots (one per period)
-    assert!(dots.len() >= 2);
+    let trend = body["trend"].as_array().unwrap();
+    // Should have at least 2 trend items (one per closed period)
+    assert!(trend.len() >= 2);
 
-    // Find the dot for period1 (within budget)
-    let dot1 = dots
+    // Find the trend item for period1 (spend 5000, within budget of 10000)
+    let item1 = trend
         .iter()
         .find(|d| d["periodId"].as_str() == Some(&period1))
-        .expect("period1 dot should exist");
-    assert_eq!(dot1["withinBudget"], true);
+        .expect("period1 trend item should exist");
+    assert_eq!(item1["totalSpend"], 5_000);
 
-    // Find the dot for period2 (over budget)
-    let dot2 = dots
+    // Find the trend item for period2 (spend 12000, over budget of 10000)
+    let item2 = trend
         .iter()
         .find(|d| d["periodId"].as_str() == Some(&period2))
-        .expect("period2 dot should exist");
-    assert_eq!(dot2["withinBudget"], false);
+        .expect("period2 trend item should exist");
+    assert_eq!(item2["totalSpend"], 12_000);
 }
 
 #[rocket::async_test]
@@ -166,7 +163,7 @@ async fn test_category_detail_missing_period_id_returns_400() {
     let client = test_client().await;
     create_user_and_login(&client).await;
 
-    let cat_id = create_category(&client, "X", "expense").await;
+    let cat_id = create_category(&client, "X Cat", "expense").await;
 
     let resp = client.get(format!("{}/categories/{}/detail", V2_BASE, cat_id)).dispatch().await;
 

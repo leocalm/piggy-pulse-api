@@ -38,7 +38,8 @@ async fn test_update_profile_persists_via_get() {
 
     let payload = json!({
         "name": "Updated Name",
-        "currency": "USD"
+        "currency": "USD",
+        "avatar": "🐷"
     });
 
     let resp = client
@@ -69,7 +70,8 @@ async fn test_update_profile_empty_name_returns_400() {
 
     let payload = json!({
         "name": "",
-        "currency": "EUR"
+        "currency": "EUR",
+        "avatar": "🐷"
     });
 
     let resp = client
@@ -90,7 +92,8 @@ async fn test_update_profile_invalid_currency_returns_400() {
 
     let payload = json!({
         "name": "Valid Name",
-        "currency": "INVALID"
+        "currency": "INVALID",
+        "avatar": "🐷"
     });
 
     let resp = client
@@ -121,7 +124,7 @@ async fn test_update_profile_no_auth() {
     let resp = client
         .put(format!("{}/settings/profile", V2_BASE))
         .header(ContentType::JSON)
-        .body(json!({"name":"x","currency":"EUR"}).to_string())
+        .body(json!({"name":"x","currency":"EUR","avatar":"🐷"}).to_string())
         .dispatch()
         .await;
 

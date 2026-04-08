@@ -313,7 +313,7 @@ async fn test_update_subscription_not_found_returns_404() {
     let client = test_client().await;
     create_user_and_login(&client).await;
 
-    let cat_id = create_category(&client, "X", "expense").await;
+    let cat_id = create_category(&client, "Sub NF Cat", "expense").await;
 
     let update = serde_json::json!({
         "name": "Ghost",

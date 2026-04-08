@@ -2,7 +2,7 @@ mod common;
 
 use common::auth::create_user_and_login;
 use common::entities::{create_account, create_category, create_transaction};
-use common::{V2_BASE, test_client};
+use common::{TEST_PASSWORD, V2_BASE, test_client};
 use rocket::http::{ContentType, Status};
 use serde_json::Value;
 
@@ -21,7 +21,7 @@ async fn test_batch_create_transactions_happy() {
 
     let payload = serde_json::json!([
         {
-            "transactionType": "regular",
+            "transactionType": "Regular",
             "description": "First",
             "amount": 1000,
             "date": "2026-03-01",
@@ -29,7 +29,7 @@ async fn test_batch_create_transactions_happy() {
             "categoryId": cat_id
         },
         {
-            "transactionType": "regular",
+            "transactionType": "Regular",
             "description": "Second",
             "amount": 2000,
             "date": "2026-03-02",
@@ -106,6 +106,15 @@ async fn test_import_data_happy() {
     assert_eq!(export_resp.status(), Status::Ok);
     let export_data: Value = serde_json::from_str(&export_resp.into_string().await.unwrap()).unwrap();
 
+    // Reset structure so the import doesn't hit uniqueness constraints
+    let reset_resp = client
+        .post(format!("{}/settings/reset-structure", V2_BASE))
+        .header(ContentType::JSON)
+        .body(serde_json::json!({ "password": TEST_PASSWORD }).to_string())
+        .dispatch()
+        .await;
+    assert_eq!(reset_resp.status(), Status::NoContent);
+
     // Import the exported data back
     let import_resp = client
         .post(format!("{}/settings/import/data", V2_BASE))
@@ -135,6 +144,15 @@ async fn test_import_data_with_transactions() {
     let export_resp = client.get(format!("{}/settings/export/data", V2_BASE)).dispatch().await;
     assert_eq!(export_resp.status(), Status::Ok);
     let export_data: Value = serde_json::from_str(&export_resp.into_string().await.unwrap()).unwrap();
+
+    // Reset structure so the import doesn't hit uniqueness constraints
+    let reset_resp = client
+        .post(format!("{}/settings/reset-structure", V2_BASE))
+        .header(ContentType::JSON)
+        .body(serde_json::json!({ "password": TEST_PASSWORD }).to_string())
+        .dispatch()
+        .await;
+    assert_eq!(reset_resp.status(), Status::NoContent);
 
     let import_resp = client
         .post(format!("{}/settings/import/data", V2_BASE))
