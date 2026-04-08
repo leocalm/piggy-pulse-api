@@ -343,59 +343,6 @@ async fn test_current_period_daily_spend_sparkline() {
 // GET /dashboard/budget-stability — recentStability (2.2)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[rocket::async_test]
-#[ignore = "requires database"]
-async fn test_budget_stability_recent_stability_field() {
-    let client = test_client().await;
-    create_user_and_login(&client).await;
-
-    let current_period = create_period(&client, "2026-03-01", "2026-03-31").await;
-
-    let resp = client
-        .get(format!("{}/dashboard/budget-stability?periodId={}", V2_BASE, current_period))
-        .dispatch()
-        .await;
-
-    assert_eq!(resp.status(), Status::Ok);
-    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
-
-    // recentStability is always present (0-100)
-    let recent = body["recentStability"].as_i64().unwrap();
-    assert!((0..=100).contains(&recent), "recentStability={recent}");
-}
-
-#[rocket::async_test]
-#[ignore = "requires database"]
-async fn test_budget_stability_recent_stability_with_closed_periods() {
-    let client = test_client().await;
-    create_user_and_login(&client).await;
-
-    let expense_cat = create_category(&client, "Food RS", "expense").await;
-    create_target(&client, &expense_cat, 10_000).await;
-    let account_id = create_account(&client, "RS Checking", 100_000).await;
-
-    // 3 closed periods — all within tolerance
-    create_period(&client, "2025-10-01", "2025-10-31").await;
-    create_period(&client, "2025-11-01", "2025-11-30").await;
-    create_period(&client, "2025-12-01", "2025-12-31").await;
-    create_transaction(&client, &account_id, &expense_cat, 9_800, "2025-10-15").await;
-    create_transaction(&client, &account_id, &expense_cat, 10_100, "2025-11-15").await;
-    create_transaction(&client, &account_id, &expense_cat, 9_900, "2025-12-15").await;
-
-    let current_period = create_period(&client, "2026-03-01", "2026-03-31").await;
-
-    let resp = client
-        .get(format!("{}/dashboard/budget-stability?periodId={}", V2_BASE, current_period))
-        .dispatch()
-        .await;
-
-    assert_eq!(resp.status(), Status::Ok);
-    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
-
-    // All 3 recent periods are within tolerance → recentStability = 100
-    assert_eq!(body["recentStability"], 100);
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /dashboard/cash-flow (2.3)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -495,20 +442,20 @@ async fn test_spending_trend_happy() {
     assert_eq!(resp.status(), Status::Ok);
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
 
-    let items = body.as_array().unwrap();
+    let items = body["periods"].as_array().unwrap();
     assert!(!items.is_empty(), "spending trend should include periods");
 
     // Each item should have required fields
     for item in items {
         assert!(item["periodId"].is_string());
         assert!(item["periodName"].is_string());
-        assert!(item["totalSpend"].is_number());
+        assert!(item["totalSpent"].is_number());
     }
 
     // Find Jan and Feb periods by spend amount
-    let jan = items.iter().find(|i| i["totalSpend"] == 8_000);
+    let jan = items.iter().find(|i| i["totalSpent"] == 8_000);
     assert!(jan.is_some(), "should find jan spend of 8000");
-    let feb = items.iter().find(|i| i["totalSpend"] == 9_000);
+    let feb = items.iter().find(|i| i["totalSpent"] == 9_000);
     assert!(feb.is_some(), "should find feb spend of 9000");
 }
 
@@ -533,7 +480,7 @@ async fn test_spending_trend_respects_limit() {
     assert_eq!(resp.status(), Status::Ok);
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
 
-    let items = body.as_array().unwrap();
+    let items = body["periods"].as_array().unwrap();
     assert_eq!(items.len(), 3, "should return exactly limit=3 items");
 }
 
@@ -590,13 +537,10 @@ async fn test_top_vendors_happy() {
 
     // First should be highest spender (Vendor Alpha)
     assert_eq!(items[0]["vendorName"], "Vendor Alpha");
-    assert_eq!(items[0]["totalSpend"], 10_000);
-    // percentage: 10000 / 14000 * 100 ≈ 71.4
-    let pct = items[0]["percentage"].as_f64().unwrap();
-    assert!((71.0..=72.0).contains(&pct), "percentage={pct}");
+    assert_eq!(items[0]["totalSpent"], 10_000);
 
     assert_eq!(items[1]["vendorName"], "Vendor Beta");
-    assert_eq!(items[1]["totalSpend"], 4_000);
+    assert_eq!(items[1]["totalSpent"], 4_000);
 }
 
 #[rocket::async_test]

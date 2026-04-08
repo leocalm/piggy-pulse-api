@@ -819,5 +819,10 @@ async fn test_options_user_isolation() {
     let resp = client_b.get(format!("{}/categories/options", V2_BASE)).dispatch().await;
     assert_eq!(resp.status(), Status::Ok);
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
-    assert!(body.as_array().unwrap().is_empty(), "User B should see no options from User A");
+    let options = body.as_array().unwrap();
+    // User B should NOT see User A's categories; only system categories (e.g. Transfer) may appear
+    assert!(
+        !options.iter().any(|c| c["name"] == "User A Option"),
+        "User B should not see User A's categories"
+    );
 }

@@ -544,7 +544,7 @@ impl PostgresRepository {
         let accounts = sqlx::query_scalar::<_, serde_json::Value>(
             r#"
             SELECT COALESCE(json_agg(row_to_json(a)), '[]'::json) FROM (
-                SELECT id, name, account_type, color, is_archived, created_at
+                SELECT id, name, account_type, color, is_archived, currency_id, created_at
                 FROM account WHERE user_id = $1 ORDER BY created_at
             ) a
             "#,
@@ -635,14 +635,15 @@ impl PostgresRepository {
                 .ok_or_else(|| AppError::BadRequest("account missing 'account_type'".to_string()))?;
             let color = acct.get("color").and_then(|v| v.as_str()).unwrap_or("#868E96");
             let is_archived = acct.get("is_archived").and_then(|v| v.as_bool()).unwrap_or(false);
+            let currency_id = acct.get("currency_id").and_then(|v| v.as_str()).and_then(|s| Uuid::parse_str(s).ok());
 
             let new_id = Uuid::new_v4();
             account_id_map.insert(old_id.to_string(), new_id);
 
             sqlx::query(
                 r#"
-                INSERT INTO account (id, user_id, name, account_type, color, icon, balance, is_archived)
-                VALUES ($1, $2, $3, $4::text::account_type, $5, '', 0, $6)
+                INSERT INTO account (id, user_id, name, account_type, color, icon, balance, is_archived, currency_id)
+                VALUES ($1, $2, $3, $4::text::account_type, $5, '', 0, $6, $7)
                 "#,
             )
             .bind(new_id)
@@ -651,6 +652,7 @@ impl PostgresRepository {
             .bind(account_type)
             .bind(color)
             .bind(is_archived)
+            .bind(currency_id)
             .execute(&mut *tx)
             .await?;
         }
@@ -674,6 +676,22 @@ impl PostgresRepository {
             let color = cat.get("color").and_then(|v| v.as_str()).unwrap_or("#868E96");
             let icon = cat.get("icon").and_then(|v| v.as_str()).unwrap_or("?");
             let is_system = cat.get("is_system").and_then(|v| v.as_bool()).unwrap_or(false);
+
+            // System categories (e.g. Transfer) may already exist after reset-structure.
+            // Map the old ID to the existing system category instead of inserting a duplicate.
+            if is_system {
+                let existing: Option<(Uuid,)> =
+                    sqlx::query_as("SELECT id FROM category WHERE user_id = $1 AND name = $2 AND category_type = $3::text::category_type AND is_system = true")
+                        .bind(user_id)
+                        .bind(name)
+                        .bind(category_type)
+                        .fetch_optional(&mut *tx)
+                        .await?;
+                if let Some((existing_id,)) = existing {
+                    category_id_map.insert(old_id.to_string(), existing_id);
+                    continue;
+                }
+            }
 
             let new_id = Uuid::new_v4();
             category_id_map.insert(old_id.to_string(), new_id);

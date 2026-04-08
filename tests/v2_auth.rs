@@ -147,6 +147,7 @@ async fn test_register_malformed_json() {
 #[rocket::async_test]
 #[ignore = "requires database"]
 async fn test_login_happy() {
+    common::clear_login_rate_limits().await;
     let client = test_client().await;
     let eur_id = common::auth::get_eur_currency_id_unauthenticated(&client).await;
     let email = format!("login.{}@example.com", Uuid::new_v4());
@@ -187,6 +188,7 @@ async fn test_login_happy() {
 #[rocket::async_test]
 #[ignore = "requires database"]
 async fn test_login_wrong_password() {
+    common::clear_login_rate_limits().await;
     let client = test_client().await;
     let eur_id = common::auth::get_eur_currency_id_unauthenticated(&client).await;
     let email = format!("wrongpw.{}@example.com", Uuid::new_v4());
@@ -221,6 +223,7 @@ async fn test_login_wrong_password() {
 #[rocket::async_test]
 #[ignore = "requires database"]
 async fn test_login_nonexistent_email() {
+    common::clear_login_rate_limits().await;
     let client = test_client().await;
 
     let login = serde_json::json!({
@@ -671,6 +674,7 @@ async fn test_2fa_emergency_disable_confirm_invalid_token() {
 #[rocket::async_test]
 #[ignore = "requires database"]
 async fn test_login_returns_bearer_token() {
+    common::clear_login_rate_limits().await;
     let client = test_client().await;
     let eur_id = common::auth::get_eur_currency_id_unauthenticated(&client).await;
     let email = format!("bearer.{}@example.com", Uuid::new_v4());
@@ -851,6 +855,7 @@ async fn test_bearer_token_refresh() {
 #[rocket::async_test]
 #[ignore = "requires database"]
 async fn test_bearer_token_revoked_after_logout() {
+    common::clear_login_rate_limits().await;
     let client = test_client().await;
     let eur_id = common::auth::get_eur_currency_id_unauthenticated(&client).await;
     let email = format!("logoutrevoke.{}@example.com", Uuid::new_v4());

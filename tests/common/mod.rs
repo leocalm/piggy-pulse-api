@@ -11,11 +11,21 @@ use rocket::local::asynchronous::Client;
 #[allow(dead_code)]
 pub const TEST_DB_URL: &str = "postgres://postgres:test_password@127.0.0.1:5433/piggy_pulse_test";
 #[allow(dead_code)]
-pub const V2_BASE: &str = "/api/v2";
-#[allow(dead_code)]
-pub const V1_BASE: &str = "/api/v1";
+pub const V2_BASE: &str = "/v2";
 #[allow(dead_code)]
 pub const TEST_PASSWORD: &str = "CorrectHorseBatteryStaple!2026";
+
+/// Clear login rate limits from the test database to prevent progressive backoff
+/// from interfering with test runs.
+#[allow(dead_code)]
+pub async fn clear_login_rate_limits() {
+    let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| TEST_DB_URL.to_string());
+    let pool = sqlx::PgPool::connect(&url).await.expect("connect to test db");
+    sqlx::query("DELETE FROM login_rate_limits")
+        .execute(&pool)
+        .await
+        .expect("clear login_rate_limits");
+}
 
 #[allow(dead_code)]
 pub fn test_config() -> Config {
