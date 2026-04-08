@@ -1,0 +1,61 @@
+name: Integration Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: API integration tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_password # pragma: allowlist secret
+          POSTGRES_DB: piggy_pulse_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgres://postgres:test_password@localhost:5432/piggy_pulse_test # pragma: allowlist secret
+      PIGGY_PULSE_DATABASE__URL: postgres://postgres:test_password@localhost:5432/piggy_pulse_test # pragma: allowlist secret
+      # Fixed key for CI — not used in production
+      ROCKET_SECRET_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY= # pragma: allowlist secret
+      PIGGY_PULSE_EMAIL__ENABLED: "false"
+      PIGGY_PULSE_API__BASE_PATH: /v1
+      # Insecure fixed key — safe for ephemeral CI
+      PIGGY_PULSE_TWO_FACTOR__ENCRYPTION_KEY: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef" # pragma: allowlist secret
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install sqlx-cli
+        uses: taiki-e/install-action@v2
+        with:
+          tool: sqlx-cli
+
+      - name: Run migrations
+        run: sqlx migrate run
+
+      - name: Run integration tests
+        run: cargo test --test data_integrity --test 'v2_*' -- --ignored --test-threads=1
