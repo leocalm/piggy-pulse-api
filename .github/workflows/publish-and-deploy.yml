@@ -104,7 +104,7 @@ jobs:
   # For Apple Silicon local dev and E2E testing
   # ──────────────────────────────────────────────
   build-api-arm64:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v6
 
