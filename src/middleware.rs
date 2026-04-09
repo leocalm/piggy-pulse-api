@@ -119,12 +119,40 @@ impl Fairing for RequestLogger {
         response.set_header(Header::new("Referrer-Policy", "strict-origin-when-cross-origin"));
         response.set_header(Header::new("Strict-Transport-Security", "max-age=31536000; includeSubDomains"));
 
+        // Mark v1 API responses as deprecated
+        let is_v1 = uri.path().segments().any(|s| s == "v1");
+        if is_v1 {
+            response.set_header(Header::new("Deprecation", "true"));
+            response.set_header(Header::new("Sunset", "2026-07-01T00:00:00Z"));
+            response.set_header(Header::new(
+                "Link",
+                format!(
+                    "<{}>; rel=\"successor-version\"",
+                    uri.to_string().replacen("/v1/", "/v2/", 1)
+                ),
+            ));
+        }
+
         // Get slow_request_ms threshold from managed state
         let slow_request_ms = request
             .rocket()
             .state::<crate::config::Config>()
             .map(|c| c.logging.slow_request_ms)
             .unwrap_or(500);
+
+        if is_v1 {
+            warn!(
+                request_id = %request_id,
+                method = %method,
+                uri = %uri,
+                status = status.code,
+                duration_ms = duration_ms,
+                request_bytes = request_bytes,
+                response_bytes = response_bytes,
+                user_id = user_id.as_deref().unwrap_or("-"),
+                "DEPRECATED v1 API call"
+            );
+        }
 
         // Only escalate 5xx to WARN; 4xx responses (401, 403, 422, etc.) are
         // routine for a REST API and log at INFO to avoid WARN noise.
