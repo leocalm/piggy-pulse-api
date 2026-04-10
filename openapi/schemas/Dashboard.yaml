@@ -377,3 +377,44 @@ SubscriptionsDashboardResponse:
       type: array
       items:
         $ref: '#/SubscriptionDashboardItem'
+
+UncategorizedTransaction:
+  type: object
+  required:
+    - id
+    - amount
+    - date
+    - description
+    - fromAccountId
+  properties:
+    id:
+      type: string
+      format: uuid
+    amount:
+      type: integer
+      format: int64
+      description: Transaction amount in cents
+    date:
+      type: string
+      format: date
+    description:
+      type: string
+    fromAccountId:
+      type: string
+      format: uuid
+
+UncategorizedResponse:
+  type: object
+  required:
+    - count
+    - transactions
+  properties:
+    count:
+      type: integer
+      format: int64
+      description: Number of uncategorized transactions
+      minimum: 0
+    transactions:
+      type: array
+      items:
+        $ref: '#/UncategorizedTransaction'

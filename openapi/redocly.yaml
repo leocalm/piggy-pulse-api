@@ -1,0 +1,23 @@
+apis:
+  v2:
+    root: v2.yaml
+
+rules:
+  operation-4xx-response: warn
+  no-unused-components: warn
+
+theme:
+  openapi:
+    hideDownloadButton: false
+    disableSearch: false
+    expandResponses: '200'
+    sortOperationsAlphabetically: false
+    jsonSampleExpandLevel: 2
+    theme:
+      colors:
+        primary:
+          main: '#6366f1'
+      typography:
+        fontFamily: 'Inter, system-ui, -apple-system, sans-serif'
+        headings:
+          fontFamily: 'Inter, system-ui, -apple-system, sans-serif'
