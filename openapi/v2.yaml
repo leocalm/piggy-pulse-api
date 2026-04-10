@@ -339,6 +339,11 @@ components:
     UpdateSubscriptionRequest:
       $ref: './schemas/Subscription.yaml#/UpdateSubscriptionRequest'
 
+    UncategorizedTransaction:
+      $ref: './schemas/Dashboard.yaml#/UncategorizedTransaction'
+    UncategorizedResponse:
+      $ref: './schemas/Dashboard.yaml#/UncategorizedResponse'
+
     # Misc
     CategoryTemplateCategory:
       $ref: './schemas/Misc.yaml#/CategoryTemplateCategory'
@@ -397,6 +402,8 @@ paths:
     $ref: './paths/dashboard@fixed-categories.yaml'
   /dashboard/subscriptions:
     $ref: './paths/dashboard@subscriptions.yaml'
+  /dashboard/uncategorized:
+    $ref: './paths/dashboard@uncategorized.yaml'
   /periods:
     $ref: './paths/periods.yaml'
   /periods/schedule:
@@ -451,6 +458,8 @@ paths:
     $ref: './paths/categories@{id}.yaml'
   /categories/{id}/detail:
     $ref: './paths/categories@{id}@detail.yaml'
+  /categories/{id}/trend:
+    $ref: './paths/categories@{id}@trend.yaml'
   /categories/{id}/archive:
     $ref: './paths/categories@{id}@archive.yaml'
   /categories/{id}/unarchive:

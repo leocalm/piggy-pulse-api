@@ -1,0 +1,51 @@
+name: API Docs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'openapi/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-docs:
+    name: Build & deploy API docs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Redocly CLI
+        run: npm install -g @redocly/cli@latest
+
+      - name: Lint OpenAPI spec
+        working-directory: openapi
+        run: redocly lint v2.yaml
+
+      - name: Bundle OpenAPI spec
+        working-directory: openapi
+        run: redocly bundle v2.yaml -o bundled/v2.yaml
+
+      - name: Build HTML docs
+        working-directory: openapi
+        run: |
+          mkdir -p dist/site
+          redocly build-docs v2.yaml -o dist/site/index.html
+          cp bundled/v2.yaml dist/site/openapi.yaml
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy openapi/dist/site --project-name=piggy-pulse-openapi

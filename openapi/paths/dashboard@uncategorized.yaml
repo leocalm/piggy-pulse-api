@@ -1,0 +1,22 @@
+get:
+  tags:
+    - Dashboard
+  summary: Get uncategorized transactions for a period
+  operationId: getDashboardUncategorized
+  parameters:
+    - $ref: '../parameters/PeriodId.yaml'
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Dashboard.yaml#/UncategorizedResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
