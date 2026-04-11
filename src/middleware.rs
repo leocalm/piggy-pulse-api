@@ -126,10 +126,7 @@ impl Fairing for RequestLogger {
             response.set_header(Header::new("Sunset", "2026-07-01T00:00:00Z"));
             response.set_header(Header::new(
                 "Link",
-                format!(
-                    "<{}>; rel=\"successor-version\"",
-                    uri.to_string().replacen("/v1/", "/v2/", 1)
-                ),
+                format!("<{}>; rel=\"successor-version\"", uri.to_string().replacen("/v1/", "/v2/", 1)),
             ));
         }
 
