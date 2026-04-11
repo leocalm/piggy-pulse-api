@@ -141,18 +141,21 @@ spent AS (
     FROM transaction t
     JOIN category c ON c.id = t.category_id
     JOIN period p ON TRUE
+    LEFT JOIN account fa ON fa.id = t.from_account_id
+    LEFT JOIN account ta ON ta.id = t.to_account_id
     WHERE t.user_id = $2
-      AND c.category_type = 'Outgoing'
       AND t.occurred_at >= p.start_date
       AND t.occurred_at <= p.end_date
+      AND (
+          (c.category_type = 'Outgoing' AND (fa.account_type IS NULL OR fa.account_type <> 'Allowance'))
+          OR (c.category_type = 'Transfer' AND ta.account_type = 'Allowance')
+      )
 ),
 target AS (
-    SELECT COALESCE(SUM(bc.budgeted_value), 0)::bigint AS value
-    FROM budget_category bc
-    JOIN category cat ON bc.category_id = cat.id
-    WHERE bc.user_id = $2
-      AND bc.is_excluded = false
-      AND cat.category_type = 'Outgoing'
+    SELECT (
+        COALESCE((SELECT SUM(bc2.budgeted_value) FROM budget_category bc2 JOIN category cat2 ON bc2.category_id = cat2.id WHERE bc2.user_id = $2 AND bc2.is_excluded = false AND cat2.category_type = 'Outgoing'), 0)
+        + COALESCE((SELECT SUM(a2.spend_limit) FROM account a2 WHERE a2.user_id = $2 AND a2.account_type = 'Allowance' AND a2.is_archived = false AND a2.spend_limit IS NOT NULL), 0)
+    )::bigint AS value
 ),
 income_target AS (
     SELECT COALESCE(SUM(bc.budgeted_value), 0)::bigint AS value
@@ -191,12 +194,20 @@ CROSS JOIN income_target
             r#"
 SELECT
     gs.day::date AS day,
-    COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::bigint AS amount
+    COALESCE(SUM(
+        CASE
+            WHEN c.category_type = 'Outgoing' AND (fa.account_type IS NULL OR fa.account_type <> 'Allowance') THEN t.amount
+            WHEN c.category_type = 'Transfer' AND ta.account_type = 'Allowance' THEN t.amount
+            ELSE 0
+        END
+    ), 0)::bigint AS amount
 FROM generate_series($1::date, $2::date, '1 day'::interval) AS gs(day)
 LEFT JOIN transaction t
     ON t.occurred_at = gs.day::date
     AND t.user_id = $3
 LEFT JOIN category c ON c.id = t.category_id
+LEFT JOIN account fa ON fa.id = t.from_account_id
+LEFT JOIN account ta ON ta.id = t.to_account_id
 GROUP BY gs.day
 ORDER BY gs.day
             "#,
@@ -337,18 +348,17 @@ FROM account_balances ab
         let closed_period_rows = sqlx::query_as::<_, ClosedPeriodRow>(
             r#"
             WITH total_budget AS (
-                SELECT COALESCE(SUM(bc.budgeted_value), 0)::bigint AS value
-                FROM budget_category bc
-                JOIN category cat ON bc.category_id = cat.id
-                WHERE bc.user_id = $1
-                  AND cat.category_type = 'Outgoing'
-                  AND bc.is_excluded = false
+                SELECT (
+                    COALESCE((SELECT SUM(bc2.budgeted_value) FROM budget_category bc2 JOIN category cat2 ON bc2.category_id = cat2.id WHERE bc2.user_id = $1 AND bc2.is_excluded = false AND cat2.category_type = 'Outgoing'), 0)
+                    + COALESCE((SELECT SUM(a2.spend_limit) FROM account a2 WHERE a2.user_id = $1 AND a2.account_type = 'Allowance' AND a2.is_archived = false AND a2.spend_limit IS NOT NULL), 0)
+                )::bigint AS value
             )
             SELECT
                 tb.value AS total_budget,
                 COALESCE(SUM(
                     CASE
-                        WHEN c.category_type = 'Outgoing' THEN t.amount
+                        WHEN c.category_type = 'Outgoing' AND (fa.account_type IS NULL OR fa.account_type <> 'Allowance') THEN t.amount
+                        WHEN c.category_type = 'Transfer' AND ta.account_type = 'Allowance' THEN t.amount
                         ELSE 0
                     END
                 ), 0)::bigint AS spent_budget
@@ -360,6 +370,8 @@ FROM account_balances ab
                 AND t.occurred_at <= bp.end_date
             LEFT JOIN category c
                 ON c.id = t.category_id
+            LEFT JOIN account fa ON fa.id = t.from_account_id
+            LEFT JOIN account ta ON ta.id = t.to_account_id
             WHERE bp.user_id = $1
                 AND bp.end_date < CURRENT_DATE
             GROUP BY bp.id, bp.end_date, tb.value
@@ -411,10 +423,18 @@ FROM account_balances ab
             r#"
 SELECT
     COALESCE(SUM(CASE WHEN c.category_type = 'Incoming' THEN t.amount ELSE 0 END), 0)::bigint AS inflows,
-    COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::bigint AS outflows
+    COALESCE(SUM(
+        CASE
+            WHEN c.category_type = 'Outgoing' AND (fa.account_type IS NULL OR fa.account_type <> 'Allowance') THEN t.amount
+            WHEN c.category_type = 'Transfer' AND ta.account_type = 'Allowance' THEN t.amount
+            ELSE 0
+        END
+    ), 0)::bigint AS outflows
 FROM transaction t
 JOIN category c ON c.id = t.category_id
 JOIN budget_period bp ON bp.id = $1 AND bp.user_id = $2
+LEFT JOIN account fa ON fa.id = t.from_account_id
+LEFT JOIN account ta ON ta.id = t.to_account_id
 WHERE t.user_id = $2
   AND t.occurred_at >= bp.start_date
   AND t.occurred_at <= bp.end_date
@@ -437,13 +457,21 @@ WHERE t.user_id = $2
 SELECT
     bp.id AS period_id,
     bp.name AS period_name,
-    COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::bigint AS total_spend
+    COALESCE(SUM(
+        CASE
+            WHEN c.category_type = 'Outgoing' AND (fa.account_type IS NULL OR fa.account_type <> 'Allowance') THEN t.amount
+            WHEN c.category_type = 'Transfer' AND ta.account_type = 'Allowance' THEN t.amount
+            ELSE 0
+        END
+    ), 0)::bigint AS total_spend
 FROM budget_period bp
 LEFT JOIN transaction t
     ON t.user_id = $1
     AND t.occurred_at >= bp.start_date
     AND t.occurred_at <= bp.end_date
 LEFT JOIN category c ON c.id = t.category_id
+LEFT JOIN account fa ON fa.id = t.from_account_id
+LEFT JOIN account ta ON ta.id = t.to_account_id
 WHERE bp.user_id = $1
 GROUP BY bp.id, bp.name, bp.end_date
 ORDER BY bp.end_date DESC
@@ -474,11 +502,14 @@ SELECT
     COUNT(t.id)::bigint AS transaction_count
 FROM vendor v
 JOIN transaction t ON t.vendor_id = v.id AND t.user_id = $2
-JOIN category c ON c.id = t.category_id AND c.category_type = 'Outgoing'
+JOIN category c ON c.id = t.category_id
 JOIN budget_period bp ON bp.id = $1 AND bp.user_id = $2
+LEFT JOIN account fa ON fa.id = t.from_account_id
 WHERE v.user_id = $2
   AND t.occurred_at >= bp.start_date
   AND t.occurred_at <= bp.end_date
+  AND c.category_type = 'Outgoing'
+  AND (fa.account_type IS NULL OR fa.account_type <> 'Allowance')
 GROUP BY v.id, v.name
 ORDER BY total_spend DESC
 LIMIT $3
@@ -680,12 +711,20 @@ days AS (
 daily_spend AS (
     SELECT
         days.day,
-        COALESCE(SUM(CASE WHEN c.category_type = 'Outgoing' THEN t.amount ELSE 0 END), 0)::bigint AS daily_spent
+        COALESCE(SUM(
+            CASE
+                WHEN c.category_type = 'Outgoing' AND (fa.account_type IS NULL OR fa.account_type <> 'Allowance') THEN t.amount
+                WHEN c.category_type = 'Transfer' AND ta.account_type = 'Allowance' THEN t.amount
+                ELSE 0
+            END
+        ), 0)::bigint AS daily_spent
     FROM days
     LEFT JOIN transaction t
         ON t.occurred_at = days.day
         AND t.user_id = $2
     LEFT JOIN category c ON c.id = t.category_id
+    LEFT JOIN account fa ON fa.id = t.from_account_id
+    LEFT JOIN account ta ON ta.id = t.to_account_id
     GROUP BY days.day
 )
 SELECT

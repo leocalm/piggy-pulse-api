@@ -121,11 +121,13 @@ WITH period_transactions AS (
     SELECT t.category_id, t.amount
     FROM transaction t
     CROSS JOIN budget_period bp
+    LEFT JOIN account fa ON fa.id = t.from_account_id
     WHERE bp.id        = $1
       AND bp.user_id   = $2
       AND t.user_id    = $2
       AND t.occurred_at >= bp.start_date
       AND t.occurred_at <= bp.end_date
+      AND (fa.account_type IS NULL OR fa.account_type <> 'Allowance')
 )
 SELECT c.name                                AS category_name,
        bc.budgeted_value::bigint             AS budgeted_value,
@@ -167,10 +169,10 @@ GROUP BY c.name, bc.budgeted_value
         let row = sqlx::query_as::<_, MonthlyBurnInResponse>(
             r#"
 WITH total_budget AS (
-    SELECT COALESCE(SUM(bc.budgeted_value), 0)::bigint AS value
-    FROM budget_category bc
-    WHERE bc.user_id = $2
-      AND bc.is_excluded = false
+    SELECT (
+        COALESCE((SELECT SUM(bc2.budgeted_value) FROM budget_category bc2 WHERE bc2.user_id = $2 AND bc2.is_excluded = false), 0)
+        + COALESCE((SELECT SUM(a2.spend_limit) FROM account a2 WHERE a2.user_id = $2 AND a2.account_type = 'Allowance' AND a2.is_archived = false AND a2.spend_limit IS NOT NULL), 0)
+    )::bigint AS value
 ),
 spent_budget AS (
     SELECT COALESCE(SUM(t.amount), 0)::bigint AS value
@@ -178,6 +180,7 @@ spent_budget AS (
     JOIN  category c       ON t.category_id = c.id
     JOIN  budget_category bc ON c.id = bc.category_id
     CROSS JOIN budget_period bp
+    LEFT JOIN account fa ON fa.id = t.from_account_id
     WHERE bp.id            = $1
       AND bp.user_id       = $2
       AND t.user_id        = $2
@@ -185,6 +188,7 @@ spent_budget AS (
       AND t.occurred_at   >= bp.start_date
       AND t.occurred_at   <= bp.end_date
       AND bc.is_excluded   = false
+      AND (fa.account_type IS NULL OR fa.account_type <> 'Allowance')
 )
 SELECT
     total_budget.value                      AS total_budget,
@@ -320,16 +324,18 @@ GROUP BY aib.balance_total
         let closed_period_rows = sqlx::query_as::<_, ClosedPeriodRow>(
             r#"
             WITH total_budget AS (
-                SELECT COALESCE(SUM(budgeted_value), 0)::bigint AS value
-                FROM budget_category
-                WHERE user_id = $1
+                SELECT (
+                    COALESCE((SELECT SUM(bc2.budgeted_value) FROM budget_category bc2 WHERE bc2.user_id = $1 AND bc2.is_excluded = false), 0)
+                    + COALESCE((SELECT SUM(a2.spend_limit) FROM account a2 WHERE a2.user_id = $1 AND a2.account_type = 'Allowance' AND a2.is_archived = false AND a2.spend_limit IS NOT NULL), 0)
+                )::bigint AS value
             )
             SELECT
                 bp.id::text AS period_id,
                 tb.value AS total_budget,
                 COALESCE(SUM(
                     CASE
-                        WHEN c.category_type = 'Outgoing' THEN t.amount
+                        WHEN c.category_type = 'Outgoing' AND (fa.account_type IS NULL OR fa.account_type <> 'Allowance') THEN t.amount
+                        WHEN c.category_type = 'Transfer' AND ta.account_type = 'Allowance' THEN t.amount
                         ELSE 0
                     END
                 ), 0)::bigint AS spent_budget
@@ -341,6 +347,8 @@ GROUP BY aib.balance_total
                 AND t.occurred_at <= bp.end_date
             LEFT JOIN category c
                 ON c.id = t.category_id
+            LEFT JOIN account fa ON fa.id = t.from_account_id
+            LEFT JOIN account ta ON ta.id = t.to_account_id
             WHERE bp.user_id = $1
                 AND bp.end_date < CURRENT_DATE
             GROUP BY bp.id, bp.end_date, tb.value
