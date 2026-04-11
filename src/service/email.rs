@@ -450,7 +450,7 @@ PiggyPulse — Your financial pulse, calm, clear, and entirely yours.
             <p class="text">If this was you, no action is needed. We recommend keeping 2FA enabled for extra security.</p>
             <p class="text">If you didn't do this, secure your account right away:</p>
             <div class="btn-wrap">
-              <a href="https://piggy-pulse.com/settings/security" class="btn-alert">Secure My Account</a>
+              <a href="https://app.piggy-pulse.com/settings" class="btn-alert">Secure My Account</a>
             </div>"##,
             name = to_name,
             rows = rows,
@@ -472,7 +472,7 @@ Action: 2FA disabled
 If this was you, no action is needed. We recommend keeping 2FA enabled for extra security.
 
 If you didn't do this, secure your account right away:
-https://piggy-pulse.com/settings/security
+https://app.piggy-pulse.com/settings
 
 PiggyPulse — Your financial pulse, calm, clear, and entirely yours.
 "#,
