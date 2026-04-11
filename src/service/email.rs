@@ -206,7 +206,7 @@ impl EmailService {
             </div>
             <p class="text">Ready to set up your financial pulse? It only takes a minute.</p>
             <div class="btn-wrap">
-              <a href="https://piggy-pulse.com" class="btn-primary">Open PiggyPulse</a>
+              <a href="https://app.piggy-pulse.com" class="btn-primary">Open PiggyPulse</a>
             </div>
             <p class="text-muted">If you have any questions, we're always here to help.</p>"##,
             name = to_name,
@@ -229,7 +229,7 @@ Here's what PiggyPulse is about:
 - Your control. Customizable periods, flexible categories, your way of budgeting.
 
 Ready to set up your financial pulse? It only takes a minute.
-https://piggy-pulse.com
+https://app.piggy-pulse.com
 
 If you have any questions, we're always here to help.
 
