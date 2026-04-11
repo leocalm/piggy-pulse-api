@@ -661,6 +661,14 @@ impl PostgresRepository {
         Ok(rows.into_iter().map(Transaction::from).collect())
     }
 
+    pub async fn has_any_transactions(&self, user_id: &Uuid) -> Result<bool, AppError> {
+        let row = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM transaction WHERE user_id = $1)")
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(row)
+    }
+
     /// Creates multiple transactions atomically inside a single DB transaction.
     ///
     /// If any individual insert fails (validation or DB error), the entire batch is rolled back
