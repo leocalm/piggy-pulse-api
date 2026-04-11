@@ -312,6 +312,12 @@ impl<'a> AuthService<'a> {
             tracing::warn!("Failed to create system transfer category for user {}: {}", user.id, e);
         }
 
+        // Best-effort: send welcome email
+        let email_service = crate::service::email::EmailService::new(self.config.email.clone());
+        if let Err(e) = email_service.send_welcome_email(email, name).await {
+            tracing::warn!("Failed to send welcome email to {}: {}", email, e);
+        }
+
         // Create session
         let ttl_seconds = self.config.session.ttl_seconds.max(60);
         let expires_at = Utc::now() + chrono::Duration::seconds(ttl_seconds);
@@ -481,6 +487,13 @@ impl<'a> AuthService<'a> {
             .create_security_audit_log(Some(user_id), audit_events::PASSWORD_CHANGED, true, client_ip, user_agent, None)
             .await;
 
+        // Best-effort: send password-changed security notification
+        let changed_at = Utc::now().format("%b %d, %Y at %-I:%M %p").to_string();
+        let email_service = crate::service::email::EmailService::new(self.config.email.clone());
+        if let Err(e) = email_service.send_password_changed_email(&user.email, &user.name, &changed_at).await {
+            tracing::warn!("Failed to send password changed email to {}: {}", user.email, e);
+        }
+
         Ok(())
     }
 
@@ -564,6 +577,15 @@ impl<'a> AuthService<'a> {
                 Some(serde_json::json!({"sessions_invalidated": sessions_invalidated})),
             )
             .await;
+
+        // Best-effort: send password-changed security notification
+        if let Ok(Some(user)) = self.repo.get_user_by_id(&reset.user_id).await {
+            let changed_at = Utc::now().format("%b %d, %Y at %-I:%M %p").to_string();
+            let email_service = crate::service::email::EmailService::new(self.config.email.clone());
+            if let Err(e) = email_service.send_password_changed_email(&user.email, &user.name, &changed_at).await {
+                tracing::warn!("Failed to send password changed email to {}: {}", user.email, e);
+            }
+        }
 
         Ok(())
     }

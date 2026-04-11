@@ -207,6 +207,15 @@ impl<'a> TwoFactorService<'a> {
             )
             .await;
 
+        // Best-effort: send 2FA disabled security notification
+        if let Ok(Some(user)) = self.repo.get_user_by_id(user_id).await {
+            let disabled_at = chrono::Utc::now().format("%b %d, %Y at %-I:%M %p").to_string();
+            let email_service = crate::service::email::EmailService::new(self.config.email.clone());
+            if let Err(e) = email_service.send_2fa_disabled_email(&user.email, &user.name, &disabled_at).await {
+                tracing::warn!("Failed to send 2FA disabled email to {}: {}", user.email, e);
+            }
+        }
+
         Ok(())
     }
 
@@ -296,6 +305,15 @@ impl<'a> TwoFactorService<'a> {
                 Some(serde_json::json!({"method": "emergency"})),
             )
             .await;
+
+        // Best-effort: send 2FA disabled security notification
+        if let Ok(Some(user)) = self.repo.get_user_by_id(&user_id).await {
+            let disabled_at = chrono::Utc::now().format("%b %d, %Y at %-I:%M %p").to_string();
+            let email_service = crate::service::email::EmailService::new(self.config.email.clone());
+            if let Err(e) = email_service.send_2fa_disabled_email(&user.email, &user.name, &disabled_at).await {
+                tracing::warn!("Failed to send 2FA disabled email to {}: {}", user.email, e);
+            }
+        }
 
         Ok(())
     }
