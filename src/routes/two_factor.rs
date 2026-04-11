@@ -187,6 +187,13 @@ pub async fn disable_two_factor(
         )
         .await;
 
+    // Best-effort: send 2FA disabled security notification
+    let disabled_at = chrono::Utc::now().format("%b %d, %Y at %-I:%M %p").to_string();
+    let email_service = crate::service::email::EmailService::new(config.email.clone());
+    if let Err(e) = email_service.send_2fa_disabled_email(&user.email, &user.name, &disabled_at).await {
+        tracing::warn!("Failed to send 2FA disabled email to {}: {}", user.email, e);
+    }
+
     Ok(Status::Ok)
 }
 
@@ -318,6 +325,7 @@ pub async fn emergency_disable_request(
 #[post("/emergency-disable-confirm", data = "<payload>")]
 pub async fn emergency_disable_confirm(
     pool: &State<PgPool>,
+    config: &State<Config>,
     _rate_limit: RateLimit,
     client_ip: ClientIp,
     user_agent: UserAgent,
@@ -345,11 +353,14 @@ pub async fn emergency_disable_confirm(
         )
         .await;
 
-    // TODO: Invalidate all sessions for this user (force re-login)
-    // This will be implemented when we modify the session management
-
-    // TODO: Send confirmation email
-    tracing::warn!("Emergency 2FA disable confirmed for user_id: {}", user_id);
+    // Best-effort: send 2FA disabled security notification
+    if let Ok(Some(user)) = repo.get_user_by_id(&user_id).await {
+        let disabled_at = chrono::Utc::now().format("%b %d, %Y at %-I:%M %p").to_string();
+        let email_service = crate::service::email::EmailService::new(config.email.clone());
+        if let Err(e) = email_service.send_2fa_disabled_email(&user.email, &user.name, &disabled_at).await {
+            tracing::warn!("Failed to send 2FA disabled email to {}: {}", user.email, e);
+        }
+    }
 
     Ok(Status::Ok)
 }

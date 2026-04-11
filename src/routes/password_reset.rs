@@ -176,7 +176,12 @@ pub async fn validate_password_reset_token(
 /// Confirm password reset and set new password (Step 3: Complete the reset)
 #[openapi(tag = "Password Reset")]
 #[post("/password-reset/confirm", data = "<payload>")]
-pub async fn confirm_password_reset(pool: &State<PgPool>, _rate_limit: AuthRateLimit, payload: Json<PasswordResetConfirmRequest>) -> Result<Status, AppError> {
+pub async fn confirm_password_reset(
+    pool: &State<PgPool>,
+    config: &State<crate::config::Config>,
+    _rate_limit: AuthRateLimit,
+    payload: Json<PasswordResetConfirmRequest>,
+) -> Result<Status, AppError> {
     payload.validate()?;
 
     let repo = PostgresRepository { pool: pool.inner().clone() };
@@ -235,6 +240,15 @@ pub async fn confirm_password_reset(pool: &State<PgPool>, _rate_limit: AuthRateL
                 .await;
 
             tracing::info!("Password reset completed successfully for user {}", reset.user_id);
+
+            // Best-effort: send password-changed security notification
+            if let Ok(Some(user)) = repo.get_user_by_id(&reset.user_id).await {
+                let changed_at = chrono::Utc::now().format("%b %d, %Y at %-I:%M %p").to_string();
+                let email_service = EmailService::new(config.email.clone());
+                if let Err(e) = email_service.send_password_changed_email(&user.email, &user.name, &changed_at).await {
+                    tracing::warn!("Failed to send password changed email to {}: {}", user.email, e);
+                }
+            }
 
             Ok(Status::Ok)
         }

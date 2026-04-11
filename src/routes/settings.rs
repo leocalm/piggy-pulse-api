@@ -151,6 +151,7 @@ pub async fn put_preferences(
 #[post("/security/password", data = "<payload>")]
 pub async fn post_change_password(
     pool: &State<PgPool>,
+    config: &State<crate::config::Config>,
     _rate_limit: RateLimit,
     current_user: CurrentUser,
     client_ip: ClientIp,
@@ -160,6 +161,7 @@ pub async fn post_change_password(
     payload.validate()?;
 
     let repo = PostgresRepository { pool: pool.inner().clone() };
+    let user = repo.get_user_by_id(&current_user.id).await?.ok_or(AppError::UserNotFound)?;
     repo.change_password(&current_user.id, &payload.current_password, &payload.new_password).await?;
     // Invalidate all other sessions so stolen session tokens are no longer usable
     match current_user.session_id {
@@ -178,6 +180,14 @@ pub async fn post_change_password(
             None,
         )
         .await;
+
+    // Best-effort: send password-changed security notification
+    let changed_at = chrono::Utc::now().format("%b %d, %Y at %-I:%M %p").to_string();
+    let email_service = crate::service::email::EmailService::new(config.email.clone());
+    if let Err(e) = email_service.send_password_changed_email(&user.email, &user.name, &changed_at).await {
+        tracing::warn!("Failed to send password changed email to {}: {}", user.email, e);
+    }
+
     Ok(Status::Ok)
 }
 
