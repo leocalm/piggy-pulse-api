@@ -510,7 +510,7 @@ PiggyPulse — Your financial pulse, calm, clear, and entirely yours.
             </div>
             <p class="text">If this was you, you're all set. If you didn't change your password, secure your account immediately:</p>
             <div class="btn-wrap">
-              <a href="https://piggy-pulse.com/settings/security" class="btn-alert">Secure My Account</a>
+              <a href="https://app.piggy-pulse.com/settings" class="btn-alert">Secure My Account</a>
             </div>"##,
             name = to_name,
             rows = rows,
@@ -529,7 +529,7 @@ Your PiggyPulse password was just changed.
 When: {changed_at}
 
 If this was you, you're all set. If you didn't change your password, secure your account immediately:
-https://piggy-pulse.com/settings/security
+https://app.piggy-pulse.com/settings
 
 PiggyPulse — Your financial pulse, calm, clear, and entirely yours.
 "#,
@@ -708,7 +708,7 @@ mod tests {
 
         assert!(text.contains("Hey Leonardo,"));
         assert!(text.contains("Apr 12, 2026 at 4:05 PM"));
-        assert!(text.contains("piggy-pulse.com/settings/security"));
+        assert!(text.contains("app.piggy-pulse.com/settings"));
     }
 
     #[test]
