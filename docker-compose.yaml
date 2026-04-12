@@ -47,7 +47,7 @@ services:
       ROCKET_ADDRESS: ${PIGGY_PULSE_SERVER_ADDRESS:-0.0.0.0}
 
       # API configuration
-      PIGGY_PULSE_API__BASE_PATH: ${PIGGY_PULSE_API_BASE_PATH:-/v1}
+      PIGGY_PULSE_API__BASE_PATH: ${PIGGY_PULSE_API_BASE_PATH:-/v2}
       PIGGY_PULSE_API__EXPOSE_DOCS: ${PIGGY_PULSE_API_EXPOSE_DOCS:-false}
 
       # CORS configuration
@@ -68,7 +68,7 @@ services:
       # Rocket secret key (required for production)
       ROCKET_SECRET_KEY: ${ROCKET_SECRET_KEY:?ROCKET_SECRET_KEY is required}
     healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:${PIGGY_PULSE_SERVER_PORT:-8000}${PIGGY_PULSE_API_BASE_PATH:-/v1}/health || exit 1" ]
+      test: [ "CMD-SHELL", "curl -f http://localhost:${PIGGY_PULSE_SERVER_PORT:-8000}${PIGGY_PULSE_API_BASE_PATH:-/v2}/health || exit 1" ]
       interval: 30s
       timeout: 5s
       retries: 3

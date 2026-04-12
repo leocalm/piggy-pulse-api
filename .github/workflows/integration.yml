@@ -35,7 +35,7 @@ jobs:
       # Fixed key for CI — not used in production
       ROCKET_SECRET_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY= # pragma: allowlist secret
       PIGGY_PULSE_EMAIL__ENABLED: "false"
-      PIGGY_PULSE_API__BASE_PATH: /v1
+      PIGGY_PULSE_API__BASE_PATH: /v2
       # Insecure fixed key — safe for ephemeral CI
       PIGGY_PULSE_TWO_FACTOR__ENCRYPTION_KEY: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef" # pragma: allowlist secret
 

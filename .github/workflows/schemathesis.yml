@@ -36,7 +36,7 @@ jobs:
       ROCKET_SECRET_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       PIGGY_PULSE_EMAIL__ENABLED: "false"
       # Match local PiggyPulse.toml base_path so v2 routes land at /v2
-      PIGGY_PULSE_API__BASE_PATH: /v1
+      PIGGY_PULSE_API__BASE_PATH: /v2
       # Insecure fixed key — safe for ephemeral CI; real key is in PiggyPulse.toml locally
       # Must contain letters so figment doesn't coerce it to an integer
       PIGGY_PULSE_TWO_FACTOR__ENCRYPTION_KEY: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
