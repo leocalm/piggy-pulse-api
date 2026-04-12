@@ -1,12 +1,11 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use rocket::serde::{Deserialize, Serialize};
-use schemars::JsonSchema;
 use uuid::Uuid;
 use validator::{Validate, ValidationError};
 
 // ===== Enums =====
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, sqlx::Type)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
 #[sqlx(type_name = "text", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum DurationUnit {
@@ -25,7 +24,7 @@ impl std::fmt::Display for DurationUnit {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, sqlx::Type)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
 #[sqlx(type_name = "text", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum WeekendAdjustment {
@@ -57,7 +56,7 @@ pub struct BudgetPeriod {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Deserialize, Debug, Validate, JsonSchema)]
+#[derive(Deserialize, Debug, Validate)]
 #[validate(schema(function = "validate_date_range"))]
 pub struct BudgetPeriodRequest {
     #[validate(length(min = 3))]

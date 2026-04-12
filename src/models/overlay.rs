@@ -1,13 +1,12 @@
 use crate::models::transaction::TransactionResponse;
 use chrono::{DateTime, NaiveDate, Utc};
 use rocket::serde::{Deserialize, Serialize};
-use schemars::JsonSchema;
 use uuid::Uuid;
 use validator::Validate;
 
 // ===== Enums =====
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, sqlx::Type)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
 #[sqlx(type_name = "text", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum InclusionMode {
@@ -26,7 +25,7 @@ impl std::fmt::Display for InclusionMode {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum InclusionSource {
     Manual,
@@ -36,7 +35,7 @@ pub enum InclusionSource {
 
 // ===== Rules Models =====
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct OverlayRules {
     #[serde(default)]
     pub category_ids: Vec<Uuid>,
@@ -48,7 +47,7 @@ pub struct OverlayRules {
 
 // ===== Category Cap Models =====
 
-#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct OverlayCategoryCap {
     pub category_id: Uuid,
     pub cap_amount: i64,
@@ -82,7 +81,7 @@ pub struct OverlayWithMetrics {
 
 // ===== Request DTOs =====
 
-#[derive(Deserialize, Debug, Validate, JsonSchema)]
+#[derive(Deserialize, Debug, Validate)]
 #[validate(schema(function = "validate_overlay_date_range"))]
 pub struct OverlayRequest {
     #[validate(length(min = 1))]
@@ -107,13 +106,13 @@ fn validate_overlay_date_range(request: &OverlayRequest) -> Result<(), validator
 
 // ===== Transaction Membership Models =====
 
-#[derive(Serialize, Debug, Clone, JsonSchema)]
+#[derive(Serialize, Debug, Clone)]
 pub struct TransactionMembership {
     pub is_included: bool,
     pub inclusion_source: Option<InclusionSource>,
 }
 
-#[derive(Serialize, Debug, JsonSchema)]
+#[derive(Serialize, Debug)]
 pub struct TransactionWithMembership {
     #[serde(flatten)]
     pub transaction: TransactionResponse,

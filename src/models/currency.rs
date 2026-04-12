@@ -1,8 +1,7 @@
 use rocket::serde::{Deserialize, Serialize};
-use schemars::JsonSchema;
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, sqlx::Type, JsonSchema, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, sqlx::Type, Default)]
 #[sqlx(type_name = "text", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum SymbolPosition {
@@ -34,7 +33,7 @@ impl From<&Currency> for CurrencyResponse {
     }
 }
 
-#[derive(Serialize, Debug, JsonSchema)]
+#[derive(Serialize, Debug)]
 pub struct CurrencyResponse {
     pub id: Uuid,
     pub name: String,

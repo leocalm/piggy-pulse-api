@@ -1,5 +1,4 @@
 use crate::middleware::RequestId;
-use crate::middleware::rate_limit::RateLimitRetryAfter;
 use rocket::http::{ContentType, Header, Status};
 use rocket::response::{Responder, Result as ResponseResult};
 use rocket::serde::Serialize;
@@ -91,8 +90,6 @@ impl<'r> Responder<'r, 'static> for TooManyRequests {
 
 #[catch(429)]
 pub fn too_many_requests(req: &Request) -> TooManyRequests {
-    let retry_after = req.local_cache(|| None::<RateLimitRetryAfter>);
-    TooManyRequests {
-        retry_after: retry_after.as_ref().map(|value| value.0),
-    }
+    let _ = req; // request context available for future use
+    TooManyRequests { retry_after: None }
 }

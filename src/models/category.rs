@@ -1,9 +1,8 @@
 use rocket::serde::{Deserialize, Serialize};
-use schemars::JsonSchema;
 use uuid::Uuid;
 use validator::Validate;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq, Default, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq, Default)]
 pub enum CategoryType {
     Incoming,
     #[default]
@@ -49,7 +48,7 @@ pub struct Category {
     pub behavior: Option<CategoryBehavior>,
 }
 
-#[derive(Deserialize, Debug, Validate, JsonSchema)]
+#[derive(Deserialize, Debug, Validate)]
 pub struct CategoryRequest {
     #[validate(length(min = 3))]
     pub name: String,
@@ -63,7 +62,7 @@ pub struct CategoryRequest {
     pub behavior: Option<String>,
 }
 
-#[derive(Serialize, Debug, Clone, JsonSchema)]
+#[derive(Serialize, Debug, Clone)]
 pub struct CategoryResponse {
     pub id: Uuid,
     pub name: String,

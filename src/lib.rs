@@ -18,12 +18,9 @@ pub use cron_tasks::{GeneratePeriodsResult, cleanup_expired_tokens, generate_per
 
 use crate::db::stage_db;
 use crate::middleware::RequestLogger;
-use crate::middleware::rate_limit::RateLimiter;
 use crate::routes as app_routes;
-use rocket::fairing::AdHoc;
 use rocket::{Build, Rocket, catchers, http::Method};
 use rocket_cors::{AllowedOrigins, CorsOptions};
-use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
 
 fn init_tracing(log_level: &str, json_format: bool) {
@@ -190,24 +187,6 @@ fn join_base_path(base_path: &str, path: &str) -> String {
     }
 }
 
-fn stage_rate_limiter(rate_limit_config: config::RateLimitConfig) -> AdHoc {
-    AdHoc::on_ignite("Rate Limiter", move |rocket| {
-        Box::pin(async move {
-            let limiter = match RateLimiter::new(rate_limit_config.clone()).await {
-                Ok(limiter) => Arc::new(limiter),
-                Err(err) => {
-                    eprintln!("Failed to initialize rate limiter: {}", err);
-                    std::process::exit(1);
-                }
-            };
-
-            limiter.clone().spawn_cleanup_task();
-
-            rocket.manage(limiter)
-        })
-    })
-}
-
 /// Mount v2 route handlers (spec-first, no rocket_okapi / OpenAPI generation).
 /// V2 routes are not included in Swagger UI — the OpenAPI spec is maintained externally.
 fn mount_v2_routes(mut rocket: Rocket<Build>, base_path: &str) -> Rocket<Build> {
@@ -252,7 +231,6 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
 
     let mut rocket = rocket::build()
         .manage(config.clone())
-        .attach(stage_rate_limiter(config.rate_limit.clone()))
         .attach(cors)
         .attach(RequestLogger)
         .attach(stage_db(config.database, config.logging.slow_query_ms));

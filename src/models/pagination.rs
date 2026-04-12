@@ -1,10 +1,9 @@
 use chrono::NaiveDate;
 use rocket::serde::{Deserialize, Serialize};
-use schemars::JsonSchema;
 use uuid::Uuid;
 
 /// Allowed values for the transaction direction filter.
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(crate = "rocket::serde")]
 pub enum TransactionDirection {
     Incoming,
@@ -25,7 +24,7 @@ impl TransactionDirection {
 /// Cursor-based pagination parameters.
 /// `cursor` is the `id` of the last item seen on the previous page.
 /// When `None`, the query starts from the beginning of the result set.
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(crate = "rocket::serde")]
 pub struct CursorParams {
     pub cursor: Option<Uuid>,
@@ -49,7 +48,7 @@ impl CursorParams {
 }
 
 /// Optional filter parameters for transaction queries.
-#[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(crate = "rocket::serde")]
 pub struct TransactionFilters {
     pub account_ids: Vec<Uuid>,
