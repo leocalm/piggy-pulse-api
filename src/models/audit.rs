@@ -14,15 +14,10 @@ pub mod audit_events {
 
     // Account events
     pub const PASSWORD_CHANGED: &str = "password_changed";
-    pub const ACCOUNT_UPDATED: &str = "account_updated";
 
-    // Password reset events (moved from password_reset.rs)
+    // Password reset events
     pub const PASSWORD_RESET_REQUESTED: &str = "password_reset_requested";
-    pub const PASSWORD_RESET_TOKEN_VALIDATED: &str = "password_reset_token_validated";
     pub const PASSWORD_RESET_COMPLETED: &str = "password_reset_completed";
-    pub const PASSWORD_RESET_FAILED: &str = "password_reset_failed";
-    pub const PASSWORD_RESET_TOKEN_EXPIRED: &str = "password_reset_token_expired";
-    pub const PASSWORD_RESET_TOKEN_INVALID: &str = "password_reset_token_invalid";
 
     // Login rate limiting events
     pub const ACCOUNT_LOCKED: &str = "account_locked";

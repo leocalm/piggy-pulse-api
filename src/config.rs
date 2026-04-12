@@ -132,9 +132,6 @@ pub struct SessionConfig {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ApiConfig {
     pub base_path: String,
-    pub additional_base_paths: Vec<String>,
-    pub expose_docs: bool,
-    pub expose_swagger_ui: bool,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -232,7 +229,7 @@ fn default_frontend_unlock_url() -> String {
     "http://localhost:3000/auth/unlock".to_string()
 }
 
-pub const DEFAULT_API_BASE_PATH: &str = "/v1";
+pub const DEFAULT_API_BASE_PATH: &str = "/v2";
 
 impl Default for DatabaseConfig {
     fn default() -> Self {
@@ -299,9 +296,6 @@ impl Default for ApiConfig {
     fn default() -> Self {
         Self {
             base_path: DEFAULT_API_BASE_PATH.to_string(),
-            additional_base_paths: Vec::new(),
-            expose_docs: false,
-            expose_swagger_ui: false,
         }
     }
 }

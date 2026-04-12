@@ -1,5 +1,4 @@
 use crate::models::account::{Account, AccountRequest, AccountType};
-use crate::models::budget_category::{BudgetCategory, BudgetCategoryRequest};
 use crate::models::budget_period::BudgetPeriod;
 use crate::models::category::{Category, CategoryType};
 use crate::models::currency::Currency;
@@ -64,20 +63,6 @@ impl From<&AccountRequest> for Account {
     }
 }
 
-impl From<&BudgetCategoryRequest> for BudgetCategory {
-    fn from(request: &BudgetCategoryRequest) -> Self {
-        Self {
-            id: Uuid::new_v4(),
-            category: Category {
-                id: request.category_id,
-                ..Category::default()
-            },
-            budgeted_value: request.budgeted_value,
-            ..BudgetCategory::default()
-        }
-    }
-}
-
 pub fn sample_account() -> Account {
     Account {
         id: Uuid::new_v4(),
@@ -125,20 +110,6 @@ pub fn sample_transaction() -> Transaction {
             description: None,
             archived: false,
         }),
-    }
-}
-
-pub fn sample_budget_category() -> BudgetCategory {
-    BudgetCategory {
-        id: Uuid::new_v4(),
-        category: Category {
-            id: Uuid::new_v4(),
-            name: "Food".into(),
-            category_type: CategoryType::Outgoing,
-            ..Category::default()
-        },
-        budgeted_value: 1_000,
-        ..BudgetCategory::default()
     }
 }
 

@@ -26,7 +26,7 @@ impl PostgresRepository {
             r#"
             INSERT INTO users (name, email, salt, password_hash)
             VALUES($1, $2, $3, $4)
-            RETURNING id, name, email, password_hash, onboarding_status
+            RETURNING id, name, email, password_hash
             "#,
         )
         .bind(name)
@@ -42,7 +42,7 @@ impl PostgresRepository {
     pub async fn get_user_by_email(&self, email: &str) -> Result<Option<User>, AppError> {
         let user = sqlx::query_as::<_, User>(
             r#"
-            SELECT id, name, email, password_hash, onboarding_status
+            SELECT id, name, email, password_hash
             FROM users
             WHERE email = $1
             "#,
@@ -57,7 +57,7 @@ impl PostgresRepository {
     pub async fn get_user_by_id(&self, id: &Uuid) -> Result<Option<User>, AppError> {
         let user = sqlx::query_as::<_, User>(
             r#"
-            SELECT id, name, email, password_hash, onboarding_status
+            SELECT id, name, email, password_hash
             FROM users
             WHERE id = $1
             "#,
@@ -96,63 +96,8 @@ impl PostgresRepository {
         let _ = Argon2::default().verify_password(b"timing-equalization", &hash);
     }
 
-    pub async fn update_user(&self, id: &Uuid, name: &str, email: &str, new_password: Option<&str>) -> Result<User, AppError> {
-        let user = if let Some(password) = new_password {
-            let (salt, hash) = password_hash(password);
-            sqlx::query_as::<_, User>(
-                r#"
-                UPDATE users
-                SET name = $1, email = $2, salt = $3, password_hash = $4
-                WHERE id = $5
-                RETURNING id, name, email, password_hash, onboarding_status
-                "#,
-            )
-            .bind(name)
-            .bind(email)
-            .bind(&salt)
-            .bind(&hash)
-            .bind(id)
-            .fetch_one(&self.pool)
-            .await?
-        } else {
-            sqlx::query_as::<_, User>(
-                r#"
-                UPDATE users
-                SET name = $1, email = $2
-                WHERE id = $3
-                RETURNING id, name, email, password_hash, onboarding_status
-                "#,
-            )
-            .bind(name)
-            .bind(email)
-            .bind(id)
-            .fetch_one(&self.pool)
-            .await?
-        };
-
-        Ok(user)
-    }
-
     pub async fn delete_user(&self, id: &Uuid) -> Result<(), AppError> {
         sqlx::query("DELETE FROM users WHERE id = $1").bind(id).execute(&self.pool).await?;
-
-        Ok(())
-    }
-
-    /// Verifies the current password and updates it to the new one.
-    pub async fn change_password(&self, user_id: &Uuid, current_password: &str, new_password: &str) -> Result<(), AppError> {
-        let user = self.get_user_by_id(user_id).await?.ok_or(AppError::UserNotFound)?;
-        self.verify_password(&user, current_password)
-            .await
-            .map_err(|_| AppError::BadRequest("Current password is incorrect".to_string()))?;
-
-        let (salt, new_hash) = password_hash(new_password);
-        sqlx::query("UPDATE users SET salt = $1, password_hash = $2 WHERE id = $3")
-            .bind(&salt)
-            .bind(&new_hash)
-            .bind(user_id)
-            .execute(&self.pool)
-            .await?;
 
         Ok(())
     }
