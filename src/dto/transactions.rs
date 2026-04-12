@@ -92,6 +92,14 @@ pub enum CreateTransactionRequest {
 
 pub type UpdateTransactionRequest = CreateTransactionRequest;
 
+// ===== Has Any =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct HasTransactionsResponse {
+    pub has_transactions: bool,
+}
+
 // ===== Stats =====
 
 #[derive(Serialize, Debug)]

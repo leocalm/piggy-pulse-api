@@ -1,0 +1,19 @@
+get:
+  tags:
+    - Transactions
+  summary: Check if user has any transactions
+  operationId: hasAnyTransactions
+  description: >
+    Returns whether the authenticated user has created at least one transaction
+    across all periods. Used by the Getting Started card to track onboarding progress.
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Transaction.yaml#/HasTransactionsResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

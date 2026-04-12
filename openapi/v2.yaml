@@ -243,6 +243,8 @@ components:
       $ref: './schemas/Transaction.yaml#/CreateTransactionRequest'
     UpdateTransactionRequest:
       $ref: './schemas/Transaction.yaml#/UpdateTransactionRequest'
+    HasTransactionsResponse:
+      $ref: './schemas/Transaction.yaml#/HasTransactionsResponse'
 
     UserResponse:
       $ref: './schemas/Auth.yaml#/UserResponse'
@@ -475,6 +477,8 @@ paths:
 
   /transactions:
     $ref: './paths/transactions.yaml'
+  /transactions/has-any:
+    $ref: './paths/transactions@has-any.yaml'
   /transactions/stats:
     $ref: './paths/transactions@stats.yaml'
   /transactions/{id}:

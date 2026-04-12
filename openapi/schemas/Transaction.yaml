@@ -238,6 +238,16 @@ UpdateTransactionRequest:
   allOf:
     - $ref: '#/CreateTransactionRequest'
 
+HasTransactionsResponse:
+  type: object
+  required:
+    - hasTransactions
+  properties:
+    hasTransactions:
+      type: boolean
+      description: Whether the user has created at least one transaction
+      example: true
+
 TransactionStatsResponse:
   type: object
   required:
