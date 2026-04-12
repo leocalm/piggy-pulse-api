@@ -1,5 +1,4 @@
 use crate::models::currency::{Currency, CurrencyResponse};
-use crate::models::dashboard::BudgetPerDayResponse;
 use chrono::NaiveDate;
 use rocket::serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
@@ -86,11 +85,6 @@ pub struct AccountUpdateRequest {
     pub payment_due_day: Option<i32>,
 }
 
-#[derive(Deserialize, Debug, Validate, JsonSchema)]
-pub struct AdjustStartingBalanceRequest {
-    pub new_balance: i64,
-}
-
 #[derive(Serialize, Debug, JsonSchema)]
 pub struct AccountResponse {
     pub id: Uuid,
@@ -129,70 +123,12 @@ impl From<&Account> for AccountResponse {
     }
 }
 
-#[derive(Serialize, Debug, JsonSchema)]
-pub struct AccountListResponse {
-    pub id: Uuid,
-    pub name: String,
-    pub color: String,
-    pub icon: String,
-    pub account_type: AccountType,
-    pub currency: CurrencyResponse,
-    pub balance: i64,
-    pub spend_limit: Option<i32>,
-    pub is_archived: bool,
-    pub next_transfer_amount: Option<i64>,
-    pub balance_per_day: Vec<BudgetPerDayResponse>,
-    pub balance_change_this_period: i64,
-    pub transaction_count: i64,
-}
-
 #[derive(Debug, Clone)]
 pub struct AccountWithMetrics {
     pub account: Account,
     pub current_balance: i64,
     pub balance_change_this_period: i64,
     pub transaction_count: i64,
-}
-
-#[derive(Debug, Clone)]
-pub struct AccountBalancePerDay {
-    pub account_id: Uuid,
-    pub account_name: String,
-    pub date: String,
-    pub balance: i64,
-}
-
-#[derive(Serialize, Debug, JsonSchema)]
-pub struct AccountsSummaryResponse {
-    pub total_net_worth: i64,
-    pub total_assets: i64,
-    pub total_liabilities: i64,
-}
-
-#[derive(Serialize, Debug, JsonSchema)]
-pub struct AccountOptionResponse {
-    pub id: Uuid,
-    pub name: String,
-    pub icon: String,
-}
-
-/// Response for the management list endpoint — includes all accounts (incl. archived)
-/// with management-specific fields.
-#[derive(Serialize, Debug, JsonSchema)]
-pub struct AccountManagementResponse {
-    pub id: Uuid,
-    pub name: String,
-    pub color: String,
-    pub icon: String,
-    pub account_type: AccountType,
-    pub currency: CurrencyResponse,
-    pub balance: i64,
-    pub spend_limit: Option<i32>,
-    pub is_archived: bool,
-    pub next_transfer_amount: Option<i64>,
-    pub transaction_count: i64,
-    pub can_delete: bool,
-    pub can_adjust_balance: bool,
 }
 
 #[derive(Serialize, Debug, JsonSchema)]

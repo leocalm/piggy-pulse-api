@@ -6,7 +6,6 @@ use crate::models::category::{Category, CategoryType};
 use crate::models::currency::{Currency, SymbolPosition};
 use crate::models::pagination::{CursorParams, TransactionFilters};
 use crate::models::transaction::{Transaction, TransactionRequest};
-use crate::models::transaction_summary::TransactionSummary;
 use crate::models::vendor::Vendor;
 use chrono::NaiveDate;
 use uuid::Uuid;
@@ -400,43 +399,6 @@ impl PostgresRepository {
         Ok(row.map(Transaction::from))
     }
 
-    pub async fn list_transactions(&self, params: &CursorParams, filters: &TransactionFilters, user_id: &Uuid) -> Result<Vec<Transaction>, AppError> {
-        let rows = if let Some(cursor) = params.cursor {
-            let (filter_sql, filter_binds) = build_filter_clause(filters, 3); // $1=user_id, $2=cursor
-            let base = build_transaction_query(
-                "transaction t",
-                &[
-                    "t.user_id = $1 AND (t.occurred_at, t.created_at, t.id) < (SELECT occurred_at, created_at, id FROM transaction WHERE id = $2)",
-                    &filter_sql,
-                ],
-                "t.occurred_at DESC, t.created_at DESC, t.id DESC",
-            );
-            let limit_n = 3 + filter_binds.len();
-            let full_query = format!("{} LIMIT ${}", base, limit_n);
-            let mut q = sqlx::query_as::<_, TransactionRow>(&full_query).bind(user_id).bind(cursor);
-            for bind in &filter_binds {
-                q = bind_filter_value(q, bind);
-            }
-            q.bind(params.fetch_limit()).fetch_all(&self.pool).await?
-        } else {
-            let (filter_sql, filter_binds) = build_filter_clause(filters, 2); // $1=user_id
-            let base = build_transaction_query(
-                "transaction t",
-                &["t.user_id = $1", &filter_sql],
-                "t.occurred_at DESC, t.created_at DESC, t.id DESC",
-            );
-            let limit_n = 2 + filter_binds.len();
-            let full_query = format!("{} LIMIT ${}", base, limit_n);
-            let mut q = sqlx::query_as::<_, TransactionRow>(&full_query).bind(user_id);
-            for bind in &filter_binds {
-                q = bind_filter_value(q, bind);
-            }
-            q.bind(params.fetch_limit()).fetch_all(&self.pool).await?
-        };
-
-        Ok(rows.into_iter().map(Transaction::from).collect())
-    }
-
     pub async fn get_transactions_for_period(
         &self,
         period_id: &Uuid,
@@ -554,55 +516,6 @@ impl PostgresRepository {
         Ok(Transaction::from(row))
     }
 
-    pub async fn get_transaction_summary(&self, period_id: &Uuid, user_id: &Uuid) -> Result<TransactionSummary, AppError> {
-        #[derive(sqlx::FromRow)]
-        struct SummaryRow {
-            category_type: String,
-            total_amount: i64,
-        }
-
-        let rows = sqlx::query_as::<_, SummaryRow>(
-            r#"
-            SELECT c.category_type::text, COALESCE(SUM(t.amount), 0) as total_amount
-            FROM transaction t
-            JOIN category c ON t.category_id = c.id
-            CROSS JOIN budget_period bp
-            WHERE bp.id = $1
-                AND bp.user_id = $2
-                AND t.user_id = $2
-                AND t.occurred_at >= bp.start_date
-                AND t.occurred_at <= bp.end_date
-            GROUP BY c.category_type
-            "#,
-        )
-        .bind(period_id)
-        .bind(user_id)
-        .fetch_all(&self.pool)
-        .await?;
-
-        let mut total_income = 0i32;
-        let mut total_expense = 0i32;
-
-        for row in rows {
-            let category_type = category_type_from_db(&row.category_type);
-            let amount = row.total_amount as i32;
-
-            match category_type {
-                CategoryType::Incoming => total_income += amount,
-                CategoryType::Outgoing => total_expense += amount,
-                CategoryType::Transfer => {} // Transfers are not counted in summary
-            }
-        }
-
-        let net_difference = total_income - total_expense;
-
-        Ok(TransactionSummary {
-            total_income,
-            total_expense,
-            net_difference,
-        })
-    }
-
     pub async fn get_transaction_stats(&self, period_id: &Uuid, user_id: &Uuid) -> Result<crate::dto::transactions::TransactionStatsResponse, AppError> {
         #[derive(sqlx::FromRow)]
         struct StatsRow {
@@ -653,12 +566,6 @@ impl PostgresRepository {
             net_amount: total_inflows - total_outflows,
             transaction_count,
         })
-    }
-
-    pub async fn list_all_transactions(&self, user_id: &Uuid) -> Result<Vec<Transaction>, AppError> {
-        let query = build_transaction_query("transaction t", &["t.user_id = $1"], "t.occurred_at DESC, t.created_at DESC, t.id DESC");
-        let rows = sqlx::query_as::<_, TransactionRow>(&query).bind(user_id).fetch_all(&self.pool).await?;
-        Ok(rows.into_iter().map(Transaction::from).collect())
     }
 
     pub async fn has_any_transactions(&self, user_id: &Uuid) -> Result<bool, AppError> {

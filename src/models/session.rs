@@ -17,7 +17,4 @@ pub struct SessionUser {
 pub struct SessionInfoFull {
     pub id: Uuid,
     pub created_at: DateTime<Utc>,
-    pub expires_at: DateTime<Utc>,
-    pub user_agent: Option<String>,
-    pub ip_address: Option<String>,
 }

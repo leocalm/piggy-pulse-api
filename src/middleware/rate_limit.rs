@@ -1,34 +1,21 @@
 use std::collections::HashMap;
-use std::net::IpAddr;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::auth::parse_session_cookie_value;
 use crate::config::{RateLimitBackend, RateLimitConfig};
-use rocket::http::{Method, Status};
-use rocket::request::{FromRequest, Outcome, Request};
-use rocket_okapi::r#gen::OpenApiGenerator;
-use rocket_okapi::okapi::openapi3::{RefOr, Response as OpenApiResponse, Responses};
-use rocket_okapi::request::{OpenApiFromRequest, RequestHeaderInput};
 use tokio::sync::Mutex;
 use tracing::warn;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(not(test), allow(dead_code))]
 enum RateLimitBucket {
     Read,
     Mutation,
     Auth,
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 impl RateLimitBucket {
-    fn from_method(method: Method) -> Self {
-        match method {
-            Method::Post | Method::Put | Method::Patch | Method::Delete => RateLimitBucket::Mutation,
-            Method::Get | Method::Head | Method::Options | Method::Trace | Method::Connect => RateLimitBucket::Read,
-        }
-    }
-
     fn as_str(&self) -> &'static str {
         match self {
             RateLimitBucket::Read => "read",
@@ -39,11 +26,13 @@ impl RateLimitBucket {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(not(test), allow(dead_code))]
 enum RateLimitIdentity {
     Ip(String),
     User(String),
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 impl RateLimitIdentity {
     fn key(&self) -> String {
         match self {
@@ -54,18 +43,21 @@ impl RateLimitIdentity {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(not(test), allow(dead_code))]
 struct RateLimitKey {
     identity: RateLimitIdentity,
     bucket: RateLimitBucket,
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(not(test), allow(dead_code))]
 struct Counter {
     window_start: Instant,
     count: u32,
 }
 
 pub(crate) struct RateLimiter {
+    #[cfg_attr(not(test), allow(dead_code))]
     config: RateLimitConfig,
     window: Duration,
     cleanup_interval: Duration,
@@ -74,7 +66,9 @@ pub(crate) struct RateLimiter {
 
 enum RateLimiterBackendImpl {
     Redis {
+        #[allow(dead_code)]
         manager: redis::aio::ConnectionManager,
+        #[allow(dead_code)]
         key_prefix: String,
     },
     InMemory {
@@ -129,6 +123,7 @@ impl RateLimiter {
         });
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     async fn check(&self, identities: &[RateLimitIdentity], bucket: RateLimitBucket) -> RateLimitDecision {
         if identities.is_empty() {
             return RateLimitDecision::Allow;
@@ -140,6 +135,7 @@ impl RateLimiter {
         }
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     fn limit_for_bucket(&self, bucket: RateLimitBucket) -> u32 {
         match bucket {
             RateLimitBucket::Read => self.config.read_limit,
@@ -148,13 +144,13 @@ impl RateLimiter {
         }
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     async fn check_in_memory(
         &self,
         counters: &Mutex<HashMap<RateLimitKey, Counter>>,
         identities: &[RateLimitIdentity],
         bucket: RateLimitBucket,
     ) -> RateLimitDecision {
-        // NOTE: This is a fixed-window counter; bursts can exceed the limit near window boundaries.
         let limit = self.limit_for_bucket(bucket);
         let now = Instant::now();
         let mut counters = counters.lock().await;
@@ -196,6 +192,7 @@ impl RateLimiter {
         RateLimitDecision::Allow
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     async fn check_redis(
         &self,
         manager: &redis::aio::ConnectionManager,
@@ -267,10 +264,8 @@ impl RateLimiter {
         RateLimitDecision::Allow
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     fn redis_failure_decision(&self, bucket: RateLimitBucket) -> RateLimitDecision {
-        // Fail closed for auth endpoints so brute-force protection remains effective
-        // even when Redis is unavailable. Keep read/mutation fail-open to prioritize
-        // availability for already-authenticated usage.
         if bucket == RateLimitBucket::Auth {
             return RateLimitDecision::Limited { retry_after: self.window };
         }
@@ -280,173 +275,20 @@ impl RateLimiter {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(not(test), allow(dead_code))]
 enum RateLimitDecision {
     Allow,
     Limited { retry_after: Duration },
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct RateLimit;
-
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct AuthRateLimit;
-
-#[derive(Debug, Clone, Copy)]
 pub(crate) struct RateLimitRetryAfter(pub u64);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum RateLimitError {
-    TooManyRequests,
-    MissingClientIp,
-}
-
-impl RateLimitError {
-    fn status(self) -> Status {
-        match self {
-            RateLimitError::TooManyRequests => Status::TooManyRequests,
-            RateLimitError::MissingClientIp => Status::BadRequest,
-        }
-    }
-}
-
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for RateLimit {
-    type Error = RateLimitError;
-
-    async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
-        match rate_limit_request(request, RateLimitBucket::from_method(request.method())).await {
-            Outcome::Success(_) => Outcome::Success(RateLimit),
-            Outcome::Error(error) => Outcome::Error(error),
-            Outcome::Forward(status) => Outcome::Forward(status),
-        }
-    }
-}
-
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for AuthRateLimit {
-    type Error = RateLimitError;
-
-    async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
-        match rate_limit_request(request, RateLimitBucket::Auth).await {
-            Outcome::Success(_) => Outcome::Success(AuthRateLimit),
-            Outcome::Error(error) => Outcome::Error(error),
-            Outcome::Forward(status) => Outcome::Forward(status),
-        }
-    }
-}
-
-impl<'a> OpenApiFromRequest<'a> for RateLimit {
-    fn from_request_input(_gen: &mut OpenApiGenerator, _name: String, _required: bool) -> rocket_okapi::Result<RequestHeaderInput> {
-        Ok(RequestHeaderInput::None)
-    }
-
-    fn get_responses(_gen: &mut OpenApiGenerator) -> rocket_okapi::Result<Responses> {
-        too_many_requests_response()
-    }
-}
-
-impl<'a> OpenApiFromRequest<'a> for AuthRateLimit {
-    fn from_request_input(_gen: &mut OpenApiGenerator, _name: String, _required: bool) -> rocket_okapi::Result<RequestHeaderInput> {
-        Ok(RequestHeaderInput::None)
-    }
-
-    fn get_responses(_gen: &mut OpenApiGenerator) -> rocket_okapi::Result<Responses> {
-        too_many_requests_response()
-    }
-}
-
-async fn rate_limit_request(request: &Request<'_>, bucket: RateLimitBucket) -> Outcome<(), RateLimitError> {
-    let limiter = match request.rocket().state::<Arc<RateLimiter>>() {
-        Some(limiter) => limiter,
-        None => return Outcome::Success(()),
-    };
-
-    let request_id = request
-        .local_cache(|| None::<crate::middleware::RequestId>)
-        .as_ref()
-        .map(|r| r.0.as_str())
-        .unwrap_or("unknown");
-
-    let ip = extract_client_ip(request, &limiter.config);
-    if ip.is_none() {
-        warn!(
-            request_id = %request_id,
-            method = %request.method(),
-            uri = %request.uri(),
-            "client ip unavailable for rate limiting"
-        );
-    }
-
-    let mut identities = Vec::new();
-    if let Some(ip) = ip {
-        identities.push(RateLimitIdentity::Ip(ip));
-    }
-    if let Some(user_id) = extract_user_id(request) {
-        identities.push(RateLimitIdentity::User(user_id));
-    }
-
-    if identities.is_empty() {
-        if limiter.config.require_client_ip {
-            return Outcome::Error((RateLimitError::MissingClientIp.status(), RateLimitError::MissingClientIp));
-        }
-        identities.push(RateLimitIdentity::Ip("missing-ip".to_string()));
-    }
-
-    match limiter.check(&identities, bucket).await {
-        RateLimitDecision::Allow => Outcome::Success(()),
-        RateLimitDecision::Limited { retry_after } => {
-            let retry_after_secs = retry_after.as_secs().max(1);
-            request.local_cache(|| Some(RateLimitRetryAfter(retry_after_secs)));
-            warn!(
-                request_id = %request_id,
-                method = %request.method(),
-                uri = %request.uri(),
-                retry_after_secs = %retry_after_secs,
-                "rate limit exceeded"
-            );
-            Outcome::Error((RateLimitError::TooManyRequests.status(), RateLimitError::TooManyRequests))
-        }
-    }
-}
-
-fn extract_client_ip(request: &Request<'_>, config: &RateLimitConfig) -> Option<String> {
-    if config.use_forwarded_ip
-        && let Some(forwarded) = request.headers().get_one(config.forwarded_ip_header.as_str())
-        && let Some(candidate) = forwarded.split(',').next().map(str::trim)
-        && !candidate.is_empty()
-        && IpAddr::from_str(candidate).is_ok()
-    {
-        return Some(candidate.to_string());
-    }
-
-    request.client_ip().map(|addr| addr.to_string())
-}
-
-fn extract_user_id(request: &Request<'_>) -> Option<String> {
-    let cookie = request.cookies().get_private("user")?;
-    let (_, user_id) = parse_session_cookie_value(cookie.value())?;
-    Some(user_id.to_string())
-}
-
-fn too_many_requests_response() -> rocket_okapi::Result<Responses> {
-    let mut responses = Responses::default();
-    responses.responses.insert(
-        "429".to_string(),
-        RefOr::Object(OpenApiResponse {
-            description: "Too Many Requests".to_string(),
-            ..Default::default()
-        }),
-    );
-    Ok(responses)
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::routes::error::too_many_requests;
-    use rocket::http::{ContentType, Status};
-    use rocket::local::asynchronous::Client;
-    use rocket::{catchers, get, routes};
+    use crate::config::RateLimitConfig;
+    use std::time::Duration;
 
     fn in_memory_config() -> RateLimitConfig {
         RateLimitConfig {
@@ -454,11 +296,6 @@ mod tests {
             redis_key_prefix: "test:rate_limit:".to_string(),
             ..RateLimitConfig::default()
         }
-    }
-
-    #[get("/limited")]
-    async fn limited(_rate_limit: RateLimit) -> Status {
-        Status::Ok
     }
 
     #[rocket::async_test]
@@ -555,46 +392,6 @@ mod tests {
 
         assert_eq!(ip_count, 1);
         assert_eq!(user_count, 1);
-    }
-
-    #[test]
-    fn rate_limit_bucket_from_method() {
-        assert_eq!(RateLimitBucket::from_method(Method::Get), RateLimitBucket::Read);
-        assert_eq!(RateLimitBucket::from_method(Method::Head), RateLimitBucket::Read);
-        assert_eq!(RateLimitBucket::from_method(Method::Options), RateLimitBucket::Read);
-        assert_eq!(RateLimitBucket::from_method(Method::Trace), RateLimitBucket::Read);
-        assert_eq!(RateLimitBucket::from_method(Method::Connect), RateLimitBucket::Read);
-        assert_eq!(RateLimitBucket::from_method(Method::Post), RateLimitBucket::Mutation);
-        assert_eq!(RateLimitBucket::from_method(Method::Put), RateLimitBucket::Mutation);
-        assert_eq!(RateLimitBucket::from_method(Method::Patch), RateLimitBucket::Mutation);
-        assert_eq!(RateLimitBucket::from_method(Method::Delete), RateLimitBucket::Mutation);
-    }
-
-    #[rocket::async_test]
-    async fn rate_limit_retry_after_header_is_set() {
-        let mut config = in_memory_config();
-        config.read_limit = 0;
-        config.mutation_limit = 0;
-        config.auth_limit = 0;
-        config.window_seconds = 60;
-        config.cleanup_interval_seconds = 60;
-        config.require_client_ip = false;
-
-        let limiter = Arc::new(RateLimiter::new(config).await.expect("rate limiter"));
-
-        // In `cargo test --release`, Rocket's default profile is `release`, which rejects the default insecure secret key.
-        // Use a deterministic (but non-default) secret key so this test passes under CI's release-mode test run.
-        let rocket = rocket::custom(rocket::Config::figment().merge(("secret_key", "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")))
-            .manage(limiter)
-            .mount("/", routes![limited])
-            .register("/", catchers![too_many_requests]);
-
-        let client = Client::tracked(rocket).await.expect("valid rocket instance");
-        let response = client.get("/limited").dispatch().await;
-
-        assert_eq!(response.status(), Status::TooManyRequests);
-        assert_eq!(response.headers().get_one("Retry-After"), Some("60"));
-        assert_eq!(response.content_type(), Some(ContentType::JSON));
     }
 
     #[cfg(test)]

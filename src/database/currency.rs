@@ -32,22 +32,6 @@ impl PostgresRepository {
         .await?)
     }
 
-    pub async fn get_currencies_by_name(&self, name: &str) -> Result<Vec<Currency>, AppError> {
-        let pattern = format!("%{}%", name);
-
-        Ok(sqlx::query_as::<_, Currency>(
-            r#"
-        SELECT id, name, symbol, currency, decimal_places, symbol_position
-        FROM currency
-        WHERE lower(name) LIKE lower($1)
-        ORDER BY name ASC
-        "#,
-        )
-        .bind(pattern)
-        .fetch_all(&self.pool)
-        .await?)
-    }
-
     pub async fn get_all_currencies(&self) -> Result<Vec<Currency>, AppError> {
         Ok(sqlx::query_as::<_, Currency>(
             r#"

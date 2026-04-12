@@ -422,21 +422,6 @@ impl PostgresRepository {
         Ok(())
     }
 
-    // ===== Manual Exclude Transaction =====
-
-    pub async fn exclude_transaction(&self, overlay_id: &Uuid, transaction_id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
-        // Verify overlay belongs to user
-        let _ = self.get_overlay(overlay_id, user_id).await?;
-
-        sqlx::query("DELETE FROM overlay_transaction_inclusions WHERE overlay_id = $1 AND transaction_id = $2")
-            .bind(overlay_id)
-            .bind(transaction_id)
-            .execute(&self.pool)
-            .await?;
-
-        Ok(())
-    }
-
     // ===== V2: Check Manual Include/Exclude Status =====
 
     pub async fn is_transaction_manually_included(&self, overlay_id: &Uuid, transaction_id: &Uuid) -> Result<bool, AppError> {

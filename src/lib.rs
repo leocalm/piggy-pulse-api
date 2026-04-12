@@ -23,7 +23,6 @@ use crate::routes as app_routes;
 use rocket::fairing::AdHoc;
 use rocket::{Build, Rocket, catchers, http::Method};
 use rocket_cors::{AllowedOrigins, CorsOptions};
-use rocket_okapi::swagger_ui::{SwaggerUIConfig, make_swagger_ui};
 use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
 
@@ -161,13 +160,6 @@ fn build_cors(cors_config: &config::CorsConfig) -> CorsOptions {
     }
 }
 
-fn get_swagger_config(openapi_url: &str) -> SwaggerUIConfig {
-    SwaggerUIConfig {
-        url: openapi_url.to_string(),
-        ..Default::default()
-    }
-}
-
 fn normalize_base_path(raw: &str) -> String {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -196,26 +188,6 @@ fn join_base_path(base_path: &str, path: &str) -> String {
     } else {
         format!("{}/{}", base, suffix)
     }
-}
-
-fn collect_base_paths(api_config: &config::ApiConfig) -> Vec<String> {
-    let mut normalized: Vec<String> = Vec::new();
-    let mut push_unique = |path: String| {
-        if !normalized.contains(&path) {
-            normalized.push(path);
-        }
-    };
-
-    push_unique(normalize_base_path(&api_config.base_path));
-
-    for extra in &api_config.additional_base_paths {
-        let normalized_extra = normalize_base_path(extra);
-        if !normalized_extra.is_empty() {
-            push_unique(normalized_extra);
-        }
-    }
-
-    normalized
 }
 
 fn stage_rate_limiter(rate_limit_config: config::RateLimitConfig) -> AdHoc {
@@ -265,27 +237,7 @@ fn mount_v2_routes(mut rocket: Rocket<Build>, base_path: &str) -> Rocket<Build> 
     rocket
 }
 
-fn mount_api_routes(mut rocket: Rocket<Build>, base_path: &str) -> Rocket<Build> {
-    rocket = rocket.mount(join_base_path(base_path, "accounts"), app_routes::account::routes().0);
-    rocket = rocket.mount(join_base_path(base_path, "users"), app_routes::user::routes().0);
-    rocket = rocket.mount(join_base_path(base_path, ""), app_routes::password_reset::routes().0);
-    rocket = rocket.mount(join_base_path(base_path, "settings"), app_routes::settings::routes().0);
-    rocket = rocket.mount(join_base_path(base_path, "currency"), app_routes::currency::routes().0);
-    rocket = rocket.mount(join_base_path(base_path, "categories"), app_routes::category::routes().0);
-    rocket = rocket.mount(join_base_path(base_path, "budget-categories"), app_routes::budget_category::routes().0);
-    rocket = rocket.mount(join_base_path(base_path, "category-targets"), app_routes::category_target::routes().0);
-    rocket = rocket.mount(join_base_path(base_path, "transactions"), app_routes::transaction::routes().0);
-    rocket = rocket.mount(join_base_path(base_path, "vendors"), app_routes::vendor::routes().0);
-    rocket = rocket.mount(join_base_path(base_path, "health"), app_routes::health::routes().0);
-    rocket = rocket.mount(join_base_path(base_path, "onboarding"), app_routes::onboarding::routes().0);
-    rocket = rocket.mount(join_base_path(base_path, "dashboard"), app_routes::dashboard::routes().0);
-    rocket = rocket.mount(join_base_path(base_path, "budget_period"), app_routes::budget_period::routes().0);
-    rocket = rocket.mount(join_base_path(base_path, "overlays"), app_routes::overlay::routes().0);
-    rocket = rocket.mount(join_base_path(base_path, "two-factor"), app_routes::two_factor::routes().0);
-    rocket = rocket.mount(join_base_path(base_path, ""), app_routes::unlock::routes().0);
-    rocket = rocket.mount(join_base_path(base_path, "auth"), app_routes::token_auth::routes().0);
-    rocket
-}
+// V1 API routes have been removed. All endpoints are now served via V2 routes.
 
 pub fn build_rocket(config: Config) -> Rocket<Build> {
     dotenvy::dotenv().ok();
@@ -296,56 +248,16 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
 
     let cors = build_cors(&config.cors).to_cors().expect("Failed to create CORS fairing");
 
-    let base_paths = collect_base_paths(&config.api);
+    let base_path = normalize_base_path(&config.api.base_path);
 
     let mut rocket = rocket::build()
         .manage(config.clone())
         .attach(stage_rate_limiter(config.rate_limit.clone()))
         .attach(cors)
-        .attach(RequestLogger) // Attach request/response logging middleware
+        .attach(RequestLogger)
         .attach(stage_db(config.database, config.logging.slow_query_ms));
 
-    let (primary_base_path, additional_base_paths) = base_paths.split_first().expect("API base paths must include at least one entry");
-
-    if config.api.expose_docs {
-        let settings = rocket_okapi::settings::OpenApiSettings::default();
-        rocket_okapi::mount_endpoints_and_merged_docs! {
-            rocket, primary_base_path.clone(), settings,
-            "/accounts" => app_routes::account::routes(),
-            "/users" => app_routes::user::routes(),
-            "" => app_routes::password_reset::routes(),
-            "/settings" => app_routes::settings::routes(),
-            "/currency" => app_routes::currency::routes(),
-            "/categories" => app_routes::category::routes(),
-            "/budget-categories" => app_routes::budget_category::routes(),
-            "/category-targets" => app_routes::category_target::routes(),
-            "/transactions" => app_routes::transaction::routes(),
-            "/vendors" => app_routes::vendor::routes(),
-            "/health" => app_routes::health::routes(),
-            "/onboarding" => app_routes::onboarding::routes(),
-            "/dashboard" => app_routes::dashboard::routes(),
-            "/budget_period" => app_routes::budget_period::routes(),
-            "/overlays" => app_routes::overlay::routes(),
-            "/two-factor" => app_routes::two_factor::routes(),
-            "" => app_routes::unlock::routes(),
-            "/auth" => app_routes::token_auth::routes(),
-        }
-        if config.api.expose_swagger_ui {
-            let docs_path = join_base_path(primary_base_path, "docs");
-            let primary_openapi_url = join_base_path(primary_base_path, "openapi.json");
-            rocket = rocket.mount(docs_path, make_swagger_ui(&get_swagger_config(&primary_openapi_url)));
-        }
-    } else {
-        rocket = mount_api_routes(rocket, primary_base_path);
-    }
-
-    // Mount v2 routes at /v2 (primary path only; additional_base_paths are v1-only for now)
-    let v2_base_path = primary_base_path.replace("/v1", "/v2");
-    debug_assert!(
-        v2_base_path != *primary_base_path,
-        "v2 base path must differ from v1 — ensure primary_base_path contains '/v1'"
-    );
-    rocket = mount_v2_routes(rocket, &v2_base_path);
+    rocket = mount_v2_routes(rocket, &base_path);
 
     let all_catchers = catchers![
         app_routes::error::bad_request,
@@ -355,43 +267,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
         app_routes::error::too_many_requests,
     ];
 
-    rocket = rocket.register(primary_base_path.as_str(), all_catchers.clone());
-    rocket = rocket.register(v2_base_path.as_str(), all_catchers.clone());
-
-    for base_path in additional_base_paths {
-        if config.api.expose_docs {
-            let settings = rocket_okapi::settings::OpenApiSettings::default();
-            rocket_okapi::mount_endpoints_and_merged_docs! {
-                    rocket, base_path.clone(), settings,
-                    "/accounts" => app_routes::account::routes(),
-                    "/users" => app_routes::user::routes(),
-                    "" => app_routes::password_reset::routes(),
-                    "/settings" => app_routes::settings::routes(),
-                    "/currency" => app_routes::currency::routes(),
-                    "/categories" => app_routes::category::routes(),
-                "/budget-categories" => app_routes::budget_category::routes(),
-                "/category-targets" => app_routes::category_target::routes(),
-                "/transactions" => app_routes::transaction::routes(),
-                "/vendors" => app_routes::vendor::routes(),
-                "/health" => app_routes::health::routes(),
-                "/onboarding" => app_routes::onboarding::routes(),
-                "/dashboard" => app_routes::dashboard::routes(),
-                "/budget_period" => app_routes::budget_period::routes(),
-                "/overlays" => app_routes::overlay::routes(),
-                "/two-factor" => app_routes::two_factor::routes(),
-                "/auth" => app_routes::token_auth::routes(),
-            }
-            if config.api.expose_swagger_ui {
-                let docs_path = join_base_path(base_path, "docs");
-                let docs_openapi_url = join_base_path(base_path, "openapi.json");
-                rocket = rocket.mount(docs_path, make_swagger_ui(&get_swagger_config(&docs_openapi_url)));
-            }
-        } else {
-            rocket = mount_api_routes(rocket, base_path);
-        }
-
-        rocket = rocket.register(base_path.as_str(), all_catchers.clone());
-    }
+    rocket = rocket.register(base_path.as_str(), all_catchers);
 
     rocket
 }

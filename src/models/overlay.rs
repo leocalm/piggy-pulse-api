@@ -105,41 +105,6 @@ fn validate_overlay_date_range(request: &OverlayRequest) -> Result<(), validator
     Ok(())
 }
 
-// ===== Response DTOs =====
-
-#[derive(Serialize, Debug, JsonSchema)]
-pub struct OverlayResponse {
-    pub id: Uuid,
-    pub name: String,
-    pub icon: Option<String>,
-    pub start_date: NaiveDate,
-    pub end_date: NaiveDate,
-    pub inclusion_mode: InclusionMode,
-    pub total_cap_amount: Option<i64>,
-    pub spent_amount: i64,
-    pub transaction_count: i64,
-    pub category_caps: Vec<OverlayCategoryCap>,
-    pub rules: OverlayRules,
-}
-
-impl From<&OverlayWithMetrics> for OverlayResponse {
-    fn from(overlay_with_metrics: &OverlayWithMetrics) -> Self {
-        Self {
-            id: overlay_with_metrics.overlay.id,
-            name: overlay_with_metrics.overlay.name.clone(),
-            icon: overlay_with_metrics.overlay.icon.clone(),
-            start_date: overlay_with_metrics.overlay.start_date,
-            end_date: overlay_with_metrics.overlay.end_date,
-            inclusion_mode: overlay_with_metrics.overlay.inclusion_mode,
-            total_cap_amount: overlay_with_metrics.overlay.total_cap_amount,
-            spent_amount: overlay_with_metrics.spent_amount,
-            transaction_count: overlay_with_metrics.transaction_count,
-            category_caps: overlay_with_metrics.category_caps.clone(),
-            rules: overlay_with_metrics.overlay.rules.clone(),
-        }
-    }
-}
-
 // ===== Transaction Membership Models =====
 
 #[derive(Serialize, Debug, Clone, JsonSchema)]

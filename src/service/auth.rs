@@ -10,14 +10,6 @@ use chrono::Utc;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-/// What happened during a login attempt.
-pub enum LoginOutcome {
-    /// Credentials valid and session created successfully.
-    Success { session_id: Uuid, user_id: Uuid },
-    /// Credentials valid but 2FA code is required before a session is issued.
-    TwoFactorRequired,
-}
-
 /// What happened during a V2 login attempt.
 pub enum V2LoginOutcome {
     /// Credentials valid and session created successfully.
@@ -34,108 +26,6 @@ pub struct AuthService<'a> {
 impl<'a> AuthService<'a> {
     pub fn new(repo: &'a PostgresRepository, config: &'a Config) -> Self {
         AuthService { repo, config }
-    }
-
-    /// Full login flow. Returns LoginOutcome on success, or AppError on failure.
-    pub async fn login(
-        &self,
-        payload: &crate::models::user::LoginRequest,
-        ip: &str,
-        client_ip: Option<String>,
-        user_agent: Option<String>,
-    ) -> Result<LoginOutcome, AppError> {
-        let user_opt = self.repo.get_user_by_email(&payload.email).await?;
-        let user_id = user_opt.as_ref().map(|u| u.id);
-
-        // Pre-login rate limit check
-        self.check_login_rate_limit(user_id.as_ref(), ip, user_opt.as_ref().map(|u| (u.email.as_str(), u.name.as_str())))
-            .await?;
-
-        let user = match user_opt {
-            Some(u) => u,
-            None => {
-                PostgresRepository::dummy_verify(&payload.password);
-                let _ = self.repo.record_failed_login_attempt(None, ip, &self.config.login_rate_limit).await;
-                let _ = self
-                    .repo
-                    .create_security_audit_log(
-                        None,
-                        audit_events::LOGIN_FAILED,
-                        false,
-                        client_ip,
-                        user_agent,
-                        Some(serde_json::json!({"reason": "user_not_found"})),
-                    )
-                    .await;
-                return Err(AppError::InvalidCredentials);
-            }
-        };
-
-        // Password verification
-        if self.repo.verify_password(&user, &payload.password).await.is_err() {
-            return Err(self.handle_failed_password(&user.id, &user.email, &user.name, ip, client_ip, user_agent).await);
-        }
-
-        // Reset login rate limits on success
-        let _ = self.repo.reset_login_rate_limit(&user.id, ip).await;
-
-        // 2FA check
-        let two_factor = self.repo.get_two_factor_by_user(&user.id).await?;
-        let has_2fa = two_factor.as_ref().map(|tf| tf.is_enabled).unwrap_or(false);
-
-        if has_2fa {
-            let code = match payload.two_factor_code.as_ref() {
-                Some(c) => c,
-                None => return Ok(LoginOutcome::TwoFactorRequired),
-            };
-
-            let two_factor_data = two_factor.unwrap();
-            let backup_code_used = self
-                .verify_two_factor(&user.id, two_factor_data, code, client_ip.clone(), user_agent.clone())
-                .await?;
-
-            if backup_code_used {
-                let _ = self
-                    .repo
-                    .create_security_audit_log(
-                        Some(&user.id),
-                        audit_events::TWO_FACTOR_BACKUP_USED,
-                        true,
-                        client_ip.clone(),
-                        user_agent.clone(),
-                        None,
-                    )
-                    .await;
-            }
-        }
-
-        // Create session
-        let ttl_seconds = self.config.session.ttl_seconds.max(60);
-        let expires_at = chrono::Utc::now() + chrono::Duration::seconds(ttl_seconds);
-        let session = self
-            .repo
-            .create_session(&user.id, expires_at, user_agent.as_deref(), client_ip.as_deref())
-            .await?;
-
-        let _ = self
-            .repo
-            .create_security_audit_log(
-                Some(&user.id),
-                audit_events::LOGIN_SUCCESS,
-                true,
-                client_ip,
-                user_agent,
-                Some(serde_json::json!({
-                    "email": &payload.email,
-                    "2fa_used": has_2fa,
-                })),
-            )
-            .await;
-
-        Ok(LoginOutcome::Success {
-            session_id: session.id,
-            user_id: user.id,
-        })
     }
 
     /// Checks the pre-login rate limit for a user (by id) and IP.
