@@ -1,11 +1,10 @@
 use crate::models::currency::{Currency, CurrencyResponse};
 use chrono::NaiveDate;
 use rocket::serde::{Deserialize, Serialize};
-use schemars::JsonSchema;
 use uuid::Uuid;
 use validator::Validate;
 
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq, Default, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq, Default)]
 pub enum AccountType {
     #[default]
     Checking,
@@ -47,7 +46,7 @@ impl std::fmt::Debug for Account {
     }
 }
 
-#[derive(Deserialize, Debug, Validate, JsonSchema)]
+#[derive(Deserialize, Debug, Validate)]
 pub struct AccountRequest {
     #[validate(length(min = 3))]
     pub name: String,
@@ -66,7 +65,7 @@ pub struct AccountRequest {
     pub payment_due_day: Option<i32>,
 }
 
-#[derive(Deserialize, Debug, Validate, JsonSchema)]
+#[derive(Deserialize, Debug, Validate)]
 pub struct AccountUpdateRequest {
     #[validate(length(min = 3))]
     pub name: String,
@@ -85,7 +84,7 @@ pub struct AccountUpdateRequest {
     pub payment_due_day: Option<i32>,
 }
 
-#[derive(Serialize, Debug, JsonSchema)]
+#[derive(Serialize, Debug)]
 pub struct AccountResponse {
     pub id: Uuid,
     pub name: String,
@@ -131,7 +130,7 @@ pub struct AccountWithMetrics {
     pub transaction_count: i64,
 }
 
-#[derive(Serialize, Debug, JsonSchema)]
+#[derive(Serialize, Debug)]
 pub struct AccountDetailResponse {
     pub balance: i64,
     pub balance_change: i64,
@@ -143,14 +142,14 @@ pub struct AccountDetailResponse {
     pub period_end: NaiveDate,
 }
 
-#[derive(Serialize, Debug, JsonSchema)]
+#[derive(Serialize, Debug)]
 pub struct AccountBalanceHistoryPoint {
     pub date: String, // "YYYY-MM-DD"
     pub balance: i64, // integer cents
     pub transaction_count: i64,
 }
 
-#[derive(Serialize, Debug, JsonSchema)]
+#[derive(Serialize, Debug)]
 pub struct AccountTransactionResponse {
     pub id: Uuid,
     pub amount: i64,
@@ -162,7 +161,7 @@ pub struct AccountTransactionResponse {
     pub running_balance: i64, // cents, server-computed
 }
 
-#[derive(Serialize, Debug, JsonSchema)]
+#[derive(Serialize, Debug)]
 pub struct CategoryImpactItem {
     pub category_id: Uuid,
     pub category_name: String,
@@ -170,7 +169,7 @@ pub struct CategoryImpactItem {
     pub percentage: i32,
 }
 
-#[derive(Serialize, Debug, JsonSchema)]
+#[derive(Serialize, Debug)]
 pub struct AccountStability {
     pub periods_closed_positive: i64,
     pub periods_evaluated: i64,
@@ -181,7 +180,7 @@ pub struct AccountStability {
     pub largest_single_outflow_category: String,
 }
 
-#[derive(Serialize, Debug, JsonSchema)]
+#[derive(Serialize, Debug)]
 pub struct AccountContextResponse {
     pub category_impact: Vec<CategoryImpactItem>,
     pub stability: AccountStability,

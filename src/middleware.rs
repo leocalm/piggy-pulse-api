@@ -1,11 +1,7 @@
-pub mod rate_limit;
-
 use rocket::fairing::{Fairing, Info, Kind};
 use rocket::http::Header;
 use rocket::request::{FromRequest, Outcome, Request};
 use rocket::{Data, Response};
-use rocket_okapi::r#gen::OpenApiGenerator;
-use rocket_okapi::request::{OpenApiFromRequest, RequestHeaderInput};
 use std::time::Instant;
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -177,12 +173,6 @@ impl<'r> FromRequest<'r> for UserAgent {
     }
 }
 
-impl<'a> OpenApiFromRequest<'a> for UserAgent {
-    fn from_request_input(_gen: &mut OpenApiGenerator, _name: String, _required: bool) -> rocket_okapi::Result<RequestHeaderInput> {
-        Ok(RequestHeaderInput::None)
-    }
-}
-
 // ── ClientIp guard ────────────────────────────────────────────────────────────
 
 /// Extracts the client IP address from the incoming request.
@@ -195,12 +185,6 @@ impl<'r> FromRequest<'r> for ClientIp {
     async fn from_request(req: &'r Request<'_>) -> Outcome<Self, ()> {
         let ip = req.client_ip().map(|ip| ip.to_string());
         Outcome::Success(ClientIp(ip))
-    }
-}
-
-impl<'a> OpenApiFromRequest<'a> for ClientIp {
-    fn from_request_input(_gen: &mut OpenApiGenerator, _name: String, _required: bool) -> rocket_okapi::Result<RequestHeaderInput> {
-        Ok(RequestHeaderInput::None)
     }
 }
 

@@ -2,10 +2,6 @@ use rocket::http::Status;
 use rocket::response::Responder;
 use rocket::serde::json::serde_json;
 use rocket::{Request, Response};
-use rocket_okapi::OpenApiError;
-use rocket_okapi::r#gen::OpenApiGenerator;
-use rocket_okapi::okapi::openapi3::Responses;
-use rocket_okapi::response::OpenApiResponderInner;
 use serde::Serialize;
 use std::io::Cursor;
 use thiserror::Error;
@@ -239,49 +235,6 @@ impl<'r> Responder<'r, 'static> for AppError {
             .header(rocket::http::ContentType::JSON)
             .sized_body(body.len(), Cursor::new(body))
             .ok()
-    }
-}
-
-impl OpenApiResponderInner for AppError {
-    fn responses(_gen: &mut OpenApiGenerator) -> Result<Responses, OpenApiError> {
-        use rocket_okapi::okapi::openapi3::{RefOr, Response as OpenApiResponse};
-        let mut responses = Responses::default();
-        responses.responses.insert(
-            "400".to_string(),
-            RefOr::Object(OpenApiResponse {
-                description: "Bad Request".to_string(),
-                ..Default::default()
-            }),
-        );
-        responses.responses.insert(
-            "401".to_string(),
-            RefOr::Object(OpenApiResponse {
-                description: "Unauthorized".to_string(),
-                ..Default::default()
-            }),
-        );
-        responses.responses.insert(
-            "403".to_string(),
-            RefOr::Object(OpenApiResponse {
-                description: "Forbidden".to_string(),
-                ..Default::default()
-            }),
-        );
-        responses.responses.insert(
-            "404".to_string(),
-            RefOr::Object(OpenApiResponse {
-                description: "Not Found".to_string(),
-                ..Default::default()
-            }),
-        );
-        responses.responses.insert(
-            "500".to_string(),
-            RefOr::Object(OpenApiResponse {
-                description: "Internal Server Error".to_string(),
-                ..Default::default()
-            }),
-        );
-        Ok(responses)
     }
 }
 

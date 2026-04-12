@@ -33,7 +33,6 @@ pub fn test_config() -> Config {
     config.database.url = std::env::var("DATABASE_URL").unwrap_or_else(|_| TEST_DB_URL.to_string());
     config.database.max_connections = 2;
     config.database.min_connections = 1;
-    config.rate_limit.require_client_ip = false;
     config.session.cookie_secure = false;
     // Set a valid 2FA encryption key for tests (insecure, debug-only)
     config.two_factor.encryption_key = "0000000000000000000000000000000000000000000000000000000000000000".to_string();

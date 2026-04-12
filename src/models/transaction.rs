@@ -3,7 +3,6 @@ use crate::models::category::{Category, CategoryResponse};
 use crate::models::vendor::{Vendor, VendorResponse};
 use chrono::NaiveDate;
 use rocket::serde::{Deserialize, Serialize};
-use schemars::JsonSchema;
 use uuid::Uuid;
 use validator::Validate;
 
@@ -19,7 +18,7 @@ pub struct Transaction {
     pub vendor: Option<Vendor>,
 }
 
-#[derive(Deserialize, Debug, Validate, JsonSchema)]
+#[derive(Deserialize, Debug, Validate)]
 pub struct TransactionRequest {
     #[validate(range(min = 0))]
     pub amount: i64,
@@ -32,7 +31,7 @@ pub struct TransactionRequest {
     pub vendor_id: Option<Uuid>,
 }
 
-#[derive(Serialize, Debug, JsonSchema)]
+#[derive(Serialize, Debug)]
 pub struct TransactionResponse {
     pub id: Uuid,
     pub amount: i64,
