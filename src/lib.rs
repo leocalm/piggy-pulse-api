@@ -248,7 +248,8 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
 
     let cors = build_cors(&config.cors).to_cors().expect("Failed to create CORS fairing");
 
-    let base_path = normalize_base_path(&config.api.base_path);
+    let configured_base = normalize_base_path(&config.api.base_path);
+    let base_path = configured_base.replace("/v1", "/v2");
 
     let mut rocket = rocket::build()
         .manage(config.clone())
