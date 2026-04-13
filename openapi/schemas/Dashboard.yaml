@@ -419,7 +419,6 @@ UncategorizedResponse:
       items:
         $ref: '#/UncategorizedTransaction'
 
-
 VariableCategoryItem:
   type: object
   required:
@@ -427,9 +426,29 @@ VariableCategoryItem:
     - name
     - budgeted
     - paid
-    - status
+    - progress
   properties:
-
+    id:
+      type: string
+      format: uuid
+      description: Unique identifier of the variable category
+    name:
+      type: string
+      description: Name of the variable category
+    budgeted:
+      type: integer
+      format: int64
+      description: Budgeted amount in cents
+    paid:
+      type: integer
+      format: int64
+      description: Amount paid (from transactions) in cents
+    progress:
+      type: integer
+      format: int64
+      description: Progress towards the target amount, as a percentage
+      minimum: 0
+      maximum: 100
 
 VariableCategoriesResponse:
   type: object

@@ -91,6 +91,10 @@ components:
       $ref: './schemas/Dashboard.yaml#/FixedCategoryItem'
     FixedCategoriesResponse:
       $ref: './schemas/Dashboard.yaml#/FixedCategoriesResponse'
+    VariableCategoryItem:
+      $ref: './schemas/Dashboard.yaml#/VariableCategoryItem'
+    VariableCategoriesResponse:
+      $ref: './schemas/Dashboard.yaml#/VariableCategoriesResponse'
     SubscriptionDisplayStatus:
       $ref: './schemas/Dashboard.yaml#/SubscriptionDisplayStatus'
     DashboardBillingCycle:
@@ -402,6 +406,8 @@ paths:
     $ref: './paths/dashboard@top-vendors.yaml'
   /dashboard/fixed-categories:
     $ref: './paths/dashboard@fixed-categories.yaml'
+  /dashboard/variable-categories:
+    $ref: './paths/dashboard@variable-categories.yaml'
   /dashboard/subscriptions:
     $ref: './paths/dashboard@subscriptions.yaml'
   /dashboard/uncategorized:
