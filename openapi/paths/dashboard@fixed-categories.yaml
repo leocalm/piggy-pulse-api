@@ -5,6 +5,20 @@ get:
   operationId: getDashboardFixedCategories
   parameters:
     - $ref: '../parameters/PeriodId.yaml'
+    - name: responseFormat
+      in: query
+      required: false
+      description: |
+        Optional. Pass `wrapped` to receive the new object response shape
+        with aggregate totals and a `categories` list. Omit (or pass any
+        other value) to receive the legacy flat-array response. This
+        opt-in exists so we can ship the new shape on the backend without
+        breaking existing strict iOS clients; it will be removed once all
+        clients migrate to the wrapped shape.
+      schema:
+        type: string
+        enum:
+          - wrapped
   responses:
     '200':
       description: OK

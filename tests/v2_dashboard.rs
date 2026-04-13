@@ -751,6 +751,95 @@ async fn test_fixed_categories_missing_period_id_returns_400() {
 
 #[rocket::async_test]
 #[ignore = "requires database"]
+async fn test_fixed_categories_wrapped_happy() {
+    use rocket::http::ContentType;
+
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let period_id = create_period(&client, "2026-05-01", "2026-05-31").await;
+    let account_id = create_account(&client, "FCW Checking", 100_000).await;
+
+    let payload = serde_json::json!({
+        "name": "Rent FCW",
+        "type": "expense",
+        "behavior": "fixed",
+        "icon": "🏠",
+        "description": null,
+        "parentId": null
+    });
+    let resp = client
+        .post(format!("{}/categories", V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Created);
+    let cat_body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    let rent_cat_id = cat_body["id"].as_str().unwrap().to_string();
+
+    create_target(&client, &rent_cat_id, 15_000).await;
+    create_transaction(&client, &account_id, &rent_cat_id, 8_000, "2026-05-05").await;
+
+    let resp = client
+        .get(format!("{}/dashboard/fixed-categories?periodId={}&responseFormat=wrapped", V2_BASE, period_id))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+
+    assert_eq!(body["totalBudgeted"], 15_000);
+    assert_eq!(body["totalPaid"], 8_000);
+    let categories = body["categories"].as_array().unwrap();
+    assert_eq!(categories.len(), 1);
+    assert_eq!(categories[0]["name"], "Rent FCW");
+    assert_eq!(categories[0]["budgeted"], 15_000);
+    assert_eq!(categories[0]["paid"], 8_000);
+    assert_eq!(categories[0]["status"], "partial");
+    assert!(categories[0]["id"].is_string());
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_fixed_categories_wrapped_empty_when_no_fixed_categories() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let period_id = create_period(&client, "2026-05-01", "2026-05-31").await;
+    create_category(&client, "Food NoFCW", "expense").await;
+
+    let resp = client
+        .get(format!("{}/dashboard/fixed-categories?periodId={}&responseFormat=wrapped", V2_BASE, period_id))
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["totalBudgeted"], 0);
+    assert_eq!(body["totalPaid"], 0);
+    assert_eq!(body["categories"].as_array().unwrap().len(), 0);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_fixed_categories_unknown_format_returns_legacy() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let period_id = create_period(&client, "2026-05-01", "2026-05-31").await;
+
+    let resp = client
+        .get(format!("{}/dashboard/fixed-categories?periodId={}&responseFormat=garbage", V2_BASE, period_id))
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    assert!(body.is_array(), "unknown responseFormat must fall through to the legacy flat array");
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
 async fn test_fixed_categories_no_auth_returns_401() {
     let client = test_client().await;
 
