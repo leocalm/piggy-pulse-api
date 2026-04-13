@@ -4,7 +4,7 @@ use crate::dto::dashboard::{
     BudgetStabilityResponse, CashFlowResponse, CurrentPeriodHistoryPoint, CurrentPeriodHistoryResponse, CurrentPeriodResponse, FixedCategoriesResponse,
     FixedCategoryItem, FixedCategoryStatus, NetPositionHistoryPoint, NetPositionHistoryResponse, NetPositionResponse, SpendingTrendItem, SpendingTrendResponse,
     SubscriptionBillingCycle, SubscriptionDashboardItem, SubscriptionDisplayStatus, SubscriptionsDashboardResponse, TopVendorItem, TopVendorsResponse,
-    UncategorizedResponse, UncategorizedTransaction,
+    UncategorizedResponse, UncategorizedTransaction, VariableCategoriesResponse, VariableCategoryItem,
 };
 use crate::error::app_error::AppError;
 use uuid::Uuid;
@@ -185,6 +185,38 @@ impl<'a> DashboardService<'a> {
                 }
             })
             .collect())
+    }
+
+    pub async fn get_variable_categories(&self, period_id: &Uuid, user_id: &Uuid) -> Result<VariableCategoriesResponse, AppError> {
+        let rows = self.repository.get_variable_categories_v2(period_id, user_id).await?;
+
+        let mut total_budgeted: i64 = 0;
+        let mut total_paid: i64 = 0;
+        let categories: Vec<VariableCategoryItem> = rows
+            .into_iter()
+            .map(|r| {
+                total_budgeted += r.budgeted;
+                total_paid += r.spent;
+                let progress = if r.budgeted > 0 {
+                    ((r.spent.saturating_mul(100)) / r.budgeted).clamp(0, 100)
+                } else {
+                    0
+                };
+                VariableCategoryItem {
+                    id: r.category_id,
+                    name: r.category_name,
+                    budgeted: r.budgeted,
+                    paid: r.spent,
+                    progress,
+                }
+            })
+            .collect();
+
+        Ok(VariableCategoriesResponse {
+            total_budgeted,
+            total_paid,
+            categories,
+        })
     }
 
     pub async fn get_subscriptions(&self, period_id: &Uuid, user_id: &Uuid) -> Result<SubscriptionsDashboardResponse, AppError> {

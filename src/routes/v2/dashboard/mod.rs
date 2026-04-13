@@ -9,6 +9,7 @@ mod spending_trend;
 mod subscriptions;
 mod top_vendors;
 mod uncategorized;
+mod variable_categories;
 
 pub fn routes() -> Vec<rocket::Route> {
     rocket::routes![
@@ -22,6 +23,7 @@ pub fn routes() -> Vec<rocket::Route> {
         top_vendors::get_top_vendors,
         uncategorized::get_uncategorized,
         fixed_categories::get_fixed_categories,
+        variable_categories::get_variable_categories,
         subscriptions::get_subscriptions,
     ]
 }

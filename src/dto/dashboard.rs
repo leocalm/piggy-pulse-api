@@ -123,6 +123,26 @@ pub struct FixedCategoryItem {
 
 pub type FixedCategoriesResponse = Vec<FixedCategoryItem>;
 
+// ===== VariableCategories =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct VariableCategoryItem {
+    pub id: Uuid,
+    pub name: String,
+    pub budgeted: i64,
+    pub paid: i64,
+    pub progress: i64,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct VariableCategoriesResponse {
+    pub total_budgeted: i64,
+    pub total_paid: i64,
+    pub categories: Vec<VariableCategoryItem>,
+}
+
 // ===== NetPositionHistory =====
 
 #[derive(Serialize, Debug)]

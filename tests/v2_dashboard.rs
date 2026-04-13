@@ -761,3 +761,313 @@ async fn test_fixed_categories_no_auth_returns_401() {
 
     assert_eq!(resp.status(), Status::Unauthorized);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GET /dashboard/variable-categories
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async fn create_variable_category(client: &rocket::local::asynchronous::Client, name: &str) -> String {
+    use rocket::http::ContentType;
+    let payload = serde_json::json!({
+        "name": name,
+        "type": "expense",
+        "behavior": "variable",
+        "icon": "🛒",
+        "description": null,
+        "parentId": null
+    });
+    let resp = client
+        .post(format!("{}/categories", V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Created);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    body["id"].as_str().unwrap().to_string()
+}
+
+async fn create_fixed_category(client: &rocket::local::asynchronous::Client, name: &str) -> String {
+    use rocket::http::ContentType;
+    let payload = serde_json::json!({
+        "name": name,
+        "type": "expense",
+        "behavior": "fixed",
+        "icon": "🏠",
+        "description": null,
+        "parentId": null
+    });
+    let resp = client
+        .post(format!("{}/categories", V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Created);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    body["id"].as_str().unwrap().to_string()
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_variable_categories_returns_wrapped_response() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let period_id = create_period(&client, "2026-04-01", "2026-04-30").await;
+    let account_id = create_account(&client, "VC Checking", 100_000).await;
+
+    // Two variable categories with budgets and partial spending
+    let groceries = create_variable_category(&client, "Groceries VC").await;
+    let dining = create_variable_category(&client, "Dining VC").await;
+
+    create_target(&client, &groceries, 10_000).await;
+    create_target(&client, &dining, 5_000).await;
+
+    create_transaction(&client, &account_id, &groceries, 4_000, "2026-04-05").await;
+    create_transaction(&client, &account_id, &dining, 2_500, "2026-04-10").await;
+
+    let resp = client
+        .get(format!("{}/dashboard/variable-categories?periodId={}", V2_BASE, period_id))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Ok);
+
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+
+    // Wrapped object per OpenAPI spec
+    assert_eq!(body["totalBudgeted"], 15_000);
+    assert_eq!(body["totalPaid"], 6_500);
+
+    let categories = body["categories"].as_array().unwrap();
+    assert_eq!(categories.len(), 2);
+
+    // Sorted alphabetically: Dining, Groceries
+    assert_eq!(categories[0]["name"], "Dining VC");
+    assert_eq!(categories[0]["budgeted"], 5_000);
+    assert_eq!(categories[0]["paid"], 2_500);
+    assert_eq!(categories[0]["progress"], 50);
+    assert!(categories[0]["id"].is_string());
+
+    assert_eq!(categories[1]["name"], "Groceries VC");
+    assert_eq!(categories[1]["budgeted"], 10_000);
+    assert_eq!(categories[1]["paid"], 4_000);
+    assert_eq!(categories[1]["progress"], 40);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_variable_categories_excludes_fixed_categories() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let period_id = create_period(&client, "2026-04-01", "2026-04-30").await;
+    let account_id = create_account(&client, "VC Excl Acct", 100_000).await;
+
+    let variable = create_variable_category(&client, "VarCat Excl").await;
+    let fixed = create_fixed_category(&client, "FixCat Excl").await;
+
+    create_target(&client, &variable, 5_000).await;
+    create_target(&client, &fixed, 8_000).await;
+    create_transaction(&client, &account_id, &variable, 1_000, "2026-04-05").await;
+    create_transaction(&client, &account_id, &fixed, 4_000, "2026-04-06").await;
+
+    let resp = client
+        .get(format!("{}/dashboard/variable-categories?periodId={}", V2_BASE, period_id))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Ok);
+
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    let categories = body["categories"].as_array().unwrap();
+    assert_eq!(categories.len(), 1);
+    assert_eq!(categories[0]["name"], "VarCat Excl");
+    assert_eq!(body["totalBudgeted"], 5_000);
+    assert_eq!(body["totalPaid"], 1_000);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_variable_categories_excludes_income_categories() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let period_id = create_period(&client, "2026-04-01", "2026-04-30").await;
+    let _account_id = create_account(&client, "VC Income Acct", 100_000).await;
+
+    create_variable_category(&client, "Salary VC").await; // would be expense, name only
+    // Create an income category — should be excluded regardless of behavior
+    create_category(&client, "RealSalary", "income").await;
+
+    let resp = client
+        .get(format!("{}/dashboard/variable-categories?periodId={}", V2_BASE, period_id))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Ok);
+
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    let categories = body["categories"].as_array().unwrap();
+    let names: Vec<&str> = categories.iter().map(|c| c["name"].as_str().unwrap()).collect();
+    assert!(names.contains(&"Salary VC"));
+    assert!(!names.contains(&"RealSalary"));
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_variable_categories_progress_clamps_at_100_when_overspent() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let period_id = create_period(&client, "2026-04-01", "2026-04-30").await;
+    let account_id = create_account(&client, "VC Over Acct", 100_000).await;
+
+    let cat = create_variable_category(&client, "Overspent VC").await;
+    create_target(&client, &cat, 5_000).await;
+    create_transaction(&client, &account_id, &cat, 8_000, "2026-04-05").await;
+
+    let resp = client
+        .get(format!("{}/dashboard/variable-categories?periodId={}", V2_BASE, period_id))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Ok);
+
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    let categories = body["categories"].as_array().unwrap();
+    assert_eq!(categories[0]["paid"], 8_000);
+    assert_eq!(categories[0]["budgeted"], 5_000);
+    assert_eq!(categories[0]["progress"], 100, "progress clamps at 100");
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_variable_categories_progress_zero_when_no_budget() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let period_id = create_period(&client, "2026-04-01", "2026-04-30").await;
+    let account_id = create_account(&client, "VC NoBudget Acct", 100_000).await;
+
+    let cat = create_variable_category(&client, "NoBudget VC").await;
+    create_transaction(&client, &account_id, &cat, 3_000, "2026-04-05").await;
+
+    let resp = client
+        .get(format!("{}/dashboard/variable-categories?periodId={}", V2_BASE, period_id))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Ok);
+
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    let categories = body["categories"].as_array().unwrap();
+    assert_eq!(categories[0]["budgeted"], 0);
+    assert_eq!(categories[0]["paid"], 3_000);
+    assert_eq!(categories[0]["progress"], 0, "progress is 0 when no budget");
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_variable_categories_excludes_transactions_outside_period() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let period_id = create_period(&client, "2026-04-01", "2026-04-30").await;
+    let account_id = create_account(&client, "VC Window Acct", 100_000).await;
+
+    let cat = create_variable_category(&client, "Windowed VC").await;
+    create_target(&client, &cat, 10_000).await;
+
+    create_transaction(&client, &account_id, &cat, 1_000, "2026-03-31").await; // before
+    create_transaction(&client, &account_id, &cat, 2_000, "2026-04-15").await; // inside
+    create_transaction(&client, &account_id, &cat, 3_000, "2026-05-01").await; // after
+
+    let resp = client
+        .get(format!("{}/dashboard/variable-categories?periodId={}", V2_BASE, period_id))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Ok);
+
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    let categories = body["categories"].as_array().unwrap();
+    assert_eq!(categories[0]["paid"], 2_000, "only in-period transactions count");
+    assert_eq!(body["totalPaid"], 2_000);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_variable_categories_empty_when_no_variable_categories() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let period_id = create_period(&client, "2026-04-01", "2026-04-30").await;
+    create_fixed_category(&client, "OnlyFixed VC").await;
+
+    let resp = client
+        .get(format!("{}/dashboard/variable-categories?periodId={}", V2_BASE, period_id))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Ok);
+
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["totalBudgeted"], 0);
+    assert_eq!(body["totalPaid"], 0);
+    assert_eq!(body["categories"].as_array().unwrap().len(), 0);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_variable_categories_missing_period_id_returns_400() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let resp = client.get(format!("{}/dashboard/variable-categories", V2_BASE)).dispatch().await;
+    assert_eq!(resp.status(), Status::BadRequest);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_variable_categories_invalid_period_id_returns_400() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let resp = client
+        .get(format!("{}/dashboard/variable-categories?periodId=not-a-uuid", V2_BASE))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::BadRequest);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_variable_categories_no_auth_returns_401() {
+    let client = test_client().await;
+
+    let resp = client
+        .get(format!("{}/dashboard/variable-categories?periodId={}", V2_BASE, uuid::Uuid::new_v4()))
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Unauthorized);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_variable_categories_user_isolation() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let period_id = create_period(&client, "2026-04-01", "2026-04-30").await;
+    let account_id = create_account(&client, "Iso VC Acct", 100_000).await;
+    let cat = create_variable_category(&client, "Iso VC").await;
+    create_target(&client, &cat, 5_000).await;
+    create_transaction(&client, &account_id, &cat, 2_000, "2026-04-05").await;
+
+    // Switch to a different user
+    create_user_and_login(&client).await;
+
+    // The second user should not see the first user's variable categories
+    let resp = client
+        .get(format!("{}/dashboard/variable-categories?periodId={}", V2_BASE, period_id))
+        .dispatch()
+        .await;
+    // The period belongs to the first user; the second user should get a 404
+    // (period not found) — matching the fixed-categories behavior.
+    assert_eq!(resp.status(), Status::NotFound);
+}

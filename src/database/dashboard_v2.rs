@@ -96,6 +96,15 @@ pub struct FixedCategoryRow {
     pub budgeted: i64,
 }
 
+/// Row returned by variable-categories query.
+#[derive(sqlx::FromRow)]
+pub struct VariableCategoryRow {
+    pub category_id: Uuid,
+    pub category_name: String,
+    pub spent: i64,
+    pub budgeted: i64,
+}
+
 /// One point in the net-position history series (one calendar day).
 #[derive(sqlx::FromRow)]
 pub struct NetPositionHistoryRow {
@@ -767,6 +776,40 @@ WHERE c.user_id = $2
   AND c.behavior = 'fixed'
   AND c.is_archived = false
 GROUP BY c.id, c.name, c.icon, bc.budgeted_value, bp.start_date, bp.end_date
+ORDER BY c.name
+            "#,
+        )
+        .bind(period_id)
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows)
+    }
+
+    /// Fetch variable categories with spent vs budgeted amounts for a period.
+    pub async fn get_variable_categories_v2(&self, period_id: &Uuid, user_id: &Uuid) -> Result<Vec<VariableCategoryRow>, AppError> {
+        self.get_budget_period(period_id, user_id).await?;
+
+        let rows = sqlx::query_as::<_, VariableCategoryRow>(
+            r#"
+SELECT
+    c.id AS category_id,
+    c.name AS category_name,
+    COALESCE(SUM(CASE
+        WHEN t.occurred_at >= bp.start_date AND t.occurred_at <= bp.end_date THEN t.amount
+        ELSE 0
+    END), 0)::bigint AS spent,
+    COALESCE(bc.budgeted_value, 0)::bigint AS budgeted
+FROM category c
+JOIN budget_period bp ON bp.id = $1 AND bp.user_id = $2
+LEFT JOIN transaction t ON t.category_id = c.id AND t.user_id = $2
+LEFT JOIN budget_category bc ON bc.category_id = c.id AND bc.user_id = $2
+WHERE c.user_id = $2
+  AND c.category_type = 'Outgoing'
+  AND c.behavior = 'variable'
+  AND c.is_archived = false
+GROUP BY c.id, c.name, bc.budgeted_value, bp.start_date, bp.end_date
 ORDER BY c.name
             "#,
         )
