@@ -266,6 +266,38 @@ FixedCategoryStatus:
     - pending
 
 FixedCategoryItem:
+  description: |
+    Legacy flat-array item shape returned when the `responseFormat` query
+    parameter is absent or any value other than `wrapped`. Retained for
+    backwards compatibility with existing iOS clients.
+  type: object
+  required:
+    - categoryId
+    - categoryName
+    - categoryIcon
+    - status
+    - spent
+    - budgeted
+  properties:
+    categoryId:
+      type: string
+      format: uuid
+    categoryName:
+      type: string
+    categoryIcon:
+      type: string
+    status:
+      $ref: '#/FixedCategoryStatus'
+    spent:
+      type: integer
+      format: int64
+      description: Amount spent (from transactions) in cents
+    budgeted:
+      type: integer
+      format: int64
+      description: Budgeted amount in cents
+
+FixedCategoryItemWrapped:
   type: object
   required:
     - id
@@ -290,7 +322,18 @@ FixedCategoryItem:
     status:
       $ref: '#/FixedCategoryStatus'
 
-FixedCategoriesResponse:
+FixedCategoriesLegacyResponse:
+  description: |
+    Legacy flat-array response shape. Returned when `responseFormat` is
+    omitted or set to anything other than `wrapped`.
+  type: array
+  items:
+    $ref: '#/FixedCategoryItem'
+
+FixedCategoriesResponseWrapped:
+  description: |
+    New wrapped response shape with aggregate totals and a `categories`
+    list. Returned when `responseFormat=wrapped` is passed.
   type: object
   required:
     - totalBudgeted
@@ -308,7 +351,17 @@ FixedCategoriesResponse:
     categories:
       type: array
       items:
-        $ref: '#/FixedCategoryItem'
+        $ref: '#/FixedCategoryItemWrapped'
+
+FixedCategoriesResponse:
+  description: |
+    Either the legacy flat-array shape or the new wrapped shape, depending
+    on the `responseFormat` query parameter. See individual schemas for
+    details. The server will eventually collapse to the wrapped shape
+    once all clients have migrated.
+  oneOf:
+    - $ref: '#/FixedCategoriesLegacyResponse'
+    - $ref: '#/FixedCategoriesResponseWrapped'
 
 SubscriptionDisplayStatus:
   type: string

@@ -2,9 +2,10 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::dto::common::Date;
 use crate::dto::dashboard::{
     BudgetStabilityResponse, CashFlowResponse, CurrentPeriodHistoryPoint, CurrentPeriodHistoryResponse, CurrentPeriodResponse, FixedCategoriesResponse,
-    FixedCategoryItem, FixedCategoryStatus, NetPositionHistoryPoint, NetPositionHistoryResponse, NetPositionResponse, SpendingTrendItem, SpendingTrendResponse,
-    SubscriptionBillingCycle, SubscriptionDashboardItem, SubscriptionDisplayStatus, SubscriptionsDashboardResponse, TopVendorItem, TopVendorsResponse,
-    UncategorizedResponse, UncategorizedTransaction, VariableCategoriesResponse, VariableCategoryItem,
+    FixedCategoriesResponseWrapped, FixedCategoryItem, FixedCategoryItemWrapped, FixedCategoryStatus, NetPositionHistoryPoint, NetPositionHistoryResponse,
+    NetPositionResponse, SpendingTrendItem, SpendingTrendResponse, SubscriptionBillingCycle, SubscriptionDashboardItem, SubscriptionDisplayStatus,
+    SubscriptionsDashboardResponse, TopVendorItem, TopVendorsResponse, UncategorizedResponse, UncategorizedTransaction, VariableCategoriesResponse,
+    VariableCategoryItem,
 };
 use crate::error::app_error::AppError;
 use uuid::Uuid;
@@ -185,6 +186,40 @@ impl<'a> DashboardService<'a> {
                 }
             })
             .collect())
+    }
+
+    pub async fn get_fixed_categories_wrapped(&self, period_id: &Uuid, user_id: &Uuid) -> Result<FixedCategoriesResponseWrapped, AppError> {
+        let rows = self.repository.get_fixed_categories_v2(period_id, user_id).await?;
+
+        let mut total_budgeted: i64 = 0;
+        let mut total_paid: i64 = 0;
+        let categories: Vec<FixedCategoryItemWrapped> = rows
+            .into_iter()
+            .map(|r| {
+                total_budgeted += r.budgeted;
+                total_paid += r.spent;
+                let status = if r.spent == 0 {
+                    FixedCategoryStatus::Pending
+                } else if r.budgeted > 0 && r.spent < r.budgeted {
+                    FixedCategoryStatus::Partial
+                } else {
+                    FixedCategoryStatus::Paid
+                };
+                FixedCategoryItemWrapped {
+                    id: r.category_id,
+                    name: r.category_name,
+                    budgeted: r.budgeted,
+                    paid: r.spent,
+                    status,
+                }
+            })
+            .collect();
+
+        Ok(FixedCategoriesResponseWrapped {
+            total_budgeted,
+            total_paid,
+            categories,
+        })
     }
 
     pub async fn get_variable_categories(&self, period_id: &Uuid, user_id: &Uuid) -> Result<VariableCategoriesResponse, AppError> {
