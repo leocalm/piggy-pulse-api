@@ -577,6 +577,54 @@ async fn test_overlay_transactions_outside_range_excluded() {
     assert!(!ids.contains(&_out_id.as_str()), "Out-of-range transaction should not appear");
 }
 
+/// Regression test for PIG-265. Listing overlay transactions used to 500 when
+/// any in-range transaction had a vendor attached, because the simple vendor
+/// fetcher selected the wrong columns and SQLx failed to decode the row.
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_overlay_transactions_with_vendor_does_not_500() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let overlay = create_simple_overlay(&client, "Vendor Txs", "2027-03-01", "2027-03-31", "all").await;
+    let overlay_id = overlay["id"].as_str().unwrap();
+
+    let account_id = common::entities::create_account(&client, "Vendor Acc", 500000).await;
+    let category_id = common::entities::create_category(&client, "Vendor Cat", "expense").await;
+    let vendor_id = common::entities::create_vendor(&client, "Vendor Inc").await;
+    let tx_id = common::entities::create_transaction_with_vendor(&client, &account_id, &category_id, 4200, "2027-03-10", &vendor_id).await;
+
+    let resp = client.get(format!("{}/overlays/{}/transactions", V2_BASE, overlay_id)).dispatch().await;
+    assert_eq!(resp.status(), Status::Ok, "endpoint must not 500 when transactions have a vendor");
+
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    let data = body["data"].as_array().unwrap();
+    let found = data.iter().find(|t| t["id"].as_str().unwrap() == tx_id).expect("vendor transaction missing");
+    assert_eq!(found["amount"], 4200);
+    assert_eq!(found["vendor"]["id"], vendor_id);
+    assert_eq!(found["vendor"]["name"], "Vendor Inc");
+    assert_eq!(found["membership"]["isIncluded"], true);
+}
+
+/// Empty-list case for PIG-265: an overlay with no in-range transactions must
+/// return 200 with an empty `data` array, never a 500.
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_overlay_transactions_empty_returns_200() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let overlay = create_simple_overlay(&client, "Empty Txs", "2027-04-01", "2027-04-30", "all").await;
+    let overlay_id = overlay["id"].as_str().unwrap();
+
+    let resp = client.get(format!("{}/overlays/{}/transactions", V2_BASE, overlay_id)).dispatch().await;
+    assert_eq!(resp.status(), Status::Ok);
+
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["data"].as_array().unwrap().len(), 0);
+    assert_eq!(body["totalCount"], 0);
+}
+
 #[rocket::async_test]
 #[ignore = "requires database"]
 async fn test_overlay_transactions_not_found() {

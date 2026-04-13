@@ -807,7 +807,7 @@ impl PostgresRepository {
     async fn get_vendor_by_id_simple(&self, vendor_id: &Uuid, user_id: &Uuid) -> Result<crate::models::vendor::Vendor, AppError> {
         let vendor = sqlx::query_as::<_, crate::models::vendor::Vendor>(
             r#"
-            SELECT id, user_id, name, created_at
+            SELECT id, name, description, archived
             FROM vendor
             WHERE id = $1 AND user_id = $2
             "#,

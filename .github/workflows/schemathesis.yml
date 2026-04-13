@@ -263,8 +263,6 @@ jobs:
             --exclude-path "/dashboard/fixed-categories" \
             `# PIG-264: PUT /subscriptions/{id} returns 500 — re-enable once fixed.` \
             --exclude-operation-id "updateSubscription" \
-            `# PIG-265: GET /overlays/{id}/transactions returns 500 — re-enable once fixed.` \
-            --exclude-operation-id "listOverlayTransactions" \
             `# PIG-266: PUT /categories/{id} returns 500 — re-enable once fixed.` \
             --exclude-operation-id "updateCategory" \
             `# DELETE endpoints destroy the seed data mid-run and then cascade` \
