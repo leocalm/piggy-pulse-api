@@ -309,7 +309,13 @@ RETURNING id, name, category_id, vendor_id, billing_amount,
         .bind(req.billing_day)
         .bind(req.next_charge_date.0)
         .fetch_optional(&self.pool)
-        .await?;
+        .await
+        .map_err(|e| match &e {
+            sqlx::Error::Database(db_err) if db_err.is_foreign_key_violation() => {
+                AppError::BadRequest("Referenced category or vendor does not exist".to_string())
+            }
+            _ => e.into(),
+        })?;
 
         Ok(row.map(row_to_response))
     }
