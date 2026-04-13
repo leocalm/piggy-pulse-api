@@ -269,7 +269,29 @@ impl PostgresRepository {
             }
         }
 
-        let row = sqlx::query_as::<_, CategoryRow>(
+        // Pre-check name uniqueness so that the duplicate-name case returns a
+        // clean 400 even before the UPDATE hits the `(user_id, name)` unique
+        // constraint (which we also map defensively below).
+        let name_exists: bool = sqlx::query_scalar(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM category
+                WHERE user_id = $1 AND name = $2 AND id <> $3
+            )
+            "#,
+        )
+        .bind(user_id)
+        .bind(&request.name)
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await?;
+
+        if name_exists {
+            return Err(AppError::BadRequest("Category name already exists".to_string()));
+        }
+
+        let row_result = sqlx::query_as::<_, CategoryRow>(
             r#"
             UPDATE category
             SET name = $1, color = $2, icon = $3, parent_id = $4, category_type = $5::text::category_type,
@@ -290,8 +312,16 @@ impl PostgresRepository {
         .bind(user_id)
         .bind(request.behavior.as_deref())
         .fetch_optional(&mut *tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Category not found".to_string()))?;
+        .await;
+
+        let row = match row_result {
+            Ok(Some(row)) => row,
+            Ok(None) => return Err(AppError::NotFound("Category not found".to_string())),
+            Err(err) if is_unique_violation(&err) => {
+                return Err(AppError::BadRequest("Category name already exists".to_string()));
+            }
+            Err(err) => return Err(err.into()),
+        };
 
         let category = Category::from(row);
 

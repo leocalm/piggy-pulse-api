@@ -387,6 +387,95 @@ async fn test_update_category_persists_via_get() {
 
 #[rocket::async_test]
 #[ignore = "requires database"]
+async fn test_update_category_with_target_full_payload() {
+    // PIG-266 regression: PUT /v2/categories/{id} with the full spec-compliant
+    // payload (including `target` and `color`) must not 500.
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+    let cat_id = common::entities::create_category(&client, "Groceries", "expense").await;
+
+    let payload = json!({
+        "name": "Groceries",
+        "type": "expense",
+        "icon": "🛒",
+        "color": "#FF0000",
+        "description": "Monthly grocery shopping",
+        "behavior": "variable",
+        "parentId": null,
+        "target": 15000
+    });
+
+    let resp = client
+        .put(format!("{}/categories/{}", V2_BASE, cat_id))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["name"], "Groceries");
+    assert_eq!(body["icon"], "🛒");
+    assert_eq!(body["behavior"], "variable");
+    // Color is computed server-side, not taken from payload.
+    assert_eq!(body["color"], "#D4A0B6");
+    assert_eq!(body["target"], 15000);
+
+    // Second update exercises the upsert path on the existing target row.
+    let payload2 = json!({
+        "name": "Groceries",
+        "type": "expense",
+        "icon": "🛒",
+        "description": "Monthly grocery shopping",
+        "behavior": "variable",
+        "parentId": null,
+        "target": 20000
+    });
+    let resp2 = client
+        .put(format!("{}/categories/{}", V2_BASE, cat_id))
+        .header(ContentType::JSON)
+        .body(payload2.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(resp2.status(), Status::Ok);
+    let body2: Value = serde_json::from_str(&resp2.into_string().await.unwrap()).unwrap();
+    assert_eq!(body2["target"], 20000);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_update_category_with_target_duplicate_name_returns_400() {
+    // PIG-266 regression: a PUT that would collide with another category's
+    // name on the unique `(user_id, name)` constraint used to reach the
+    // UPDATE and bubble up as a 500. It must return a clean 400 instead.
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+    let _first = common::entities::create_category(&client, "Groceries", "expense").await;
+    let second = common::entities::create_category(&client, "Rent", "expense").await;
+
+    let payload = json!({
+        "name": "Groceries",
+        "type": "expense",
+        "icon": "🛒",
+        "color": "#FF0000",
+        "description": null,
+        "behavior": "variable",
+        "parentId": null,
+        "target": 15000
+    });
+
+    let resp = client
+        .put(format!("{}/categories/{}", V2_BASE, second))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::BadRequest);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
 async fn test_update_category_not_found() {
     let client = test_client().await;
     create_user_and_login(&client).await;
