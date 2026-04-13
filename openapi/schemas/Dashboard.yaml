@@ -418,3 +418,35 @@ UncategorizedResponse:
       type: array
       items:
         $ref: '#/UncategorizedTransaction'
+
+
+VariableCategoryItem:
+  type: object
+  required:
+    - id
+    - name
+    - budgeted
+    - paid
+    - status
+  properties:
+
+
+VariableCategoriesResponse:
+  type: object
+  required:
+    - totalBudgeted
+    - totalPaid
+    - categories
+  properties:
+    totalBudgeted:
+      type: integer
+      format: int64
+      description: Total budgeted across all variable categories in cents
+    totalPaid:
+      type: integer
+      format: int64
+      description: Total paid across all variable categories in cents
+    categories:
+      type: array
+      items:
+        $ref: '#/VariableCategoryItem'
