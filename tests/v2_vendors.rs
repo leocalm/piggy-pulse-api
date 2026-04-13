@@ -317,6 +317,62 @@ async fn test_delete_vendor_then_gone_from_list() {
 
 #[rocket::async_test]
 #[ignore = "requires database"]
+async fn test_delete_vendor_with_transactions_is_blocked() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    // Set up: account, expense category, vendor, period, transaction
+    let account_id = common::entities::create_account(&client, "Main", 100_000).await;
+    let category_id = common::entities::create_category(&client, "Groceries", "expense").await;
+    let vendor_id = common::entities::create_vendor(&client, "Albert Heijn").await;
+    let _ = common::entities::create_period(&client, "2026-04-01", "2026-04-30").await;
+    let _txn_id = common::entities::create_transaction_with_vendor(&client, &account_id, &category_id, 2500, "2026-04-15", &vendor_id).await;
+
+    // Attempt to delete the vendor — should be rejected
+    let resp = client.delete(format!("{}/vendors/{}", V2_BASE, vendor_id)).dispatch().await;
+    assert_eq!(resp.status(), Status::BadRequest);
+
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    let message = body["message"].as_str().unwrap_or("");
+    assert!(
+        message.contains("Cannot delete vendor with existing transactions"),
+        "expected archive-instead error, got: {}",
+        message
+    );
+
+    // Vendor must still exist in the list
+    let list_resp = client.get(format!("{}/vendors", V2_BASE)).dispatch().await;
+    let list_body: Value = serde_json::from_str(&list_resp.into_string().await.unwrap()).unwrap();
+    let data = list_body["data"].as_array().unwrap();
+    let found = data.iter().any(|v| v["id"].as_str().unwrap() == vendor_id);
+    assert!(found, "Vendor should still exist after blocked delete");
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_delete_vendor_after_archive_when_used_is_still_blocked() {
+    // Archiving a vendor does NOT permit hard delete — the transactions still
+    // reference it. This locks in current behavior.
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let account_id = common::entities::create_account(&client, "Main", 100_000).await;
+    let category_id = common::entities::create_category(&client, "Groceries", "expense").await;
+    let vendor_id = common::entities::create_vendor(&client, "Lidl").await;
+    let _ = common::entities::create_period(&client, "2026-04-01", "2026-04-30").await;
+    let _txn_id = common::entities::create_transaction_with_vendor(&client, &account_id, &category_id, 1500, "2026-04-10", &vendor_id).await;
+
+    // Archive the vendor first
+    let archive_resp = client.post(format!("{}/vendors/{}/archive", V2_BASE, vendor_id)).dispatch().await;
+    assert_eq!(archive_resp.status(), Status::Ok);
+
+    // Hard delete should still be blocked
+    let resp = client.delete(format!("{}/vendors/{}", V2_BASE, vendor_id)).dispatch().await;
+    assert_eq!(resp.status(), Status::BadRequest);
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
 async fn test_delete_vendor_not_found() {
     let client = test_client().await;
     create_user_and_login(&client).await;

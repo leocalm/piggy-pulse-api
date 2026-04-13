@@ -123,6 +123,26 @@ impl PostgresRepository {
     }
 
     pub async fn delete_vendor(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
+        // Refuse deletion if any transactions still reference this vendor.
+        // Mirrors the behavior of accounts and categories: archive instead.
+        let transaction_count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)::bigint
+            FROM transaction
+            WHERE vendor_id = $1 AND user_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        if transaction_count > 0 {
+            return Err(AppError::BadRequest(
+                "Cannot delete vendor with existing transactions. Archive it instead.".to_string(),
+            ));
+        }
+
         sqlx::query("DELETE FROM vendor WHERE id = $1 AND user_id = $2")
             .bind(id)
             .bind(user_id)
