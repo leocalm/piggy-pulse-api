@@ -258,8 +258,6 @@ jobs:
             --max-examples 10 \
             --exclude-path "/auth/logout" \
             --exclude-path "/auth/refresh" \
-            `# PIG-264: PUT /subscriptions/{id} returns 500 — re-enable once fixed.` \
-            --exclude-operation-id "updateSubscription" \
             `# PIG-266: PUT /categories/{id} returns 500 — re-enable once fixed.` \
             --exclude-operation-id "updateCategory" \
             `# DELETE endpoints destroy the seed data mid-run and then cascade` \

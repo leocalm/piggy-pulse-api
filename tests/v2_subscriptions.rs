@@ -335,6 +335,41 @@ async fn test_update_subscription_not_found_returns_404() {
     assert_eq!(resp.status(), Status::NotFound);
 }
 
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_update_subscription_invalid_category_returns_400() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let cat_id = create_category(&client, "Original Cat", "expense").await;
+    let sub_id = create_subscription(&client, "Sub To Update", &cat_id, 500, "monthly", "2026-04-01").await;
+
+    // Reference a category id that does not exist for this user.
+    let update = serde_json::json!({
+        "name": "Sub To Update",
+        "categoryId": "00000000-0000-0000-0000-0000000000aa",
+        "vendorId": null,
+        "billingAmount": 500,
+        "billingCycle": "monthly",
+        "billingDay": 1,
+        "nextChargeDate": "2026-04-01"
+    });
+
+    let resp = client
+        .put(format!("{}/subscriptions/{}", V2_BASE, sub_id))
+        .header(ContentType::JSON)
+        .body(update.to_string())
+        .dispatch()
+        .await;
+
+    // Foreign key violation must be mapped to a client error, not a 500.
+    assert!(
+        resp.status() == Status::BadRequest || resp.status() == Status::NotFound,
+        "expected 400 or 404, got {}",
+        resp.status()
+    );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // DELETE /subscriptions/{id}
 // ═══════════════════════════════════════════════════════════════════════════════
