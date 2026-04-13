@@ -91,7 +91,6 @@ pub struct UncategorizedRow {
 pub struct FixedCategoryRow {
     pub category_id: Uuid,
     pub category_name: String,
-    pub category_icon: String,
     pub spent: i64,
     pub budgeted: i64,
 }
@@ -761,7 +760,6 @@ ORDER BY ds.day
 SELECT
     c.id AS category_id,
     c.name AS category_name,
-    COALESCE(c.icon, '') AS category_icon,
     COALESCE(SUM(CASE
         WHEN t.occurred_at >= bp.start_date AND t.occurred_at <= bp.end_date THEN t.amount
         ELSE 0
@@ -775,7 +773,7 @@ WHERE c.user_id = $2
   AND c.category_type = 'Outgoing'
   AND c.behavior = 'fixed'
   AND c.is_archived = false
-GROUP BY c.id, c.name, c.icon, bc.budgeted_value, bp.start_date, bp.end_date
+GROUP BY c.id, c.name, bc.budgeted_value, bp.start_date, bp.end_date
 ORDER BY c.name
             "#,
         )

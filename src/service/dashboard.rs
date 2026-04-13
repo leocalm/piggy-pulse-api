@@ -165,9 +165,14 @@ impl<'a> DashboardService<'a> {
 
     pub async fn get_fixed_categories(&self, period_id: &Uuid, user_id: &Uuid) -> Result<FixedCategoriesResponse, AppError> {
         let rows = self.repository.get_fixed_categories_v2(period_id, user_id).await?;
-        Ok(rows
+
+        let mut total_budgeted: i64 = 0;
+        let mut total_paid: i64 = 0;
+        let categories: Vec<FixedCategoryItem> = rows
             .into_iter()
             .map(|r| {
+                total_budgeted += r.budgeted;
+                total_paid += r.spent;
                 let status = if r.spent == 0 {
                     FixedCategoryStatus::Pending
                 } else if r.budgeted > 0 && r.spent < r.budgeted {
@@ -176,15 +181,20 @@ impl<'a> DashboardService<'a> {
                     FixedCategoryStatus::Paid
                 };
                 FixedCategoryItem {
-                    category_id: r.category_id,
-                    category_name: r.category_name,
-                    category_icon: r.category_icon,
-                    status,
-                    spent: r.spent,
+                    id: r.category_id,
+                    name: r.category_name,
                     budgeted: r.budgeted,
+                    paid: r.spent,
+                    status,
                 }
             })
-            .collect())
+            .collect();
+
+        Ok(FixedCategoriesResponse {
+            total_budgeted,
+            total_paid,
+            categories,
+        })
     }
 
     pub async fn get_variable_categories(&self, period_id: &Uuid, user_id: &Uuid) -> Result<VariableCategoriesResponse, AppError> {

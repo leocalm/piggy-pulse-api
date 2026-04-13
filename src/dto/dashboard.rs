@@ -113,15 +113,20 @@ pub enum FixedCategoryStatus {
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct FixedCategoryItem {
-    pub category_id: Uuid,
-    pub category_name: String,
-    pub category_icon: String,
-    pub status: FixedCategoryStatus,
-    pub spent: i64,
+    pub id: Uuid,
+    pub name: String,
     pub budgeted: i64,
+    pub paid: i64,
+    pub status: FixedCategoryStatus,
 }
 
-pub type FixedCategoriesResponse = Vec<FixedCategoryItem>;
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FixedCategoriesResponse {
+    pub total_budgeted: i64,
+    pub total_paid: i64,
+    pub categories: Vec<FixedCategoryItem>,
+}
 
 // ===== VariableCategories =====
 

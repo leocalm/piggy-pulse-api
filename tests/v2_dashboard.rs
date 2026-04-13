@@ -679,12 +679,14 @@ async fn test_fixed_categories_happy() {
         .await;
     assert_eq!(resp.status(), Status::Ok);
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
-    let items = body.as_array().unwrap();
+    let items = body["categories"].as_array().unwrap();
     assert_eq!(items.len(), 1, "only fixed categories returned");
-    assert_eq!(items[0]["categoryName"], "Rent FC");
+    assert_eq!(items[0]["name"], "Rent FC");
     assert_eq!(items[0]["status"], "pending");
-    assert_eq!(items[0]["spent"], 0);
+    assert_eq!(items[0]["paid"], 0);
     assert_eq!(items[0]["budgeted"], 15_000);
+    assert_eq!(body["totalBudgeted"], 15_000);
+    assert_eq!(body["totalPaid"], 0);
 
     // Add a partial payment (less than target)
     create_transaction(&client, &account_id, &rent_cat_id, 8_000, "2026-03-05").await;
@@ -695,9 +697,11 @@ async fn test_fixed_categories_happy() {
         .await;
     assert_eq!(resp.status(), Status::Ok);
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
-    let items = body.as_array().unwrap();
+    let items = body["categories"].as_array().unwrap();
     assert_eq!(items[0]["status"], "partial");
-    assert_eq!(items[0]["spent"], 8_000);
+    assert_eq!(items[0]["paid"], 8_000);
+    assert_eq!(body["totalPaid"], 8_000);
+    assert_eq!(body["totalBudgeted"], 15_000);
 
     // Pay full amount
     create_transaction(&client, &account_id, &rent_cat_id, 7_000, "2026-03-06").await;
@@ -708,14 +712,15 @@ async fn test_fixed_categories_happy() {
         .await;
     assert_eq!(resp.status(), Status::Ok);
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
-    let items = body.as_array().unwrap();
+    let items = body["categories"].as_array().unwrap();
     assert_eq!(items[0]["status"], "paid");
-    assert_eq!(items[0]["spent"], 15_000);
+    assert_eq!(items[0]["paid"], 15_000);
+    assert_eq!(body["totalPaid"], 15_000);
 
     // The variable category should NOT appear
     let _ = expense_cat; // ensure it was created
     for item in items {
-        assert_ne!(item["categoryName"], "Groceries FC");
+        assert_ne!(item["name"], "Groceries FC");
     }
 }
 
@@ -736,7 +741,9 @@ async fn test_fixed_categories_empty_when_no_fixed_categories() {
 
     assert_eq!(resp.status(), Status::Ok);
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
-    assert_eq!(body.as_array().unwrap().len(), 0);
+    assert_eq!(body["categories"].as_array().unwrap().len(), 0);
+    assert_eq!(body["totalBudgeted"], 0);
+    assert_eq!(body["totalPaid"], 0);
 }
 
 #[rocket::async_test]
