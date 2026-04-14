@@ -677,53 +677,28 @@ impl PostgresRepository {
             period_end: NaiveDate,
         }
 
+        // All metrics come from account_daily_delta summed over the period.
+        // `inflow`/`outflow` on account_daily_delta already follow the
+        // from/to semantics used by the legacy query (Incoming credits the
+        // from account; Outgoing/Transfer-out debit it; Transfer-in credits
+        // the to account), so a raw sum matches the legacy classification.
         let row = sqlx::query_as::<_, DetailRow>(
             r#"
-WITH period AS (
-    SELECT start_date, end_date
-    FROM budget_period
-    WHERE id = $2 AND user_id = $3
-),
-period_txs AS (
-    SELECT
-        t.amount,
-        c.category_type,
-        t.from_account_id,
-        t.to_account_id
-    FROM transaction t
-    JOIN category c ON c.id = t.category_id
-    CROSS JOIN period
-    WHERE t.user_id = $3
-      AND (t.from_account_id = $1 OR t.to_account_id = $1)
-      AND t.occurred_at >= period.start_date
-      AND t.occurred_at <= period.end_date
-),
-flow AS (
-    SELECT
-        COALESCE(SUM(CASE
-            WHEN category_type = 'Incoming' THEN amount
-            WHEN category_type = 'Transfer' AND to_account_id = $1 THEN amount
-            ELSE 0
-        END), 0) AS inflows,
-        COALESCE(SUM(CASE
-            WHEN category_type = 'Outgoing' THEN amount
-            WHEN category_type = 'Transfer' AND from_account_id = $1 THEN amount
-            ELSE 0
-        END), 0) AS outflows,
-        COUNT(*)::bigint AS transaction_count
-    FROM period_txs
-)
 SELECT
-    a.balance                         AS balance,
-    flow.inflows::bigint              AS inflows,
-    flow.outflows::bigint             AS outflows,
-    flow.transaction_count::bigint    AS transaction_count,
-    period.start_date                 AS period_start,
-    period.end_date                   AS period_end
+    a.balance                              AS balance,
+    COALESCE(SUM(add1.inflow), 0)::bigint  AS inflows,
+    COALESCE(SUM(add1.outflow), 0)::bigint AS outflows,
+    COALESCE(SUM(add1.tx_count), 0)::bigint AS transaction_count,
+    bp.start_date                          AS period_start,
+    bp.end_date                            AS period_end
 FROM account a
-CROSS JOIN flow
-CROSS JOIN period
+CROSS JOIN budget_period bp
+LEFT JOIN account_daily_delta add1
+       ON add1.account_id = a.id
+      AND add1.day BETWEEN bp.start_date AND bp.end_date
 WHERE a.id = $1 AND a.user_id = $3
+  AND bp.id = $2 AND bp.user_id = $3
+GROUP BY a.balance, bp.start_date, bp.end_date
             "#,
         )
         .bind(account_id)
@@ -761,6 +736,10 @@ WHERE a.id = $1 AND a.user_id = $3
             transaction_count: i64,
         }
 
+        // Compute per-day running balance from account_daily_delta:
+        //   base_balance = account.balance + account_balance_state.sum_amount
+        //                  − SUM(account_daily_delta after start_date)
+        // Then layer daily (inflow − outflow) running-sum over the date range.
         let rows = sqlx::query_as::<_, HistoryRow>(
             r#"
 WITH days AS (
@@ -769,43 +748,25 @@ WITH days AS (
 ),
 base_balance AS (
     SELECT
-        a.balance + COALESCE(SUM(
-            CASE
-                WHEN c.category_type = 'Incoming'                              THEN  t.amount::bigint
-                WHEN c.category_type = 'Outgoing'                              THEN -t.amount::bigint
-                WHEN c.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
-                WHEN c.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
-                ELSE 0
-            END
+        a.balance
+        + COALESCE(abs.sum_amount, 0)
+        - COALESCE((
+            SELECT SUM(add1.inflow - add1.outflow)
+              FROM account_daily_delta add1
+             WHERE add1.account_id = a.id
+               AND add1.day >= $2
         ), 0) AS base_bal
     FROM account a
-    LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id)
-                            AND t.occurred_at < $2
-                            AND t.user_id = $4
-    LEFT JOIN category c ON t.category_id = c.id
+    LEFT JOIN account_balance_state abs ON abs.account_id = a.id
     WHERE a.id = $1 AND a.user_id = $4
-    GROUP BY a.id, a.balance
 ),
 daily_totals AS (
-    SELECT
-        t.occurred_at::date AS day,
-        SUM(
-            CASE
-                WHEN c.category_type = 'Incoming'                              THEN  t.amount::bigint
-                WHEN c.category_type = 'Outgoing'                              THEN -t.amount::bigint
-                WHEN c.category_type = 'Transfer' AND t.from_account_id = $1  THEN -t.amount::bigint
-                WHEN c.category_type = 'Transfer' AND t.to_account_id   = $1  THEN  t.amount::bigint
-                ELSE 0
-            END
-        ) AS daily_amount,
-        COUNT(*)::bigint AS tx_count
-    FROM transaction t
-    JOIN category c ON c.id = t.category_id
-    WHERE (t.from_account_id = $1 OR t.to_account_id = $1)
-      AND t.user_id = $4
-      AND t.occurred_at >= $2
-      AND t.occurred_at <= $3
-    GROUP BY t.occurred_at::date
+    SELECT add1.day,
+           (add1.inflow - add1.outflow)::bigint AS daily_amount,
+           add1.tx_count::bigint                AS tx_count
+    FROM account_daily_delta add1
+    WHERE add1.account_id = $1
+      AND add1.day BETWEEN $2 AND $3
 )
 SELECT
     to_char(d.day, 'YYYY-MM-DD') AS date,
@@ -863,13 +824,26 @@ ORDER BY d.day
             _ => "",
         };
 
-        // Build cursor clause using the same subquery pattern as list_transactions
+        // Cursor resolves the UUID to (occurred_at, id) via Latest_Row lookup
+        // on logical_transaction_state.
         let (cursor_clause, has_cursor) = if params.cursor.is_some() {
-            ("AND (occurred_at, id) < (SELECT occurred_at, id FROM transaction WHERE id = $5)", true)
+            (
+                "AND (occurred_at, id) < ( \
+                    SELECT t2.occurred_at, lts2.id \
+                      FROM logical_transaction_state lts2 \
+                      JOIN transaction t2 ON t2.id = lts2.id AND t2.seq = lts2.latest_seq \
+                     WHERE lts2.id = $5 AND lts2.user_id = $4)",
+                true,
+            )
         } else {
             ("", false)
         };
 
+        // Base balance = account balance + all-time aggregate sum −
+        //                 (sum of account_daily_delta on/after period start).
+        // period_txs joins logical_transaction_state so only Latest_Rows of
+        // effective logical transactions appear — voided and reversal rows
+        // are invisible.
         let sql = format!(
             r#"
 WITH period AS (
@@ -877,26 +851,21 @@ WITH period AS (
 ),
 base_balance AS (
     SELECT
-        a.balance + COALESCE(SUM(
-            CASE
-                WHEN c.category_type = 'Incoming'                              THEN  t.amount::bigint
-                WHEN c.category_type = 'Outgoing'                              THEN -t.amount::bigint
-                WHEN c.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
-                WHEN c.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
-                ELSE 0
-            END
+        a.balance
+        + COALESCE(abs.sum_amount, 0)
+        - COALESCE((
+            SELECT SUM(add1.inflow - add1.outflow)
+              FROM account_daily_delta add1
+             WHERE add1.account_id = a.id
+               AND add1.day >= (SELECT start_date FROM period)
         ), 0) AS base_bal
     FROM account a
-    LEFT JOIN transaction t  ON (t.from_account_id = a.id OR t.to_account_id = a.id)
-                             AND t.occurred_at < (SELECT start_date FROM period)
-                             AND t.user_id = $4
-    LEFT JOIN category c ON t.category_id = c.id
+    LEFT JOIN account_balance_state abs ON abs.account_id = a.id
     WHERE a.id = $1 AND a.user_id = $4
-    GROUP BY a.id, a.balance
 ),
 period_txs AS (
     SELECT
-        t.id,
+        lts.id,
         t.amount::bigint AS amount,
         t.description,
         t.occurred_at,
@@ -907,11 +876,13 @@ period_txs AS (
             WHEN cat.category_type = 'Transfer' AND t.to_account_id = $1    THEN 'in'
             ELSE 'out'
         END AS flow
-    FROM transaction t
+    FROM logical_transaction_state lts
+    JOIN transaction t ON t.id = lts.id AND t.seq = lts.latest_seq
     JOIN category cat ON cat.id = t.category_id
     CROSS JOIN period
     WHERE (t.from_account_id = $1 OR t.to_account_id = $1)
-      AND t.user_id = $4
+      AND lts.user_id = $4
+      AND lts.is_effective
       AND t.occurred_at >= period.start_date
       AND t.occurred_at <= period.end_date
 ),
@@ -977,6 +948,12 @@ LIMIT $3
             amount: i64,
         }
 
+        // Account top categories in period is one of the three sanctioned
+        // ledger scans (Req 12 AC 5 + design open-question #2). There is no
+        // (account, category, day) aggregate table, so we scan the
+        // Latest_Rows joined to logical_transaction_state over the narrow
+        // account+period slice. Acceptable because the account detail page
+        // is reached explicitly and the slice is small.
         let cat_rows = sqlx::query_as::<_, CategoryRow>(
             r#"
 WITH period AS (
@@ -986,11 +963,13 @@ SELECT
     cat.id AS category_id,
     cat.name AS category_name,
     SUM(t.amount)::bigint AS amount
-FROM transaction t
+FROM logical_transaction_state lts
+JOIN transaction t ON t.id = lts.id AND t.seq = lts.latest_seq
 JOIN category cat ON cat.id = t.category_id
 CROSS JOIN period
 WHERE t.from_account_id = $1
-  AND t.user_id = $3
+  AND lts.user_id = $3
+  AND lts.is_effective
   AND cat.category_type = 'Outgoing'
   AND t.occurred_at >= period.start_date
   AND t.occurred_at <= period.end_date
@@ -1025,6 +1004,10 @@ ORDER BY amount DESC
             is_positive: bool,
         }
 
+        // Net flow per closed period comes from account_daily_delta summed
+        // over each period's day range. The base balance is the account's
+        // current balance (including all-time aggregate), matching the
+        // legacy computation.
         let stability_rows = sqlx::query_as::<_, StabilityRow>(
             r#"
 WITH prior_periods AS (
@@ -1040,25 +1023,19 @@ period_flows AS (
     SELECT
         pp.id AS period_id,
         pp.end_date,
-        COALESCE(SUM(
-            CASE
-                WHEN c.category_type = 'Incoming'                              THEN  t.amount::bigint
-                WHEN c.category_type = 'Outgoing'                              THEN -t.amount::bigint
-                WHEN c.category_type = 'Transfer' AND t.from_account_id = $1  THEN -t.amount::bigint
-                WHEN c.category_type = 'Transfer' AND t.to_account_id   = $1  THEN  t.amount::bigint
-                ELSE 0
-            END
-        ), 0) AS net_flow
+        COALESCE((
+            SELECT SUM(add1.inflow - add1.outflow)
+              FROM account_daily_delta add1
+             WHERE add1.account_id = $1
+               AND add1.day BETWEEN pp.start_date AND pp.end_date
+        ), 0)::bigint AS net_flow
     FROM prior_periods pp
-    LEFT JOIN transaction t ON (t.from_account_id = $1 OR t.to_account_id = $1)
-                            AND t.user_id = $2
-                            AND t.occurred_at >= pp.start_date
-                            AND t.occurred_at <= pp.end_date
-    LEFT JOIN category c ON c.id = t.category_id
-    GROUP BY pp.id, pp.end_date
 ),
 base AS (
-    SELECT a.balance AS current_balance FROM account a WHERE a.id = $1 AND a.user_id = $2
+    SELECT (a.balance + COALESCE(abs.sum_amount, 0))::bigint AS current_balance
+      FROM account a
+      LEFT JOIN account_balance_state abs ON abs.account_id = a.id
+     WHERE a.id = $1 AND a.user_id = $2
 )
 SELECT
     (base.current_balance + SUM(pf.net_flow) OVER (ORDER BY pf.end_date DESC ROWS UNBOUNDED PRECEDING))::bigint AS closing_balance,
@@ -1091,6 +1068,10 @@ CROSS JOIN base
             amount: i64,
         }
 
+        // Narrow ledger scan joined to logical_transaction_state so only
+        // Latest_Rows of effective logical transactions are considered. This
+        // is a single-row query over a bounded date range per account — no
+        // aggregate table fits this "largest single outflow" use case.
         let largest = sqlx::query_as::<_, OutflowRow>(
             r#"
 WITH period AS (
@@ -1099,11 +1080,13 @@ WITH period AS (
 SELECT
     cat.name AS category_name,
     t.amount::bigint AS amount
-FROM transaction t
+FROM logical_transaction_state lts
+JOIN transaction t ON t.id = lts.id AND t.seq = lts.latest_seq
 JOIN category cat ON cat.id = t.category_id
 CROSS JOIN period
 WHERE t.from_account_id = $1
-  AND t.user_id = $3
+  AND lts.user_id = $3
+  AND lts.is_effective
   AND cat.category_type = 'Outgoing'
   AND t.occurred_at >= period.start_date
   AND t.occurred_at <= period.end_date
@@ -1322,27 +1305,14 @@ LIMIT 1
                     c.id as currency_id, c.name as currency_name, c.symbol as currency_symbol,
                     c.currency as currency_code, c.decimal_places as currency_decimal_places,
                     c.symbol_position as currency_symbol_position,
-                    (a.balance + COALESCE(SUM(
-                        CASE
-                            WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
-                            WHEN cat.category_type = 'Outgoing'                              THEN -t.amount::bigint
-                            WHEN cat.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
-                            WHEN cat.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
-                            ELSE 0
-                        END
-                    ), 0))::bigint AS current_balance,
+                    (a.balance + COALESCE(abs.sum_amount, 0))::bigint AS current_balance,
                     0::bigint AS balance_change_this_period,
-                    COUNT(t.id)::bigint AS transaction_count
+                    COALESCE(abs.tx_count, 0)::bigint AS transaction_count
                 FROM account a
                 JOIN currency c ON c.id = a.currency_id
-                LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id) AND t.user_id = $2
-                LEFT JOIN category cat ON t.category_id = cat.id
+                LEFT JOIN account_balance_state abs ON abs.account_id = a.id
                 WHERE (a.created_at, a.id) < (SELECT created_at, id FROM account WHERE id = $1)
                   AND a.user_id = $2 AND a.is_archived = FALSE
-                GROUP BY a.id, a.name, a.color, a.icon, a.account_type, a.balance,
-                         a.spend_limit, a.is_archived, a.next_transfer_amount, a.created_at,
-                         a.top_up_amount, a.top_up_cycle, a.top_up_day, a.statement_close_day, a.payment_due_day,
-                         c.id, c.name, c.symbol, c.currency, c.decimal_places, c.symbol_position
                 ORDER BY a.created_at DESC, a.id DESC
                 LIMIT $3
                 "#,
@@ -1366,26 +1336,13 @@ LIMIT 1
                     c.id as currency_id, c.name as currency_name, c.symbol as currency_symbol,
                     c.currency as currency_code, c.decimal_places as currency_decimal_places,
                     c.symbol_position as currency_symbol_position,
-                    (a.balance + COALESCE(SUM(
-                        CASE
-                            WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
-                            WHEN cat.category_type = 'Outgoing'                              THEN -t.amount::bigint
-                            WHEN cat.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
-                            WHEN cat.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
-                            ELSE 0
-                        END
-                    ), 0))::bigint AS current_balance,
+                    (a.balance + COALESCE(abs.sum_amount, 0))::bigint AS current_balance,
                     0::bigint AS balance_change_this_period,
-                    COUNT(t.id)::bigint AS transaction_count
+                    COALESCE(abs.tx_count, 0)::bigint AS transaction_count
                 FROM account a
                 JOIN currency c ON c.id = a.currency_id
-                LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id) AND t.user_id = $1
-                LEFT JOIN category cat ON t.category_id = cat.id
+                LEFT JOIN account_balance_state abs ON abs.account_id = a.id
                 WHERE a.user_id = $1 AND a.is_archived = FALSE
-                GROUP BY a.id, a.name, a.color, a.icon, a.account_type, a.balance,
-                         a.spend_limit, a.is_archived, a.next_transfer_amount, a.created_at,
-                         a.top_up_amount, a.top_up_cycle, a.top_up_day, a.statement_close_day, a.payment_due_day,
-                         c.id, c.name, c.symbol, c.currency, c.decimal_places, c.symbol_position
                 ORDER BY a.created_at DESC, a.id DESC
                 LIMIT $2
                 "#,
@@ -1448,21 +1405,16 @@ cycle_start AS (
         END::date AS start_date
     FROM account_cfg cfg
 )
+-- Allowance spending is: money going OUT of this account (Outgoing
+-- purchases + outgoing Transfers). `account_daily_delta.outflow` already
+-- captures both classifications via the from-side delta.
 SELECT
-    COALESCE(SUM(
-        CASE
-            WHEN cat.category_type = 'Outgoing' THEN t.amount::bigint
-            WHEN cat.category_type = 'Transfer' AND t.from_account_id = $1 THEN t.amount::bigint
-            ELSE 0
-        END
-    ), 0)::bigint AS spent
+    COALESCE(SUM(add1.outflow), 0)::bigint AS spent
 FROM cycle_start cs
-LEFT JOIN transaction t
-    ON t.from_account_id = $1
-    AND t.user_id = $2
+LEFT JOIN account_daily_delta add1
+    ON add1.account_id = $1
     AND cs.start_date IS NOT NULL
-    AND t.occurred_at >= cs.start_date
-LEFT JOIN category cat ON cat.id = t.category_id
+    AND add1.day >= cs.start_date
             "#,
         )
         .bind(account_id)
@@ -1488,6 +1440,8 @@ LEFT JOIN category cat ON cat.id = t.category_id
             return Ok(0);
         }
 
+        // Mirrors get_account_balance_history but averages the daily balances
+        // instead of returning them one by one.
         let row = sqlx::query_as::<_, AvgRow>(
             r#"
 WITH days AS (
@@ -1496,42 +1450,24 @@ WITH days AS (
 ),
 base_balance AS (
     SELECT
-        a.balance + COALESCE(SUM(
-            CASE
-                WHEN c.category_type = 'Incoming'                              THEN  t.amount::bigint
-                WHEN c.category_type = 'Outgoing'                              THEN -t.amount::bigint
-                WHEN c.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
-                WHEN c.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
-                ELSE 0
-            END
+        a.balance
+        + COALESCE(abs.sum_amount, 0)
+        - COALESCE((
+            SELECT SUM(add1.inflow - add1.outflow)
+              FROM account_daily_delta add1
+             WHERE add1.account_id = a.id
+               AND add1.day >= $2
         ), 0) AS base_bal
     FROM account a
-    LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id)
-                            AND t.occurred_at < $2
-                            AND t.user_id = $4
-    LEFT JOIN category c ON t.category_id = c.id
+    LEFT JOIN account_balance_state abs ON abs.account_id = a.id
     WHERE a.id = $1 AND a.user_id = $4
-    GROUP BY a.id, a.balance
 ),
 daily_totals AS (
-    SELECT
-        t.occurred_at::date AS day,
-        SUM(
-            CASE
-                WHEN c.category_type = 'Incoming'                              THEN  t.amount::bigint
-                WHEN c.category_type = 'Outgoing'                              THEN -t.amount::bigint
-                WHEN c.category_type = 'Transfer' AND t.from_account_id = $1  THEN -t.amount::bigint
-                WHEN c.category_type = 'Transfer' AND t.to_account_id   = $1  THEN  t.amount::bigint
-                ELSE 0
-            END
-        ) AS daily_amount
-    FROM transaction t
-    JOIN category c ON c.id = t.category_id
-    WHERE (t.from_account_id = $1 OR t.to_account_id = $1)
-      AND t.user_id = $4
-      AND t.occurred_at >= $2
-      AND t.occurred_at <= $3
-    GROUP BY t.occurred_at::date
+    SELECT add1.day,
+           (add1.inflow - add1.outflow)::bigint AS daily_amount
+    FROM account_daily_delta add1
+    WHERE add1.account_id = $1
+      AND add1.day BETWEEN $2 AND $3
 ),
 daily_balances AS (
     SELECT
