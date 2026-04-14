@@ -288,6 +288,11 @@ impl PostgresRepository {
 
     /// Get a single account with its computed current_balance from all transactions.
     pub async fn get_account_with_metrics(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<AccountWithMetrics>, AppError> {
+        // current_balance comes from account_balance_state (maintained by the
+        // aggregate trigger). transaction_count is the total all-time count
+        // of distinct effective logical transactions touching this account.
+        // balance_change_this_period is left at 0 here — this endpoint is
+        // not period-scoped; callers that need it use list_accounts.
         let row = sqlx::query_as::<_, AccountMetricsRow>(
             r#"
             SELECT
@@ -301,26 +306,13 @@ impl PostgresRepository {
                 a.top_up_day::int as top_up_day,
                 a.statement_close_day::int as statement_close_day,
                 a.payment_due_day::int as payment_due_day,
-                (a.balance + COALESCE(SUM(
-                    CASE
-                        WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
-                        WHEN cat.category_type = 'Outgoing'                              THEN -t.amount::bigint
-                        WHEN cat.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
-                        WHEN cat.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
-                        ELSE 0
-                    END
-                ), 0))::bigint AS current_balance,
+                (a.balance + COALESCE(abs.sum_amount, 0))::bigint AS current_balance,
                 0::bigint AS balance_change_this_period,
-                COUNT(t.id)::bigint AS transaction_count
+                COALESCE(abs.tx_count, 0)::bigint AS transaction_count
             FROM account a
             JOIN currency c ON c.id = a.currency_id
-            LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id) AND t.user_id = $2
-            LEFT JOIN category cat ON t.category_id = cat.id
+            LEFT JOIN account_balance_state abs ON abs.account_id = a.id
             WHERE a.id = $1 AND a.user_id = $2
-            GROUP BY a.id, a.name, a.color, a.icon, a.account_type, a.balance,
-                     a.spend_limit, a.is_archived, a.next_transfer_amount,
-                     a.top_up_amount, a.top_up_cycle, a.top_up_day, a.statement_close_day, a.payment_due_day,
-                     c.id, c.name, c.symbol, c.currency, c.decimal_places, c.symbol_position
             "#,
         )
         .bind(id)
@@ -332,6 +324,10 @@ impl PostgresRepository {
     }
 
     pub async fn list_accounts(&self, params: &CursorParams, budget_period_id: &Uuid, user_id: &Uuid) -> Result<Vec<AccountWithMetrics>, AppError> {
+        // current_balance comes from account_balance_state; the period change
+        // and period transaction count come from account_daily_delta summed
+        // over the period's day range. Neither read touches the `transaction`
+        // table.
         let rows = if let Some(cursor) = params.cursor {
             sqlx::query_as::<_, AccountMetricsRow>(
                 r#"
@@ -361,62 +357,25 @@ impl PostgresRepository {
                     c.currency as currency_code,
                     c.decimal_places as currency_decimal_places,
                     c.symbol_position as currency_symbol_position,
-                    (a.balance + COALESCE(SUM(
-                        CASE
-                            WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
-                            WHEN cat.category_type = 'Outgoing'                              THEN -t.amount::bigint
-                            WHEN cat.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
-                            WHEN cat.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
-                            ELSE 0
-                        END
-                    ), 0))::bigint AS current_balance,
-                    COALESCE(SUM(
-                        CASE
-                            WHEN p.start_date IS NOT NULL
-                             AND t.occurred_at >= p.start_date
-                             AND t.occurred_at <= p.end_date THEN
-                                CASE
-                                    WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
-                                    WHEN cat.category_type = 'Outgoing'                              THEN -t.amount::bigint
-                                    WHEN cat.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
-                                    WHEN cat.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
-                                    ELSE 0
-                                END
-                            ELSE 0
-                        END
+                    (a.balance + COALESCE(abs.sum_amount, 0))::bigint AS current_balance,
+                    COALESCE((
+                        SELECT SUM(add.inflow - add.outflow)::bigint
+                          FROM account_daily_delta add, period p
+                         WHERE add.account_id = a.id
+                           AND add.day BETWEEN p.start_date AND p.end_date
                     ), 0)::bigint AS balance_change_this_period,
-                    COUNT(t.id) FILTER (WHERE p.start_date IS NOT NULL AND t.occurred_at >= p.start_date AND t.occurred_at <= p.end_date)::bigint AS transaction_count
+                    COALESCE((
+                        SELECT SUM(add.tx_count)::bigint
+                          FROM account_daily_delta add, period p
+                         WHERE add.account_id = a.id
+                           AND add.day BETWEEN p.start_date AND p.end_date
+                    ), 0)::bigint AS transaction_count
                 FROM account a
                 JOIN currency c ON c.id = a.currency_id
-                LEFT JOIN period p ON true
-                LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id) AND t.user_id = $3
-                LEFT JOIN category cat ON t.category_id = cat.id
+                LEFT JOIN account_balance_state abs ON abs.account_id = a.id
                 WHERE (a.created_at, a.id) < (
                     SELECT created_at, id FROM account WHERE id = $1
                 ) AND a.user_id = $3 AND a.is_archived = FALSE
-                GROUP BY
-                    a.id,
-                    a.user_id,
-                    a.name,
-                    a.color,
-                    a.icon,
-                    a.account_type,
-                    a.balance,
-                    a.created_at,
-                    a.spend_limit,
-                    a.is_archived,
-                    a.next_transfer_amount,
-                    a.top_up_amount,
-                    a.top_up_cycle,
-                    a.top_up_day,
-                    a.statement_close_day,
-                    a.payment_due_day,
-                    c.id,
-                    c.name,
-                    c.symbol,
-                    c.currency,
-                    c.decimal_places,
-                    c.symbol_position
                 ORDER BY a.created_at DESC, a.id DESC
                 LIMIT $4
                 "#,
@@ -456,60 +415,23 @@ impl PostgresRepository {
                     c.currency as currency_code,
                     c.decimal_places as currency_decimal_places,
                     c.symbol_position as currency_symbol_position,
-                    (a.balance + COALESCE(SUM(
-                        CASE
-                            WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
-                            WHEN cat.category_type = 'Outgoing'                              THEN -t.amount::bigint
-                            WHEN cat.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
-                            WHEN cat.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
-                            ELSE 0
-                        END
-                    ), 0))::bigint AS current_balance,
-                    COALESCE(SUM(
-                        CASE
-                            WHEN p.start_date IS NOT NULL
-                             AND t.occurred_at >= p.start_date
-                             AND t.occurred_at <= p.end_date THEN
-                                CASE
-                                    WHEN cat.category_type = 'Incoming'                              THEN  t.amount::bigint
-                                    WHEN cat.category_type = 'Outgoing'                              THEN -t.amount::bigint
-                                    WHEN cat.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount::bigint
-                                    WHEN cat.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount::bigint
-                                    ELSE 0
-                                END
-                            ELSE 0
-                        END
+                    (a.balance + COALESCE(abs.sum_amount, 0))::bigint AS current_balance,
+                    COALESCE((
+                        SELECT SUM(add.inflow - add.outflow)::bigint
+                          FROM account_daily_delta add, period p
+                         WHERE add.account_id = a.id
+                           AND add.day BETWEEN p.start_date AND p.end_date
                     ), 0)::bigint AS balance_change_this_period,
-                    COUNT(t.id) FILTER (WHERE p.start_date IS NOT NULL AND t.occurred_at >= p.start_date AND t.occurred_at <= p.end_date)::bigint AS transaction_count
+                    COALESCE((
+                        SELECT SUM(add.tx_count)::bigint
+                          FROM account_daily_delta add, period p
+                         WHERE add.account_id = a.id
+                           AND add.day BETWEEN p.start_date AND p.end_date
+                    ), 0)::bigint AS transaction_count
                 FROM account a
                 JOIN currency c ON c.id = a.currency_id
-                LEFT JOIN period p ON true
-                LEFT JOIN transaction t ON (t.from_account_id = a.id OR t.to_account_id = a.id) AND t.user_id = $2
-                LEFT JOIN category cat ON t.category_id = cat.id
+                LEFT JOIN account_balance_state abs ON abs.account_id = a.id
                 WHERE a.user_id = $2 AND a.is_archived = FALSE
-                GROUP BY
-                    a.id,
-                    a.user_id,
-                    a.name,
-                    a.color,
-                    a.icon,
-                    a.account_type,
-                    a.balance,
-                    a.created_at,
-                    a.spend_limit,
-                    a.is_archived,
-                    a.next_transfer_amount,
-                    a.top_up_amount,
-                    a.top_up_cycle,
-                    a.top_up_day,
-                    a.statement_close_day,
-                    a.payment_due_day,
-                    c.id,
-                    c.name,
-                    c.symbol,
-                    c.currency,
-                    c.decimal_places,
-                    c.symbol_position
                 ORDER BY a.created_at DESC, a.id DESC
                 LIMIT $3
                 "#,

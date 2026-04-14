@@ -138,6 +138,9 @@ impl PostgresRepository {
     /// Fetch current-period dashboard data for a given period.
     /// Returns `AppError::NotFound` if the period does not exist for this user.
     pub async fn get_current_period_dashboard(&self, period_id: &Uuid, user_id: &Uuid) -> Result<CurrentPeriodRow, AppError> {
+        // `spent` reads directly from user_daily_totals.spending, which the
+        // aggregate trigger maintains with the same classification as the
+        // legacy query (Outgoing + Transfer-to-Allowance).
         let row = sqlx::query_as::<_, CurrentPeriodRow>(
             r#"
 WITH period AS (
@@ -146,19 +149,11 @@ WITH period AS (
     WHERE id = $1 AND user_id = $2
 ),
 spent AS (
-    SELECT COALESCE(SUM(t.amount), 0)::bigint AS value
-    FROM transaction t
-    JOIN category c ON c.id = t.category_id
-    JOIN period p ON TRUE
-    LEFT JOIN account fa ON fa.id = t.from_account_id
-    LEFT JOIN account ta ON ta.id = t.to_account_id
-    WHERE t.user_id = $2
-      AND t.occurred_at >= p.start_date
-      AND t.occurred_at <= p.end_date
-      AND (
-          (c.category_type = 'Outgoing' AND (fa.account_type IS NULL OR fa.account_type <> 'Allowance'))
-          OR (c.category_type = 'Transfer' AND ta.account_type = 'Allowance')
-      )
+    SELECT COALESCE(SUM(udt.spending), 0)::bigint AS value
+    FROM period p
+    LEFT JOIN user_daily_totals udt
+           ON udt.user_id = $2
+          AND udt.day BETWEEN p.start_date AND p.end_date
 ),
 target AS (
     SELECT (
@@ -199,25 +194,18 @@ CROSS JOIN income_target
 
     /// Fetch daily spend amounts for the period (one entry per calendar day).
     pub async fn get_daily_spend_v2(&self, start_date: NaiveDate, end_date: NaiveDate, user_id: &Uuid) -> Result<Vec<DailySpendRow>, AppError> {
+        // Left-join user_daily_totals onto a calendar series so days with no
+        // spending still appear as 0. Classification (Outgoing +
+        // Transfer-to-Allowance) was applied at trigger time.
         let rows = sqlx::query_as::<_, DailySpendRow>(
             r#"
 SELECT
     gs.day::date AS day,
-    COALESCE(SUM(
-        CASE
-            WHEN c.category_type = 'Outgoing' AND (fa.account_type IS NULL OR fa.account_type <> 'Allowance') THEN t.amount
-            WHEN c.category_type = 'Transfer' AND ta.account_type = 'Allowance' THEN t.amount
-            ELSE 0
-        END
-    ), 0)::bigint AS amount
+    COALESCE(udt.spending, 0)::bigint AS amount
 FROM generate_series($1::date, $2::date, '1 day'::interval) AS gs(day)
-LEFT JOIN transaction t
-    ON t.occurred_at = gs.day::date
-    AND t.user_id = $3
-LEFT JOIN category c ON c.id = t.category_id
-LEFT JOIN account fa ON fa.id = t.from_account_id
-LEFT JOIN account ta ON ta.id = t.to_account_id
-GROUP BY gs.day
+LEFT JOIN user_daily_totals udt
+    ON udt.user_id = $3
+    AND udt.day = gs.day::date
 ORDER BY gs.day
             "#,
         )
@@ -242,46 +230,18 @@ WITH account_balances AS (
     SELECT
         a.id,
         a.account_type::text AS account_type,
-        (
-            a.balance + COALESCE(
-                SUM(
-                    CASE
-                        WHEN c.category_type = 'Incoming' THEN t.amount
-                        WHEN c.category_type = 'Outgoing' THEN -t.amount
-                        WHEN c.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount
-                        WHEN c.category_type = 'Transfer' AND t.to_account_id = a.id THEN t.amount
-                        ELSE 0
-                    END
-                ),
-                0
-            )
-        )::bigint AS current_balance
+        (a.balance + COALESCE(abs.sum_amount, 0))::bigint AS current_balance
     FROM account a
-    LEFT JOIN transaction t
-        ON (t.from_account_id = a.id OR t.to_account_id = a.id)
-        AND t.user_id = $1
-    LEFT JOIN category c ON c.id = t.category_id
+    LEFT JOIN account_balance_state abs ON abs.account_id = a.id
     WHERE a.user_id = $1
-    GROUP BY a.id, a.account_type, a.balance
 ),
 period_change AS (
-    SELECT
-        COALESCE(
-            SUM(
-                CASE
-                    WHEN c.category_type = 'Incoming' THEN t.amount
-                    WHEN c.category_type = 'Outgoing' THEN -t.amount
-                    ELSE 0
-                END
-            ),
-            0
-        )::bigint AS value
-    FROM transaction t
-    JOIN category c ON c.id = t.category_id
-    JOIN budget_period bp ON bp.id = $2 AND bp.user_id = $1
-    WHERE t.user_id = $1
-      AND t.occurred_at >= bp.start_date
-      AND t.occurred_at <= LEAST(bp.end_date, CURRENT_DATE)
+    SELECT COALESCE(SUM(udt.inflow - udt.outflow), 0)::bigint AS value
+    FROM budget_period bp
+    LEFT JOIN user_daily_totals udt
+           ON udt.user_id = $1
+          AND udt.day BETWEEN bp.start_date AND LEAST(bp.end_date, CURRENT_DATE)
+    WHERE bp.id = $2 AND bp.user_id = $1
 )
 SELECT
     COALESCE(SUM(
@@ -364,23 +324,12 @@ FROM account_balances ab
             )
             SELECT
                 tb.value AS total_budget,
-                COALESCE(SUM(
-                    CASE
-                        WHEN c.category_type = 'Outgoing' AND (fa.account_type IS NULL OR fa.account_type <> 'Allowance') THEN t.amount
-                        WHEN c.category_type = 'Transfer' AND ta.account_type = 'Allowance' THEN t.amount
-                        ELSE 0
-                    END
-                ), 0)::bigint AS spent_budget
+                COALESCE(SUM(udt.spending), 0)::bigint AS spent_budget
             FROM budget_period bp
             CROSS JOIN total_budget tb
-            LEFT JOIN transaction t
-                ON t.user_id = $1
-                AND t.occurred_at >= bp.start_date
-                AND t.occurred_at <= bp.end_date
-            LEFT JOIN category c
-                ON c.id = t.category_id
-            LEFT JOIN account fa ON fa.id = t.from_account_id
-            LEFT JOIN account ta ON ta.id = t.to_account_id
+            LEFT JOIN user_daily_totals udt
+                   ON udt.user_id = $1
+                  AND udt.day BETWEEN bp.start_date AND bp.end_date
             WHERE bp.user_id = $1
                 AND bp.end_date < CURRENT_DATE
             GROUP BY bp.id, bp.end_date, tb.value
@@ -428,25 +377,20 @@ FROM account_balances ab
     pub async fn get_cash_flow_v2(&self, period_id: &Uuid, user_id: &Uuid) -> Result<CashFlowRow, AppError> {
         self.get_budget_period(period_id, user_id).await?;
 
+        // Inflows = user_daily_totals.inflow (category_type = 'Incoming').
+        // Outflows uses the stricter "spending" definition (Outgoing from
+        // non-Allowance + Transfer-to-Allowance), which the trigger maintains
+        // on user_daily_totals.spending as of migration 20260327000007.
         let row = sqlx::query_as::<_, CashFlowRow>(
             r#"
 SELECT
-    COALESCE(SUM(CASE WHEN c.category_type = 'Incoming' THEN t.amount ELSE 0 END), 0)::bigint AS inflows,
-    COALESCE(SUM(
-        CASE
-            WHEN c.category_type = 'Outgoing' AND (fa.account_type IS NULL OR fa.account_type <> 'Allowance') THEN t.amount
-            WHEN c.category_type = 'Transfer' AND ta.account_type = 'Allowance' THEN t.amount
-            ELSE 0
-        END
-    ), 0)::bigint AS outflows
-FROM transaction t
-JOIN category c ON c.id = t.category_id
-JOIN budget_period bp ON bp.id = $1 AND bp.user_id = $2
-LEFT JOIN account fa ON fa.id = t.from_account_id
-LEFT JOIN account ta ON ta.id = t.to_account_id
-WHERE t.user_id = $2
-  AND t.occurred_at >= bp.start_date
-  AND t.occurred_at <= bp.end_date
+    COALESCE(SUM(udt.inflow), 0)::bigint   AS inflows,
+    COALESCE(SUM(udt.spending), 0)::bigint AS outflows
+FROM budget_period bp
+LEFT JOIN user_daily_totals udt
+       ON udt.user_id = bp.user_id
+      AND udt.day BETWEEN bp.start_date AND bp.end_date
+WHERE bp.id = $1 AND bp.user_id = $2
             "#,
         )
         .bind(period_id)
@@ -466,21 +410,11 @@ WHERE t.user_id = $2
 SELECT
     bp.id AS period_id,
     bp.name AS period_name,
-    COALESCE(SUM(
-        CASE
-            WHEN c.category_type = 'Outgoing' AND (fa.account_type IS NULL OR fa.account_type <> 'Allowance') THEN t.amount
-            WHEN c.category_type = 'Transfer' AND ta.account_type = 'Allowance' THEN t.amount
-            ELSE 0
-        END
-    ), 0)::bigint AS total_spend
+    COALESCE(SUM(udt.spending), 0)::bigint AS total_spend
 FROM budget_period bp
-LEFT JOIN transaction t
-    ON t.user_id = $1
-    AND t.occurred_at >= bp.start_date
-    AND t.occurred_at <= bp.end_date
-LEFT JOIN category c ON c.id = t.category_id
-LEFT JOIN account fa ON fa.id = t.from_account_id
-LEFT JOIN account ta ON ta.id = t.to_account_id
+LEFT JOIN user_daily_totals udt
+       ON udt.user_id = bp.user_id
+      AND udt.day BETWEEN bp.start_date AND bp.end_date
 WHERE bp.user_id = $1
 GROUP BY bp.id, bp.name, bp.end_date
 ORDER BY bp.end_date DESC
@@ -502,29 +436,25 @@ LIMIT $2
     pub async fn get_top_vendors_v2(&self, period_id: &Uuid, user_id: &Uuid, limit: i64) -> Result<Vec<TopVendorRow>, AppError> {
         self.get_budget_period(period_id, user_id).await?;
 
-        // Filter to Latest_Row of effective logical transactions so vendor
-        // merges and corrections are reflected correctly. Phase 3 will
-        // replace this with a direct read from `vendor_daily_spend`.
+        // Read from vendor_daily_spend summed over the period. The aggregate
+        // only includes category_type = 'Outgoing' at trigger time, and the
+        // group-by produces one row per vendor. We keep vendors with
+        // sum_amount > 0 because a vendor with effective_count > 0 but a
+        // zero sum (all merged away) should not show in the top list.
         let rows = sqlx::query_as::<_, TopVendorRow>(
             r#"
 SELECT
     v.id AS vendor_id,
     v.name AS vendor_name,
-    COALESCE(SUM(t.amount), 0)::bigint AS total_spend,
-    COUNT(t.id)::bigint AS transaction_count
+    COALESCE(SUM(vds.sum_amount), 0)::bigint AS total_spend,
+    COALESCE(SUM(vds.tx_count), 0)::bigint   AS transaction_count
 FROM vendor v
-JOIN transaction t ON t.vendor_id = v.id AND t.user_id = $2
-JOIN category c ON c.id = t.category_id
+JOIN vendor_daily_spend vds ON vds.vendor_id = v.id
 JOIN budget_period bp ON bp.id = $1 AND bp.user_id = $2
-LEFT JOIN account fa ON fa.id = t.from_account_id
 WHERE v.user_id = $2
-  AND t.occurred_at >= bp.start_date
-  AND t.occurred_at <= bp.end_date
-  AND c.category_type = 'Outgoing'
-  AND (fa.account_type IS NULL OR fa.account_type <> 'Allowance')
-  AND EXISTS (SELECT 1 FROM logical_transaction_state lts WHERE lts.id = t.id AND lts.is_effective)
-  AND t.seq = (SELECT latest_seq FROM logical_transaction_state WHERE id = t.id)
+  AND vds.day BETWEEN bp.start_date AND bp.end_date
 GROUP BY v.id, v.name
+HAVING SUM(vds.sum_amount) > 0
 ORDER BY total_spend DESC
 LIMIT $3
             "#,
@@ -539,6 +469,11 @@ LIMIT $3
     }
 
     /// Fetch transactions without a category within a period (up to limit).
+    ///
+    /// Kept as a narrow ledger scan: the join to logical_transaction_state
+    /// filters to the Latest_Row of each effective logical transaction so
+    /// voided and reversal rows are excluded. See Req 12 AC 5 — this is one
+    /// of the three sanctioned ledger scans.
     pub async fn get_uncategorized_v2(&self, period_id: &Uuid, user_id: &Uuid, limit: i64) -> Result<Vec<UncategorizedRow>, AppError> {
         self.get_budget_period(period_id, user_id).await?;
 
@@ -550,13 +485,15 @@ SELECT
     t.occurred_at,
     t.description,
     t.from_account_id
-FROM transaction t
+FROM logical_transaction_state lts
+JOIN transaction t ON t.id = lts.id AND t.seq = lts.latest_seq
 JOIN budget_period bp ON bp.id = $1 AND bp.user_id = $2
-WHERE t.user_id = $2
+WHERE lts.user_id = $2
+  AND lts.is_effective
   AND t.category_id IS NULL
   AND t.occurred_at >= bp.start_date
   AND t.occurred_at <= bp.end_date
-ORDER BY t.occurred_at DESC
+ORDER BY t.occurred_at DESC, lts.first_created_at DESC
 LIMIT $3
             "#,
         )
@@ -578,13 +515,12 @@ LIMIT $3
 
         let row = sqlx::query_as::<_, CountRow>(
             r#"
-SELECT COUNT(*)::bigint AS count
-FROM transaction t
-JOIN budget_period bp ON bp.id = $1 AND bp.user_id = $2
-WHERE t.user_id = $2
-  AND t.category_id IS NULL
-  AND t.occurred_at >= bp.start_date
-  AND t.occurred_at <= bp.end_date
+SELECT COALESCE(SUM(udt.uncategorized_count), 0)::bigint AS count
+FROM budget_period bp
+LEFT JOIN user_daily_totals udt
+       ON udt.user_id = bp.user_id
+      AND udt.day BETWEEN bp.start_date AND bp.end_date
+WHERE bp.id = $1 AND bp.user_id = $2
             "#,
         )
         .bind(period_id)
@@ -602,6 +538,12 @@ WHERE t.user_id = $2
         // Verify period exists (will 404 if not found)
         self.get_budget_period(period_id, user_id).await?;
 
+        // Read the per-account running balance from account_daily_delta:
+        //   base_balance = account.balance + account_balance_state.sum_amount
+        //                  − (sum of account_daily_delta *after* start_date)
+        // Then add daily inflow − outflow cumulatively via a window function
+        // to produce the running total per day per account. Grouped by
+        // account_type for the final output columns.
         let rows = sqlx::query_as::<_, NetPositionHistoryRow>(
             r#"
 WITH period AS (
@@ -617,55 +559,35 @@ days AS (
         '1 day'
     ) AS d
 ),
--- Balance each account carried into the period start (sum of all prior transactions + initial balance)
 base_balances AS (
     SELECT
         a.id,
         a.account_type::text AS account_type,
-        (a.balance + COALESCE(SUM(
-            CASE
-                WHEN c.category_type = 'Incoming'                              THEN  t.amount
-                WHEN c.category_type = 'Outgoing'                              THEN -t.amount
-                WHEN c.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount
-                WHEN c.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount
-                ELSE 0
-            END
-        ), 0))::bigint AS base_balance
+        (
+            a.balance
+            + COALESCE(abs.sum_amount, 0)
+            - COALESCE((
+                SELECT SUM(add2.inflow - add2.outflow)
+                  FROM account_daily_delta add2
+                 WHERE add2.account_id = a.id
+                   AND add2.day >= (SELECT start_date FROM period)
+            ), 0)
+        )::bigint AS base_balance
     FROM account a
-    LEFT JOIN transaction t
-        ON (t.from_account_id = a.id OR t.to_account_id = a.id)
-        AND t.user_id = $2
-        AND t.occurred_at < (SELECT start_date FROM period)
-    LEFT JOIN category c ON t.category_id = c.id
+    LEFT JOIN account_balance_state abs ON abs.account_id = a.id
     WHERE a.user_id = $2
-    GROUP BY a.id, a.account_type, a.balance
 ),
--- Per-account, per-day delta within the period
 daily_deltas AS (
     SELECT
-        a.id AS account_id,
-        t.occurred_at::date AS day,
-        SUM(
-            CASE
-                WHEN c.category_type = 'Incoming'                              THEN  t.amount
-                WHEN c.category_type = 'Outgoing'                              THEN -t.amount
-                WHEN c.category_type = 'Transfer' AND t.from_account_id = a.id THEN -t.amount
-                WHEN c.category_type = 'Transfer' AND t.to_account_id   = a.id THEN  t.amount
-                ELSE 0
-            END
-        )::bigint AS delta
-    FROM account a
-    JOIN transaction t
-        ON (t.from_account_id = a.id OR t.to_account_id = a.id)
-        AND t.user_id = $2
-    JOIN category c ON t.category_id = c.id
-    CROSS JOIN period
-    WHERE a.user_id = $2
-      AND t.occurred_at >= period.start_date
-      AND t.occurred_at <= LEAST(period.end_date, CURRENT_DATE)
-    GROUP BY a.id, t.occurred_at::date
+        add1.account_id,
+        add1.day,
+        (add1.inflow - add1.outflow)::bigint AS delta
+    FROM account_daily_delta add1
+    JOIN account a ON a.id = add1.account_id AND a.user_id = $2
+    CROSS JOIN period p
+    WHERE add1.day >= p.start_date
+      AND add1.day <= LEAST(p.end_date, CURRENT_DATE)
 ),
--- Running balance per account per day
 running_balances AS (
     SELECT
         bb.id AS account_id,
@@ -723,23 +645,12 @@ days AS (
     ) AS d
 ),
 daily_spend AS (
-    SELECT
-        days.day,
-        COALESCE(SUM(
-            CASE
-                WHEN c.category_type = 'Outgoing' AND (fa.account_type IS NULL OR fa.account_type <> 'Allowance') THEN t.amount
-                WHEN c.category_type = 'Transfer' AND ta.account_type = 'Allowance' THEN t.amount
-                ELSE 0
-            END
-        ), 0)::bigint AS daily_spent
+    SELECT days.day,
+           COALESCE(udt.spending, 0)::bigint AS daily_spent
     FROM days
-    LEFT JOIN transaction t
-        ON t.occurred_at = days.day
-        AND t.user_id = $2
-    LEFT JOIN category c ON c.id = t.category_id
-    LEFT JOIN account fa ON fa.id = t.from_account_id
-    LEFT JOIN account ta ON ta.id = t.to_account_id
-    GROUP BY days.day
+    LEFT JOIN user_daily_totals udt
+           ON udt.user_id = $2
+          AND udt.day = days.day
 )
 SELECT
     to_char(ds.day, 'YYYY-MM-DD') AS date,
@@ -767,20 +678,19 @@ SELECT
     c.id AS category_id,
     c.name AS category_name,
     COALESCE(c.icon, '') AS category_icon,
-    COALESCE(SUM(CASE
-        WHEN t.occurred_at >= bp.start_date AND t.occurred_at <= bp.end_date THEN t.amount
-        ELSE 0
-    END), 0)::bigint AS spent,
+    COALESCE(SUM(cds.sum_amount), 0)::bigint AS spent,
     COALESCE(bc.budgeted_value, 0)::bigint AS budgeted
 FROM category c
 JOIN budget_period bp ON bp.id = $1 AND bp.user_id = $2
-LEFT JOIN transaction t ON t.category_id = c.id AND t.user_id = $2
+LEFT JOIN category_daily_spend cds
+       ON cds.category_id = c.id
+      AND cds.day BETWEEN bp.start_date AND bp.end_date
 LEFT JOIN budget_category bc ON bc.category_id = c.id AND bc.user_id = $2
 WHERE c.user_id = $2
   AND c.category_type = 'Outgoing'
   AND c.behavior = 'fixed'
   AND c.is_archived = false
-GROUP BY c.id, c.name, c.icon, bc.budgeted_value, bp.start_date, bp.end_date
+GROUP BY c.id, c.name, c.icon, bc.budgeted_value
 ORDER BY c.name
             "#,
         )
@@ -801,20 +711,19 @@ ORDER BY c.name
 SELECT
     c.id AS category_id,
     c.name AS category_name,
-    COALESCE(SUM(CASE
-        WHEN t.occurred_at >= bp.start_date AND t.occurred_at <= bp.end_date THEN t.amount
-        ELSE 0
-    END), 0)::bigint AS spent,
+    COALESCE(SUM(cds.sum_amount), 0)::bigint AS spent,
     COALESCE(bc.budgeted_value, 0)::bigint AS budgeted
 FROM category c
 JOIN budget_period bp ON bp.id = $1 AND bp.user_id = $2
-LEFT JOIN transaction t ON t.category_id = c.id AND t.user_id = $2
+LEFT JOIN category_daily_spend cds
+       ON cds.category_id = c.id
+      AND cds.day BETWEEN bp.start_date AND bp.end_date
 LEFT JOIN budget_category bc ON bc.category_id = c.id AND bc.user_id = $2
 WHERE c.user_id = $2
   AND c.category_type = 'Outgoing'
   AND c.behavior = 'variable'
   AND c.is_archived = false
-GROUP BY c.id, c.name, bc.budgeted_value, bp.start_date, bp.end_date
+GROUP BY c.id, c.name, bc.budgeted_value
 ORDER BY c.name
             "#,
         )

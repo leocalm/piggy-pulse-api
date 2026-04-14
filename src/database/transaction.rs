@@ -2,7 +2,7 @@ use crate::database::category::category_type_from_db;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::account::Account;
-use crate::models::category::{Category, CategoryType};
+use crate::models::category::Category;
 use crate::models::currency::{Currency, SymbolPosition};
 use crate::models::pagination::{CursorParams, TransactionFilters};
 use crate::models::transaction::{Transaction, TransactionRequest};
@@ -415,18 +415,12 @@ impl PostgresRepository {
     }
 
     pub async fn get_transaction_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Transaction>, AppError> {
-        // Only return effective logical transactions, resolved to their
-        // Latest_Row. Voided transactions (is_effective = false) return None
-        // so callers see them as "not found". Phase 3 will generalize this
-        // pattern across the read layer.
+        // Resolve the logical transaction via logical_transaction_state. The
+        // join at `t.seq = lts.latest_seq` fetches the Latest_Row metadata.
+        // Voided transactions (is_effective = false) look like "not found".
         let query = build_transaction_query(
-            "transaction t",
-            &[
-                "t.id = $1",
-                "t.user_id = $2",
-                "EXISTS (SELECT 1 FROM logical_transaction_state lts WHERE lts.id = t.id AND lts.is_effective)",
-                "t.seq = (SELECT latest_seq FROM logical_transaction_state WHERE id = t.id)",
-            ],
+            "logical_transaction_state lts JOIN transaction t ON t.id = lts.id AND t.seq = lts.latest_seq",
+            &["lts.id = $1", "lts.user_id = $2", "lts.is_effective"],
             "",
         );
         let row = sqlx::query_as::<_, TransactionRow>(&query)
@@ -445,27 +439,42 @@ impl PostgresRepository {
         filters: &TransactionFilters,
         user_id: &Uuid,
     ) -> Result<Vec<Transaction>, AppError> {
+        // Read from logical_transaction_state filtered to effective rows,
+        // joined to the Latest_Row at `t.seq = lts.latest_seq` for metadata.
+        // Cursor orders by (t.occurred_at DESC, lts.first_created_at DESC,
+        // lts.id DESC) — the first two are shown in the UI as the
+        // transaction's date, and first_created_at is stable across
+        // corrections so pagination doesn't jump when a transaction is
+        // corrected in place.
+        let from_clause = "logical_transaction_state lts \
+                           JOIN transaction t ON t.id = lts.id AND t.seq = lts.latest_seq \
+                           CROSS JOIN budget_period bp";
+
         let rows = if let Some(cursor) = params.cursor {
             let (filter_sql, filter_binds) = build_filter_clause(filters, 4); // $1=period_id, $2=user_id, $3=cursor
             let base_where = "bp.id = $1 \
                    AND bp.user_id = $2 \
-                   AND t.user_id = $2 \
+                   AND lts.user_id = $2 \
+                   AND lts.is_effective \
                    AND t.occurred_at >= bp.start_date \
                    AND t.occurred_at <= bp.end_date \
-                   AND EXISTS (SELECT 1 FROM logical_transaction_state lts WHERE lts.id = t.id AND lts.is_effective) \
-                   AND t.seq = (SELECT latest_seq FROM logical_transaction_state WHERE id = t.id) \
-                   AND (t.occurred_at, t.created_at, t.id) < (SELECT t2.occurred_at, t2.created_at, t2.id FROM transaction t2 WHERE t2.id = $3 AND t2.seq = (SELECT latest_seq FROM logical_transaction_state WHERE id = $3))";
+                   AND (t.occurred_at, lts.first_created_at, lts.id) < ( \
+                       SELECT t2.occurred_at, lts2.first_created_at, lts2.id \
+                         FROM logical_transaction_state lts2 \
+                         JOIN transaction t2 ON t2.id = lts2.id AND t2.seq = lts2.latest_seq \
+                        WHERE lts2.id = $3 AND lts2.user_id = $2 AND lts2.is_effective)";
             let combined_where = if filter_sql.is_empty() {
                 base_where.to_string()
             } else {
                 format!("{} AND {}", base_where, filter_sql)
             };
             let query = format!(
-                "SELECT {} FROM transaction t CROSS JOIN budget_period bp {} \
+                "SELECT {} FROM {} {} \
                  WHERE {} \
-                 ORDER BY t.occurred_at DESC, t.created_at DESC, t.id DESC \
+                 ORDER BY t.occurred_at DESC, lts.first_created_at DESC, lts.id DESC \
                  LIMIT ${}",
                 TRANSACTION_SELECT_FIELDS,
+                from_clause,
                 TRANSACTION_JOINS,
                 combined_where,
                 4 + filter_binds.len()
@@ -479,22 +488,22 @@ impl PostgresRepository {
             let (filter_sql, filter_binds) = build_filter_clause(filters, 3); // $1=period_id, $2=user_id
             let base_where = "bp.id = $1 \
                    AND bp.user_id = $2 \
-                   AND t.user_id = $2 \
+                   AND lts.user_id = $2 \
+                   AND lts.is_effective \
                    AND t.occurred_at >= bp.start_date \
-                   AND t.occurred_at <= bp.end_date \
-                   AND EXISTS (SELECT 1 FROM logical_transaction_state lts WHERE lts.id = t.id AND lts.is_effective) \
-                   AND t.seq = (SELECT latest_seq FROM logical_transaction_state WHERE id = t.id)";
+                   AND t.occurred_at <= bp.end_date";
             let combined_where = if filter_sql.is_empty() {
                 base_where.to_string()
             } else {
                 format!("{} AND {}", base_where, filter_sql)
             };
             let query = format!(
-                "SELECT {} FROM transaction t CROSS JOIN budget_period bp {} \
+                "SELECT {} FROM {} {} \
                  WHERE {} \
-                 ORDER BY t.occurred_at DESC, t.created_at DESC, t.id DESC \
+                 ORDER BY t.occurred_at DESC, lts.first_created_at DESC, lts.id DESC \
                  LIMIT ${}",
                 TRANSACTION_SELECT_FIELDS,
+                from_clause,
                 TRANSACTION_JOINS,
                 combined_where,
                 3 + filter_binds.len()
@@ -750,60 +759,39 @@ impl PostgresRepository {
     }
 
     pub async fn get_transaction_stats(&self, period_id: &Uuid, user_id: &Uuid) -> Result<crate::dto::transactions::TransactionStatsResponse, AppError> {
+        // Read directly from user_daily_totals summed over the period's day
+        // range. The aggregate already classifies inflow/outflow by
+        // category_type and counts distinct effective logical transactions,
+        // so no ledger scan or category join is needed at read time.
         #[derive(sqlx::FromRow)]
         struct StatsRow {
-            category_type: String,
-            total_amount: i64,
-            txn_count: i64,
+            total_inflows: i64,
+            total_outflows: i64,
+            transaction_count: i64,
         }
 
-        // Filter to Latest_Row of effective logical transactions only so that
-        // compensating and reversal rows do not inflate counts and the totals
-        // reflect the sum-based semantics. Phase 3 will replace this with a
-        // direct read from user_daily_totals.
-        let rows = sqlx::query_as::<_, StatsRow>(
+        let row = sqlx::query_as::<_, StatsRow>(
             r#"
-            SELECT c.category_type::text,
-                   COALESCE(SUM(t.amount), 0)::BIGINT as total_amount,
-                   COUNT(t.id)::BIGINT as txn_count
-            FROM transaction t
-            JOIN category c ON t.category_id = c.id
-            CROSS JOIN budget_period bp
-            WHERE bp.id = $1
-                AND bp.user_id = $2
-                AND t.user_id = $2
-                AND t.occurred_at >= bp.start_date
-                AND t.occurred_at <= bp.end_date
-                AND EXISTS (SELECT 1 FROM logical_transaction_state lts WHERE lts.id = t.id AND lts.is_effective)
-                AND t.seq = (SELECT latest_seq FROM logical_transaction_state WHERE id = t.id)
-            GROUP BY c.category_type
+            SELECT COALESCE(SUM(udt.inflow), 0)::BIGINT   AS total_inflows,
+                   COALESCE(SUM(udt.outflow), 0)::BIGINT  AS total_outflows,
+                   COALESCE(SUM(udt.tx_count), 0)::BIGINT AS transaction_count
+              FROM budget_period bp
+              LEFT JOIN user_daily_totals udt
+                     ON udt.user_id = bp.user_id
+                    AND udt.day BETWEEN bp.start_date AND bp.end_date
+             WHERE bp.id = $1 AND bp.user_id = $2
             "#,
         )
         .bind(period_id)
         .bind(user_id)
-        .fetch_all(&self.pool)
+        .fetch_one(&self.pool)
         .await?;
 
-        let mut total_inflows = 0i64;
-        let mut total_outflows = 0i64;
-        let mut transaction_count = 0i64;
-
-        for row in rows {
-            let category_type = category_type_from_db(&row.category_type);
-            transaction_count += row.txn_count;
-
-            match category_type {
-                CategoryType::Incoming => total_inflows += row.total_amount,
-                CategoryType::Outgoing => total_outflows += row.total_amount,
-                CategoryType::Transfer => {}
-            }
-        }
-
         Ok(crate::dto::transactions::TransactionStatsResponse {
-            total_inflows,
-            total_outflows,
-            net_amount: total_inflows - total_outflows,
-            transaction_count,
+            total_inflows: row.total_inflows,
+            total_outflows: row.total_outflows,
+            net_amount: row.total_inflows - row.total_outflows,
+            transaction_count: row.transaction_count,
         })
     }
 
