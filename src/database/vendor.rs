@@ -527,16 +527,13 @@ LIMIT 10
             .await?;
         }
 
-        // Delete the now-detached source vendor. The FK cascade from
-        // `transaction.vendor_id` removes the historical (original + reversal)
-        // rows that still point at the source vendor; the correction row
-        // (pointing at the target) survives because it no longer matches.
-        // Enable the ledger mutation bypass for this tx only so the cascade
-        // can execute. The aggregate tables for source_vendor have already
-        // been decremented to zero by the per-tx trigger deltas above, so
-        // the cascading aggregate cleanup is a no-op.
-        sqlx::query("SET LOCAL piggy_pulse.allow_ledger_mutations = 'on'").execute(&mut *tx).await?;
-
+        // Delete the source vendor. The FK from `transaction.vendor_id` was
+        // dropped in migration 20260327000006, so historical source-vendor
+        // rows remain in place as dangling references — harmless because
+        // every read path resolves vendor via `LEFT JOIN vendor` at the
+        // Latest_Row only. The aggregate tables (vendor_all_time,
+        // vendor_daily_spend, vendor_category_all_time) still cascade on
+        // vendor delete and cleanly drop their already-zero rows.
         sqlx::query("DELETE FROM vendor WHERE id = $1 AND user_id = $2")
             .bind(source_id)
             .bind(user_id)
