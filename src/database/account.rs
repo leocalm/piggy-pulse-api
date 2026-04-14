@@ -548,6 +548,16 @@ impl PostgresRepository {
             .ok_or_else(|| AppError::NotFound("Account not found".to_string()))?;
         let currency = existing_account.currency;
 
+        // Account type is immutable after creation (enforced at the DB level
+        // by the `account_type_immutable` trigger from migration
+        // 20260327000004). Check at the service layer first so we can return
+        // a clean 400 instead of letting the trigger raise a 5xx. Same-value
+        // updates are allowed so clients that round-trip the type field on
+        // edit continue to work.
+        if existing_account.account_type != request.account_type {
+            return Err(AppError::BadRequest("Account type cannot be changed after creation".to_string()));
+        }
+
         let account_type_str = account_type_to_db(&request.account_type);
 
         #[derive(sqlx::FromRow)]

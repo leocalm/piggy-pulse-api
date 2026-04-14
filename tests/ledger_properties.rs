@@ -405,3 +405,85 @@ async fn property_negative_amount_rejected_at_dto() {
 
     let _ = Uuid::new_v4(); // suppress unused import lint when above tests shrink
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Property 13: type-field change attempts return 400, not 500
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// PUT /accounts/:id with a different `type` value must return 400 — not a
+/// 500 from the raw immutability trigger. Same for PUT /categories/:id with
+/// a different `type`. This is a regression test for the Schemathesis
+/// fuzzing failure on PR #311, where random `type` values produced 5xx.
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn property_type_field_change_returns_400_not_500() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let acct = create_account(&client, "TypeGuard Acct", 100_000).await;
+    let cat_expense = create_category(&client, "TypeGuard Cat", "expense").await;
+    let _period = create_period(&client, "2026-12-01", "2026-12-31").await;
+
+    // Attempt to change an account's type from Checking → Savings
+    let resp = client
+        .put(format!("{V2_BASE}/accounts/{acct}"))
+        .header(ContentType::JSON)
+        .body(
+            json!({
+                "type": "Savings",
+                "name": "TypeGuard Acct",
+                "color": "#6B8FD4",
+                "initialBalance": 100_000,
+                "currencyId": Uuid::new_v4(),
+            })
+            .to_string(),
+        )
+        .dispatch()
+        .await;
+    assert_eq!(
+        resp.status(),
+        Status::BadRequest,
+        "Property 13 violated: account type change returned {} instead of 400",
+        resp.status()
+    );
+
+    // Attempt to change a category's type from expense → income
+    let resp = client
+        .put(format!("{V2_BASE}/categories/{cat_expense}"))
+        .header(ContentType::JSON)
+        .body(
+            json!({
+                "type": "income",
+                "name": "TypeGuard Cat",
+                "color": "#6B8FD4",
+                "icon": "💰",
+            })
+            .to_string(),
+        )
+        .dispatch()
+        .await;
+    assert_eq!(
+        resp.status(),
+        Status::BadRequest,
+        "Property 13 violated: category type change returned {} instead of 400",
+        resp.status()
+    );
+
+    // Same-value updates should still succeed
+    let resp = client
+        .put(format!("{V2_BASE}/accounts/{acct}"))
+        .header(ContentType::JSON)
+        .body(
+            json!({
+                "type": "Checking",
+                "name": "TypeGuard Acct Renamed",
+                "color": "#6B8FD4",
+                "initialBalance": 100_000,
+                "currencyId": Uuid::new_v4(),
+            })
+            .to_string(),
+        )
+        .dispatch()
+        .await;
+    assert!(resp.status().code < 500, "same-value account update failed with 5xx: {}", resp.status());
+}
