@@ -10,6 +10,32 @@ use crate::models::vendor::Vendor;
 use chrono::NaiveDate;
 use uuid::Uuid;
 
+/// Per-logical-transaction running state. Maintained by the
+/// `transaction_aggregate_maintain` trigger and used as the concurrency-control
+/// target (via `SELECT ... FOR UPDATE`) for void and correct operations.
+#[derive(Debug, sqlx::FromRow)]
+#[allow(dead_code)] // id, user_id, first_created_at are read by list queries in Phase 3
+pub struct LogicalTransactionState {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub current_sum: i64,
+    pub is_effective: bool,
+    pub latest_seq: i64,
+    pub first_created_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Snapshot of the metadata columns on the Latest_Row of a logical transaction.
+/// Used to copy fields into a Full_Reversal_Row during correct/void operations.
+#[derive(Debug, sqlx::FromRow)]
+pub struct LatestRowSnapshot {
+    pub description: String,
+    pub occurred_at: NaiveDate,
+    pub category_id: Option<Uuid>,
+    pub from_account_id: Uuid,
+    pub to_account_id: Option<Uuid>,
+    pub vendor_id: Option<Uuid>,
+}
+
 // Intermediate struct for sqlx query results with all JOINed data
 #[derive(Debug, sqlx::FromRow)]
 struct TransactionRow {
@@ -389,7 +415,20 @@ impl PostgresRepository {
     }
 
     pub async fn get_transaction_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Transaction>, AppError> {
-        let query = build_transaction_query("transaction t", &["t.id = $1 AND t.user_id = $2"], "");
+        // Only return effective logical transactions, resolved to their
+        // Latest_Row. Voided transactions (is_effective = false) return None
+        // so callers see them as "not found". Phase 3 will generalize this
+        // pattern across the read layer.
+        let query = build_transaction_query(
+            "transaction t",
+            &[
+                "t.id = $1",
+                "t.user_id = $2",
+                "EXISTS (SELECT 1 FROM logical_transaction_state lts WHERE lts.id = t.id AND lts.is_effective)",
+                "t.seq = (SELECT latest_seq FROM logical_transaction_state WHERE id = t.id)",
+            ],
+            "",
+        );
         let row = sqlx::query_as::<_, TransactionRow>(&query)
             .bind(id)
             .bind(user_id)
@@ -413,7 +452,9 @@ impl PostgresRepository {
                    AND t.user_id = $2 \
                    AND t.occurred_at >= bp.start_date \
                    AND t.occurred_at <= bp.end_date \
-                   AND (t.occurred_at, t.created_at, t.id) < (SELECT occurred_at, created_at, id FROM transaction WHERE id = $3)";
+                   AND EXISTS (SELECT 1 FROM logical_transaction_state lts WHERE lts.id = t.id AND lts.is_effective) \
+                   AND t.seq = (SELECT latest_seq FROM logical_transaction_state WHERE id = t.id) \
+                   AND (t.occurred_at, t.created_at, t.id) < (SELECT t2.occurred_at, t2.created_at, t2.id FROM transaction t2 WHERE t2.id = $3 AND t2.seq = (SELECT latest_seq FROM logical_transaction_state WHERE id = $3))";
             let combined_where = if filter_sql.is_empty() {
                 base_where.to_string()
             } else {
@@ -440,7 +481,9 @@ impl PostgresRepository {
                    AND bp.user_id = $2 \
                    AND t.user_id = $2 \
                    AND t.occurred_at >= bp.start_date \
-                   AND t.occurred_at <= bp.end_date";
+                   AND t.occurred_at <= bp.end_date \
+                   AND EXISTS (SELECT 1 FROM logical_transaction_state lts WHERE lts.id = t.id AND lts.is_effective) \
+                   AND t.seq = (SELECT latest_seq FROM logical_transaction_state WHERE id = t.id)";
             let combined_where = if filter_sql.is_empty() {
                 base_where.to_string()
             } else {
@@ -466,33 +509,128 @@ impl PostgresRepository {
         Ok(rows.into_iter().map(Transaction::from).collect())
     }
 
-    pub async fn delete_transaction(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
-        sqlx::query("DELETE FROM transaction WHERE id = $1 AND user_id = $2")
-            .bind(id)
-            .bind(user_id)
-            .execute(&self.pool)
-            .await?;
+    /// Acquires a row-level lock on the `logical_transaction_state` row for
+    /// `(id, user_id)`. Must be called inside an open database transaction.
+    /// Returns `None` if no state row matches — the caller should map that to a
+    /// 404 Not Found response.
+    pub(super) async fn lock_logical_transaction_state(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        id: &Uuid,
+        user_id: &Uuid,
+    ) -> Result<Option<LogicalTransactionState>, AppError> {
+        let row = sqlx::query_as::<_, LogicalTransactionState>(
+            r#"
+            SELECT id, user_id, current_sum, is_effective, latest_seq, first_created_at
+              FROM logical_transaction_state
+             WHERE id = $1 AND user_id = $2
+             FOR UPDATE
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+        Ok(row)
+    }
 
+    /// Fetches the metadata columns of the Latest_Row for a logical transaction.
+    /// The caller passes `latest_seq` from a previously-locked
+    /// `LogicalTransactionState`, guaranteeing that no newer row can have been
+    /// inserted between the lock and this read.
+    pub(super) async fn fetch_latest_row(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        id: &Uuid,
+        latest_seq: i64,
+    ) -> Result<LatestRowSnapshot, AppError> {
+        let row = sqlx::query_as::<_, LatestRowSnapshot>(
+            r#"
+            SELECT description, occurred_at, category_id, from_account_id, to_account_id, vendor_id
+              FROM transaction
+             WHERE id = $1 AND seq = $2
+            "#,
+        )
+        .bind(id)
+        .bind(latest_seq)
+        .fetch_one(&mut **tx)
+        .await?;
+        Ok(row)
+    }
+
+    /// Inserts a single ledger row without fetching joined metadata back.
+    /// Used for Full_Reversal_Rows and void Compensating_Rows where the
+    /// caller does not need the inserted row returned. `id = None` generates
+    /// a fresh UUID (for brand-new logical transactions); `id = Some(_)`
+    /// reuses an existing logical `id` (for compensating and correction rows).
+    ///
+    /// This helper does not validate `amount`, so it accepts negative values
+    /// as required by the ledger model. Call `validate_transaction_ownership`
+    /// separately when inserting new user-supplied metadata.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) async fn insert_ledger_row_plain_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        id: Option<&Uuid>,
+        user_id: &Uuid,
+        amount: i64,
+        description: &str,
+        occurred_at: NaiveDate,
+        category_id: Option<&Uuid>,
+        from_account_id: &Uuid,
+        to_account_id: Option<&Uuid>,
+        vendor_id: Option<&Uuid>,
+    ) -> Result<(), AppError> {
+        sqlx::query(
+            r#"
+            INSERT INTO transaction (
+                id, user_id, amount, description, occurred_at,
+                category_id, from_account_id, to_account_id, vendor_id
+            )
+            VALUES (COALESCE($1, gen_random_uuid()), $2, $3, $4, $5, $6, $7, $8, $9)
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .bind(amount)
+        .bind(description)
+        .bind(occurred_at)
+        .bind(category_id)
+        .bind(from_account_id)
+        .bind(to_account_id)
+        .bind(vendor_id)
+        .execute(&mut **tx)
+        .await?;
         Ok(())
     }
 
-    pub async fn update_transaction(&self, id: &Uuid, transaction: &TransactionRequest, user_id: &Uuid) -> Result<Transaction, AppError> {
-        self.validate_transaction_ownership(transaction, user_id).await?;
-
-        let select_query = build_transaction_query("updated t", &[], "");
+    /// Inserts a single ledger row and returns the fully joined `Transaction`.
+    /// Used for Correction_Rows (where the caller needs the updated state to
+    /// build the API response). Follows the same CTE + JOINs pattern as
+    /// `create_transaction`.
+    #[allow(clippy::too_many_arguments)]
+    async fn insert_ledger_row_returning_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        id: Option<&Uuid>,
+        user_id: &Uuid,
+        amount: i64,
+        description: &str,
+        occurred_at: NaiveDate,
+        category_id: &Uuid,
+        from_account_id: &Uuid,
+        to_account_id: Option<&Uuid>,
+        vendor_id: Option<&Uuid>,
+    ) -> Result<Transaction, AppError> {
+        let select_query = build_transaction_query("inserted t", &[], "");
         let query = format!(
             r#"
-            WITH updated AS (
-                UPDATE transaction
-                SET
-                    amount = $1,
-                    description = $2,
-                    occurred_at = $3,
-                    category_id = $4,
-                    from_account_id = $5,
-                    to_account_id = $6,
-                    vendor_id = $7
-                WHERE id = $8 AND user_id = $9
+            WITH inserted AS (
+                INSERT INTO transaction (
+                    id, user_id, amount, description, occurred_at,
+                    category_id, from_account_id, to_account_id, vendor_id
+                )
+                VALUES (COALESCE($1, gen_random_uuid()), $2, $3, $4, $5, $6, $7, $8, $9)
                 RETURNING id, amount, description, occurred_at, category_id, from_account_id, to_account_id, vendor_id
             )
             {}
@@ -501,19 +639,114 @@ impl PostgresRepository {
         );
 
         let row = sqlx::query_as::<_, TransactionRow>(&query)
-            .bind(transaction.amount)
-            .bind(&transaction.description)
-            .bind(transaction.occurred_at)
-            .bind(transaction.category_id)
-            .bind(transaction.from_account_id)
-            .bind(transaction.to_account_id)
-            .bind(transaction.vendor_id)
             .bind(id)
             .bind(user_id)
-            .fetch_one(&self.pool)
+            .bind(amount)
+            .bind(description)
+            .bind(occurred_at)
+            .bind(category_id)
+            .bind(from_account_id)
+            .bind(to_account_id)
+            .bind(vendor_id)
+            .fetch_one(&mut **tx)
+            .await?;
+        Ok(Transaction::from(row))
+    }
+
+    /// Voids a logical transaction by inserting a Compensating_Row with
+    /// `amount = -current_sum` under the same `id`. No DELETE is issued
+    /// against the `transaction` table. Returns 404 if the logical id does
+    /// not exist for this user, or 409 if the transaction has already been
+    /// voided (current_sum = 0).
+    pub async fn delete_transaction(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
+        let mut tx = self.pool.begin().await?;
+
+        let state = self
+            .lock_logical_transaction_state(&mut tx, id, user_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Transaction not found".to_string()))?;
+
+        if !state.is_effective {
+            return Err(AppError::Conflict("Transaction has already been voided".to_string()));
+        }
+
+        let latest = self.fetch_latest_row(&mut tx, id, state.latest_seq).await?;
+
+        self.insert_ledger_row_plain_in_tx(
+            &mut tx,
+            Some(id),
+            user_id,
+            -state.current_sum,
+            &latest.description,
+            latest.occurred_at,
+            latest.category_id.as_ref(),
+            &latest.from_account_id,
+            latest.to_account_id.as_ref(),
+            latest.vendor_id.as_ref(),
+        )
+        .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Corrects a logical transaction by inserting a Full_Reversal_Row
+    /// (copying the Latest_Row's metadata, with `amount = -current_sum`)
+    /// followed by a Correction_Row (with the request's new metadata and
+    /// `amount`). Both inserts happen atomically inside a single database
+    /// transaction. No UPDATE is issued against the `transaction` table.
+    /// Returns 404 if the logical id does not exist for this user, or 409 if
+    /// the transaction has already been voided.
+    pub async fn update_transaction(&self, id: &Uuid, transaction: &TransactionRequest, user_id: &Uuid) -> Result<Transaction, AppError> {
+        self.validate_transaction_ownership(transaction, user_id).await?;
+
+        let mut tx = self.pool.begin().await?;
+
+        let state = self
+            .lock_logical_transaction_state(&mut tx, id, user_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Transaction not found".to_string()))?;
+
+        if !state.is_effective {
+            return Err(AppError::Conflict("Transaction has already been voided".to_string()));
+        }
+
+        let latest = self.fetch_latest_row(&mut tx, id, state.latest_seq).await?;
+
+        // Full_Reversal_Row: brings the running sum to zero using the latest
+        // metadata so the trigger decrements the correct buckets.
+        self.insert_ledger_row_plain_in_tx(
+            &mut tx,
+            Some(id),
+            user_id,
+            -state.current_sum,
+            &latest.description,
+            latest.occurred_at,
+            latest.category_id.as_ref(),
+            &latest.from_account_id,
+            latest.to_account_id.as_ref(),
+            latest.vendor_id.as_ref(),
+        )
+        .await?;
+
+        // Correction_Row: applies the new metadata and desired amount.
+        let result = self
+            .insert_ledger_row_returning_in_tx(
+                &mut tx,
+                Some(id),
+                user_id,
+                transaction.amount,
+                &transaction.description,
+                transaction.occurred_at,
+                &transaction.category_id,
+                &transaction.from_account_id,
+                transaction.to_account_id.as_ref(),
+                transaction.vendor_id.as_ref(),
+            )
             .await?;
 
-        Ok(Transaction::from(row))
+        tx.commit().await?;
+        Ok(result)
     }
 
     pub async fn get_transaction_stats(&self, period_id: &Uuid, user_id: &Uuid) -> Result<crate::dto::transactions::TransactionStatsResponse, AppError> {
@@ -524,6 +757,10 @@ impl PostgresRepository {
             txn_count: i64,
         }
 
+        // Filter to Latest_Row of effective logical transactions only so that
+        // compensating and reversal rows do not inflate counts and the totals
+        // reflect the sum-based semantics. Phase 3 will replace this with a
+        // direct read from user_daily_totals.
         let rows = sqlx::query_as::<_, StatsRow>(
             r#"
             SELECT c.category_type::text,
@@ -537,6 +774,8 @@ impl PostgresRepository {
                 AND t.user_id = $2
                 AND t.occurred_at >= bp.start_date
                 AND t.occurred_at <= bp.end_date
+                AND EXISTS (SELECT 1 FROM logical_transaction_state lts WHERE lts.id = t.id AND lts.is_effective)
+                AND t.seq = (SELECT latest_seq FROM logical_transaction_state WHERE id = t.id)
             GROUP BY c.category_type
             "#,
         )
@@ -569,7 +808,7 @@ impl PostgresRepository {
     }
 
     pub async fn has_any_transactions(&self, user_id: &Uuid) -> Result<bool, AppError> {
-        let row = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM transaction WHERE user_id = $1)")
+        let row = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM logical_transaction_state WHERE user_id = $1 AND is_effective)")
             .bind(user_id)
             .fetch_one(&self.pool)
             .await?;

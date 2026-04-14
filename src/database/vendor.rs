@@ -456,18 +456,87 @@ LIMIT 10
             return Err(AppError::NotFound("Target vendor not found".to_string()));
         }
 
-        // Perform reassignment and deletion atomically
         let mut tx = self.pool.begin().await?;
 
-        // Reassign all transactions from source to target
-        sqlx::query("UPDATE transaction SET vendor_id = $1 WHERE vendor_id = $2 AND user_id = $3")
-            .bind(target_id)
-            .bind(source_id)
-            .bind(user_id)
-            .execute(&mut *tx)
+        // Lock every effective logical transaction currently assigned to the
+        // source vendor, ordered deterministically so concurrent merges don't
+        // deadlock. The join to `transaction` at `latest_seq` reads the
+        // current vendor_id from the Latest_Row, matching the user's view of
+        // "which transactions belong to this vendor".
+        #[derive(sqlx::FromRow)]
+        struct EffectiveRow {
+            id: Uuid,
+            current_sum: i64,
+            latest_seq: i64,
+        }
+
+        let effective: Vec<EffectiveRow> = sqlx::query_as::<_, EffectiveRow>(
+            r#"
+            SELECT lts.id, lts.current_sum, lts.latest_seq
+              FROM logical_transaction_state lts
+              JOIN transaction t ON t.id = lts.id AND t.seq = lts.latest_seq
+             WHERE lts.user_id = $1
+               AND lts.is_effective
+               AND t.vendor_id = $2
+             ORDER BY lts.id
+             FOR UPDATE OF lts
+            "#,
+        )
+        .bind(user_id)
+        .bind(source_id)
+        .fetch_all(&mut *tx)
+        .await?;
+
+        // For each effective transaction: insert a Full_Reversal_Row (copying
+        // the latest metadata, still pointing at the source vendor) and a
+        // Correction_Row (same metadata but vendor_id swapped to the target).
+        // The logical `id` is preserved so external references stay valid; the
+        // aggregate trigger decrements vendor_*_spend buckets for source and
+        // increments the same buckets for target automatically.
+        for row in &effective {
+            let latest = self.fetch_latest_row(&mut tx, &row.id, row.latest_seq).await?;
+
+            // Full_Reversal_Row: still under source vendor
+            self.insert_ledger_row_plain_in_tx(
+                &mut tx,
+                Some(&row.id),
+                user_id,
+                -row.current_sum,
+                &latest.description,
+                latest.occurred_at,
+                latest.category_id.as_ref(),
+                &latest.from_account_id,
+                latest.to_account_id.as_ref(),
+                latest.vendor_id.as_ref(),
+            )
             .await?;
 
-        // Delete the source vendor
+            // Correction_Row: retargeted to target vendor
+            self.insert_ledger_row_plain_in_tx(
+                &mut tx,
+                Some(&row.id),
+                user_id,
+                row.current_sum,
+                &latest.description,
+                latest.occurred_at,
+                latest.category_id.as_ref(),
+                &latest.from_account_id,
+                latest.to_account_id.as_ref(),
+                Some(target_id),
+            )
+            .await?;
+        }
+
+        // Delete the now-detached source vendor. The FK cascade from
+        // `transaction.vendor_id` removes the historical (original + reversal)
+        // rows that still point at the source vendor; the correction row
+        // (pointing at the target) survives because it no longer matches.
+        // Enable the ledger mutation bypass for this tx only so the cascade
+        // can execute. The aggregate tables for source_vendor have already
+        // been decremented to zero by the per-tx trigger deltas above, so
+        // the cascading aggregate cleanup is a no-op.
+        sqlx::query("SET LOCAL piggy_pulse.allow_ledger_mutations = 'on'").execute(&mut *tx).await?;
+
         sqlx::query("DELETE FROM vendor WHERE id = $1 AND user_id = $2")
             .bind(source_id)
             .bind(user_id)

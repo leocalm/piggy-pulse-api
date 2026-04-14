@@ -550,6 +550,11 @@ impl PostgresRepository {
     pub async fn reset_structure_v2(&self, user_id: &Uuid) -> Result<(), AppError> {
         let mut tx = self.pool.begin().await?;
 
+        // Bulk reset legitimately cascade-deletes transactions via the
+        // account/category/vendor FKs. Enable the ledger mutation bypass for
+        // this transaction only; it is cleared automatically on commit.
+        sqlx::query("SET LOCAL piggy_pulse.allow_ledger_mutations = 'on'").execute(&mut *tx).await?;
+
         sqlx::query("DELETE FROM period_schedule WHERE user_id = $1")
             .bind(user_id)
             .execute(&mut *tx)
@@ -586,6 +591,10 @@ impl PostgresRepository {
     /// this does NOT re-create the system Transfer category.
     pub async fn delete_all_user_data(&self, user_id: &Uuid) -> Result<(), AppError> {
         let mut tx = self.pool.begin().await?;
+
+        // Same rationale as reset_structure_v2: the cascade chain will remove
+        // transactions; bypass the ledger immutability trigger for this tx only.
+        sqlx::query("SET LOCAL piggy_pulse.allow_ledger_mutations = 'on'").execute(&mut *tx).await?;
 
         sqlx::query("DELETE FROM period_schedule WHERE user_id = $1")
             .bind(user_id)

@@ -1,4 +1,4 @@
-use crate::database::postgres_repository::{PostgresRepository, is_unique_violation};
+use crate::database::postgres_repository::{PostgresRepository, is_exclusion_violation, is_unique_violation};
 use crate::error::app_error::AppError;
 use crate::models::budget_period::{AutoPeriodGenerationResponse, BudgetPeriod, BudgetPeriodRequest, DurationUnit, PeriodSchedule, WeekendAdjustment};
 use chrono::{Datelike, Days, Months, NaiveDate, Weekday};
@@ -474,6 +474,14 @@ impl PostgresRepository {
                     Ok(_) => {
                         periods_created += 1;
                     }
+                    Err(err) if is_exclusion_violation(&err) => {
+                        // The weekend-adjustment logic can produce a start/end
+                        // that overlaps with an existing period for the same
+                        // user. Skip rather than failing the whole generator —
+                        // the user will still have periods up to the last
+                        // successful insertion and a subsequent call will try
+                        // again with a later anchor.
+                    }
                     Err(err) if is_unique_violation(&err) => {
                         let fallback_name = format!("{} ({})", generated_name, start_date.format("%Y-%m-%d"));
                         let fallback_insert = sqlx::query_scalar::<_, Uuid>(
@@ -492,7 +500,7 @@ impl PostgresRepository {
 
                         match fallback_insert {
                             Ok(_) => periods_created += 1,
-                            Err(err) if is_unique_violation(&err) => {}
+                            Err(err) if is_unique_violation(&err) || is_exclusion_violation(&err) => {}
                             Err(err) => return Err(err.into()),
                         }
                     }

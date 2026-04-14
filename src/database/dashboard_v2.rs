@@ -502,6 +502,9 @@ LIMIT $2
     pub async fn get_top_vendors_v2(&self, period_id: &Uuid, user_id: &Uuid, limit: i64) -> Result<Vec<TopVendorRow>, AppError> {
         self.get_budget_period(period_id, user_id).await?;
 
+        // Filter to Latest_Row of effective logical transactions so vendor
+        // merges and corrections are reflected correctly. Phase 3 will
+        // replace this with a direct read from `vendor_daily_spend`.
         let rows = sqlx::query_as::<_, TopVendorRow>(
             r#"
 SELECT
@@ -519,6 +522,8 @@ WHERE v.user_id = $2
   AND t.occurred_at <= bp.end_date
   AND c.category_type = 'Outgoing'
   AND (fa.account_type IS NULL OR fa.account_type <> 'Allowance')
+  AND EXISTS (SELECT 1 FROM logical_transaction_state lts WHERE lts.id = t.id AND lts.is_effective)
+  AND t.seq = (SELECT latest_seq FROM logical_transaction_state WHERE id = t.id)
 GROUP BY v.id, v.name
 ORDER BY total_spend DESC
 LIMIT $3
