@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

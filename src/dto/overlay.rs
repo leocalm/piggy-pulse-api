@@ -3,7 +3,7 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::dto::common::{Date, PaginatedResponse};
-use crate::dto::transactions::TransactionResponse;
+use crate::dto::transactions::EncryptedTransactionResponse;
 
 // ===== Enums =====
 
@@ -84,7 +84,7 @@ pub struct OverlayTransactionMembership {
 #[serde(rename_all = "camelCase")]
 pub struct OverlayTransactionResponse {
     #[serde(flatten)]
-    pub transaction: TransactionResponse,
+    pub transaction: EncryptedTransactionResponse,
     pub membership: OverlayTransactionMembership,
 }
 

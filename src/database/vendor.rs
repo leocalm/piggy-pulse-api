@@ -454,93 +454,35 @@ LIMIT 10
             return Err(AppError::NotFound("Target vendor not found".to_string()));
         }
 
-        let mut tx = self.pool.begin().await?;
+        let _tx = self.pool.begin().await?;
 
         // Lock every effective logical transaction currently assigned to the
         // source vendor, ordered deterministically so concurrent merges don't
         // deadlock. The join to `transaction` at `latest_seq` reads the
         // current vendor_id from the Latest_Row, matching the user's view of
         // "which transactions belong to this vendor".
-        #[derive(sqlx::FromRow)]
-        struct EffectiveRow {
-            id: Uuid,
-            current_sum: i64,
-            latest_seq: i64,
-        }
-
-        let effective: Vec<EffectiveRow> = sqlx::query_as::<_, EffectiveRow>(
-            r#"
-            SELECT lts.id, lts.current_sum, lts.latest_seq
-              FROM logical_transaction_state lts
-              JOIN transaction t ON t.id = lts.id AND t.seq = lts.latest_seq
-             WHERE lts.user_id = $1
-               AND lts.is_effective
-               AND t.vendor_id = $2
-             ORDER BY lts.id
-             FOR UPDATE OF lts
-            "#,
-        )
-        .bind(user_id)
-        .bind(source_id)
-        .fetch_all(&mut *tx)
-        .await?;
-
-        // For each effective transaction: insert a Full_Reversal_Row (copying
-        // the latest metadata, still pointing at the source vendor) and a
-        // Correction_Row (same metadata but vendor_id swapped to the target).
-        // The logical `id` is preserved so external references stay valid; the
-        // aggregate trigger decrements vendor_*_spend buckets for source and
-        // increments the same buckets for target automatically.
-        for row in &effective {
-            let latest = self.fetch_latest_row(&mut tx, &row.id, row.latest_seq).await?;
-
-            // Full_Reversal_Row: still under source vendor
-            self.insert_ledger_row_plain_in_tx(
-                &mut tx,
-                Some(&row.id),
-                user_id,
-                -row.current_sum,
-                &latest.description,
-                latest.occurred_at,
-                latest.category_id.as_ref(),
-                &latest.from_account_id,
-                latest.to_account_id.as_ref(),
-                latest.vendor_id.as_ref(),
-            )
-            .await?;
-
-            // Correction_Row: retargeted to target vendor
-            self.insert_ledger_row_plain_in_tx(
-                &mut tx,
-                Some(&row.id),
-                user_id,
-                row.current_sum,
-                &latest.description,
-                latest.occurred_at,
-                latest.category_id.as_ref(),
-                &latest.from_account_id,
-                latest.to_account_id.as_ref(),
-                Some(target_id),
-            )
-            .await?;
-        }
-
-        // Delete the source vendor. The FK from `transaction.vendor_id` was
-        // dropped in migration 20260327000006, so historical source-vendor
-        // rows remain in place as dangling references — harmless because
-        // every read path resolves vendor via `LEFT JOIN vendor` at the
-        // Latest_Row only. The aggregate tables (vendor_all_time,
-        // vendor_daily_spend, vendor_category_all_time) still cascade on
-        // vendor delete and cleanly drop their already-zero rows.
-        sqlx::query("DELETE FROM vendor WHERE id = $1 AND user_id = $2")
-            .bind(source_id)
-            .bind(user_id)
-            .execute(&mut *tx)
-            .await?;
-
-        tx.commit().await?;
-
-        Ok(true)
+        // TODO(Phase 2c): re-implement merge_vendor under encryption.
+        // The encrypted version needs the caller's DEK to:
+        //   1. Read lts.current_sum_enc for each source-vendor transaction,
+        //      decrypt to prev_sum
+        //   2. Encrypt(-prev_sum) for the reversal row's amount_enc
+        //   3. Encrypt(prev_sum) for the correction row's amount_enc
+        //   4. Copy description_enc bytes verbatim between reversal +
+        //      correction rows (no decryption needed)
+        //   5. Maintain lts.current_sum_enc via upsert_lts_in_tx
+        //   6. Apply account balance deltas via apply_category_balance_effect
+        //      (same as create_transaction's balance side effect, twice:
+        //      once to undo the old vendor membership, once to apply it
+        //      under the target)
+        // For Phase 2b this is stubbed: merge_vendor rejects at the service
+        // layer so the rest of the write path can compile and run. Phase 2c
+        // adds the &Dek parameter to the signature and implements the above.
+        let _ = user_id;
+        let _ = source_id;
+        let _ = target_id;
+        Err(AppError::BadRequest(
+            "merge_vendor is temporarily unavailable during the encryption refactor".to_string(),
+        ))
     }
 
     pub async fn get_vendor_stats_v2(&self, user_id: &Uuid, period_id: &Uuid) -> Result<VendorStatsDb, AppError> {

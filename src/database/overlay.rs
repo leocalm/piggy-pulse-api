@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::account::AccountResponse;

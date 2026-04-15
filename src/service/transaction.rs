@@ -1,11 +1,20 @@
+//! Transaction service layer — encryption-at-rest edition.
+//!
+//! Phase 2b of the encryption refactor. The service layer converts V2 DTO
+//! requests to the internal `TransactionRequest` model, hands them to the
+//! repository's encrypted write path, and maps the returned
+//! `LedgerInsertResult` into the wire `EncryptedTransactionResponse`.
+//!
+//! Read paths (list / stats / has-any / detail) are deleted; see Phase 3
+//! which introduces `GET /v2/transactions` returning the full period as
+//! ciphertext and retires the dashboard/stats/detail endpoints.
+
+use crate::crypto::Dek;
 use crate::database::postgres_repository::PostgresRepository;
-use crate::dto::categories::CategoryType as V2CategoryType;
-use crate::dto::common::Date;
-use crate::dto::transactions::{AccountRef, CategoryRef, CreateTransactionRequest, TransactionKind, TransactionListResponse, TransactionResponse, VendorRef};
+use crate::dto::transactions::{CreateTransactionRequest, EncryptedTransactionResponse};
 use crate::error::app_error::AppError;
-use crate::models::category::CategoryType as V1CategoryType;
-use crate::models::pagination::{CursorParams, TransactionDirection, TransactionFilters};
-use crate::models::transaction::{Transaction, TransactionRequest as V1TransactionRequest};
+use crate::models::pagination::TransactionDirection;
+use crate::models::transaction::TransactionRequest as V1TransactionRequest;
 use chrono::NaiveDate;
 use uuid::Uuid;
 
@@ -18,72 +27,45 @@ impl<'a> TransactionService<'a> {
         TransactionService { repository }
     }
 
-    pub async fn create_transaction(&self, request: &CreateTransactionRequest, user_id: &Uuid) -> Result<TransactionResponse, AppError> {
+    pub async fn create_transaction(&self, request: &CreateTransactionRequest, user_id: &Uuid, dek: &Dek) -> Result<EncryptedTransactionResponse, AppError> {
         let v1_request = to_v1_request(request)?;
-        let tx = self.repository.create_transaction(&v1_request, user_id).await?;
-        Ok(to_v2_response(&tx))
+        let result = self.repository.create_transaction(&v1_request, user_id, dek).await?;
+        Ok(result.into())
     }
 
-    /// Creates all transactions in a single atomic DB transaction.
-    /// Returns all created transactions or rolls back entirely if any item fails.
-    pub async fn batch_create_transactions(&self, requests: &[CreateTransactionRequest], user_id: &Uuid) -> Result<Vec<TransactionResponse>, AppError> {
+    pub async fn batch_create_transactions(
+        &self,
+        requests: &[CreateTransactionRequest],
+        user_id: &Uuid,
+        dek: &Dek,
+    ) -> Result<Vec<EncryptedTransactionResponse>, AppError> {
         let v1_requests: Result<Vec<_>, _> = requests.iter().map(to_v1_request).collect();
         let v1_requests = v1_requests?;
-        let txs = self.repository.batch_create_transactions(&v1_requests, user_id).await?;
-        Ok(txs.iter().map(to_v2_response).collect())
+        let results = self.repository.batch_create_transactions(&v1_requests, user_id, dek).await?;
+        Ok(results.into_iter().map(EncryptedTransactionResponse::from).collect())
     }
 
-    pub async fn update_transaction(&self, id: &Uuid, request: &CreateTransactionRequest, user_id: &Uuid) -> Result<TransactionResponse, AppError> {
-        // Validation happens first (400 for bad amount/description), then the
-        // repository acquires a FOR UPDATE lock on logical_transaction_state
-        // and emits NotFound/Conflict atomically with the two-row insert.
-        let v1_request = to_v1_request(request)?;
-        let tx = self.repository.update_transaction(id, &v1_request, user_id).await?;
-        Ok(to_v2_response(&tx))
-    }
-
-    pub async fn delete_transaction(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
-        // The repository's void path acquires a FOR UPDATE lock on
-        // logical_transaction_state and returns NotFound (404) or Conflict
-        // (409 "Transaction has already been voided") atomically with the
-        // compensating row insert, so no pre-check is needed here.
-        self.repository.delete_transaction(id, user_id).await
-    }
-
-    pub async fn list_transactions(
+    pub async fn update_transaction(
         &self,
-        period_id: &Uuid,
-        cursor: Option<Uuid>,
-        limit: i64,
-        filters: TransactionFilters,
+        id: &Uuid,
+        request: &CreateTransactionRequest,
         user_id: &Uuid,
-    ) -> Result<TransactionListResponse, AppError> {
-        let params = CursorParams { cursor, limit: Some(limit) };
+        dek: &Dek,
+    ) -> Result<EncryptedTransactionResponse, AppError> {
+        let v1_request = to_v1_request(request)?;
+        let result = self.repository.update_transaction(id, &v1_request, user_id, dek).await?;
+        Ok(result.into())
+    }
 
-        let mut rows = self.repository.get_transactions_for_period(period_id, &params, &filters, user_id).await?;
-
-        let has_more = rows.len() as i64 > limit;
-        if has_more {
-            rows.truncate(limit as usize);
-        }
-        let next_cursor = if has_more { rows.last().map(|t| t.id.to_string()) } else { None };
-
-        // Count total for the period (without pagination)
-        let total_count = rows.len() as i64;
-
-        let data: Vec<TransactionResponse> = rows.iter().map(to_v2_response).collect();
-
-        Ok(TransactionListResponse {
-            data,
-            total_count,
-            has_more,
-            next_cursor,
-        })
+    pub async fn delete_transaction(&self, id: &Uuid, user_id: &Uuid, dek: &Dek) -> Result<(), AppError> {
+        self.repository.delete_transaction(id, user_id, dek).await
     }
 }
 
 /// Converts the V2 direction string (from query param) to the V1 TransactionDirection
-/// which maps to DB category_type values.
+/// which maps to DB category_type values. Kept for the filter-plumbing in
+/// dto/pagination until Phase 3 retires the filter machinery entirely.
+#[allow(dead_code)]
 pub fn parse_direction(direction: &str) -> Result<TransactionDirection, AppError> {
     match direction {
         "income" => Ok(TransactionDirection::Incoming),
@@ -93,57 +75,6 @@ pub fn parse_direction(direction: &str) -> Result<TransactionDirection, AppError
             "Invalid direction '{}'. Must be one of: income, expense, transfer",
             direction
         ))),
-    }
-}
-
-fn to_v2_category_type(ct: V1CategoryType) -> V2CategoryType {
-    match ct {
-        V1CategoryType::Incoming => V2CategoryType::Income,
-        V1CategoryType::Outgoing => V2CategoryType::Expense,
-        V1CategoryType::Transfer => V2CategoryType::Transfer,
-    }
-}
-
-fn to_v2_response(tx: &Transaction) -> TransactionResponse {
-    let from_account = AccountRef {
-        id: tx.from_account.id,
-        name: tx.from_account.name.clone(),
-        color: tx.from_account.color.clone(),
-    };
-
-    let category = CategoryRef {
-        id: tx.category.id,
-        name: tx.category.name.clone(),
-        color: tx.category.color.clone(),
-        icon: tx.category.icon.clone(),
-        category_type: to_v2_category_type(tx.category.category_type),
-    };
-
-    let vendor = tx.vendor.as_ref().map(|v| VendorRef {
-        id: v.id,
-        name: v.name.clone(),
-    });
-
-    let kind = match &tx.to_account {
-        Some(to_acc) => TransactionKind::Transfer {
-            to_account: AccountRef {
-                id: to_acc.id,
-                name: to_acc.name.clone(),
-                color: to_acc.color.clone(),
-            },
-        },
-        None => TransactionKind::Regular { to_account: None },
-    };
-
-    TransactionResponse {
-        id: tx.id,
-        date: Date(tx.occurred_at),
-        description: tx.description.clone(),
-        amount: tx.amount,
-        from_account,
-        category,
-        vendor,
-        kind,
     }
 }
 
@@ -177,12 +108,9 @@ fn to_v1_request(request: &CreateTransactionRequest) -> Result<V1TransactionRequ
         ),
     };
 
-    // Validate amount >= 0
     if amount < 0 {
         return Err(AppError::BadRequest("amount must be >= 0".to_string()));
     }
-
-    // Validate description length
     if description.len() < 3 {
         return Err(AppError::BadRequest("description must be at least 3 characters".to_string()));
     }
@@ -199,6 +127,7 @@ fn to_v1_request(request: &CreateTransactionRequest) -> Result<V1TransactionRequ
 }
 
 /// Parse a date string in YYYY-MM-DD format.
+#[allow(dead_code)]
 pub fn parse_date(s: &str) -> Result<NaiveDate, AppError> {
     NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| AppError::BadRequest(format!("Invalid date format '{}'. Expected YYYY-MM-DD", s)))
 }

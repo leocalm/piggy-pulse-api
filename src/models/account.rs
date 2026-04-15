@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::models::currency::{Currency, CurrencyResponse};
 use chrono::NaiveDate;
 use rocket::serde::{Deserialize, Serialize};

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::models::account::{Account, AccountResponse};
 use crate::models::category::{Category, CategoryResponse};
 use crate::models::vendor::{Vendor, VendorResponse};

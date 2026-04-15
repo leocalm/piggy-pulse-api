@@ -3,7 +3,6 @@ mod config;
 mod cron_tasks;
 pub mod crypto;
 mod database;
-pub mod session_dek;
 mod db;
 mod dto;
 mod error;
@@ -11,6 +10,7 @@ mod middleware;
 mod models;
 mod routes;
 mod service;
+pub mod session_dek;
 
 #[cfg(test)]
 pub mod test_utils;

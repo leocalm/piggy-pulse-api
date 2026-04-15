@@ -68,10 +68,7 @@ impl Dek {
         let mut nonce_bytes = [0u8; 12];
         rand::rng().fill_bytes(&mut nonce_bytes);
         let nonce = Nonce::from_slice(&nonce_bytes);
-        let ciphertext = self
-            .cipher()
-            .encrypt(nonce, plaintext)
-            .map_err(|_| CryptoError::EncryptFailed)?;
+        let ciphertext = self.cipher().encrypt(nonce, plaintext).map_err(|_| CryptoError::EncryptFailed)?;
         let mut out = Vec::with_capacity(12 + ciphertext.len());
         out.extend_from_slice(&nonce_bytes);
         out.extend_from_slice(&ciphertext);
@@ -86,9 +83,7 @@ impl Dek {
         }
         let (nonce_bytes, ciphertext) = envelope.split_at(12);
         let nonce = Nonce::from_slice(nonce_bytes);
-        self.cipher()
-            .decrypt(nonce, ciphertext)
-            .map_err(|_| CryptoError::DecryptFailed)
+        self.cipher().decrypt(nonce, ciphertext).map_err(|_| CryptoError::DecryptFailed)
     }
 
     /// Encrypt an i64 (little-endian).

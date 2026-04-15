@@ -2,11 +2,10 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::dto::common::{Date, PaginatedResponse};
 use crate::dto::overlay::{
     CreateOverlayRequest, InclusionMode as DtoInclusionMode, OverlayCategoryBreakdownItem, OverlayCategoryCap as DtoOverlayCategoryCap, OverlayResponse,
-    OverlayRules as DtoOverlayRules, OverlayTransactionListResponse, OverlayTransactionMembership, OverlayTransactionResponse,
+    OverlayRules as DtoOverlayRules, OverlayTransactionListResponse,
 };
-use crate::dto::transactions::{AccountRef, CategoryRef, TransactionKind, TransactionResponse, VendorRef};
 use crate::error::app_error::AppError;
-use crate::models::overlay::{InclusionSource, OverlayCategoryCap, OverlayRequest, OverlayRules, OverlayWithMetrics};
+use crate::models::overlay::{OverlayCategoryCap, OverlayRequest, OverlayRules, OverlayWithMetrics};
 use uuid::Uuid;
 
 pub struct OverlayService<'a> {
@@ -71,46 +70,26 @@ impl<'a> OverlayService<'a> {
         self.repository.delete_overlay(overlay_id, user_id).await
     }
 
-    pub async fn list_overlay_transactions(&self, overlay_id: &Uuid, user_id: &Uuid) -> Result<OverlayTransactionListResponse, AppError> {
-        let transactions = self.repository.get_overlay_transactions(overlay_id, user_id).await?;
-
-        let data: Vec<OverlayTransactionResponse> = transactions
-            .into_iter()
-            .map(|twm| {
-                let tx_resp = v1_tx_to_dto(&twm.transaction);
-                let membership = OverlayTransactionMembership {
-                    is_included: twm.membership.is_included,
-                    inclusion_source: twm.membership.inclusion_source.map(|s| match s {
-                        InclusionSource::Manual => DtoInclusionMode::Manual,
-                        InclusionSource::Rules => DtoInclusionMode::Rules,
-                        InclusionSource::All => DtoInclusionMode::All,
-                    }),
-                };
-                OverlayTransactionResponse {
-                    transaction: tx_resp,
-                    membership,
-                }
-            })
-            .collect();
-
-        let total_count = data.len() as i64;
-        Ok(PaginatedResponse {
-            data,
-            total_count,
-            has_more: false,
-            next_cursor: None,
-        })
+    pub async fn list_overlay_transactions(&self, _overlay_id: &Uuid, _user_id: &Uuid) -> Result<OverlayTransactionListResponse, AppError> {
+        unimplemented!("Phase 3: overlay list transactions — retired under encryption, rewrite planned")
     }
 
     pub async fn include_transaction(&self, overlay_id: &Uuid, transaction_id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
         // Verify overlay exists
         let _ = self.repository.get_overlay(overlay_id, user_id).await?;
 
-        // Verify transaction exists
-        self.repository
-            .get_transaction_by_id(transaction_id, user_id)
-            .await?
-            .ok_or_else(|| AppError::NotFound("Transaction not found".to_string()))?;
+        // Verify transaction exists and is still effective by looking it up
+        // in logical_transaction_state (plaintext structural fields, no DEK
+        // required). Replaces the pre-encryption get_transaction_by_id call
+        // which joined the now-ciphertext transaction columns.
+        let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM logical_transaction_state WHERE id = $1 AND user_id = $2 AND is_effective)")
+            .bind(transaction_id)
+            .bind(user_id)
+            .fetch_one(&self.repository.pool)
+            .await?;
+        if !exists {
+            return Err(AppError::NotFound("Transaction not found".to_string()));
+        }
 
         // Check if already manually included
         if self.repository.is_transaction_manually_included(overlay_id, transaction_id).await? {
@@ -124,11 +103,18 @@ impl<'a> OverlayService<'a> {
         // Verify overlay exists
         let _ = self.repository.get_overlay(overlay_id, user_id).await?;
 
-        // Verify transaction exists
-        self.repository
-            .get_transaction_by_id(transaction_id, user_id)
-            .await?
-            .ok_or_else(|| AppError::NotFound("Transaction not found".to_string()))?;
+        // Verify transaction exists and is still effective by looking it up
+        // in logical_transaction_state (plaintext structural fields, no DEK
+        // required). Replaces the pre-encryption get_transaction_by_id call
+        // which joined the now-ciphertext transaction columns.
+        let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM logical_transaction_state WHERE id = $1 AND user_id = $2 AND is_effective)")
+            .bind(transaction_id)
+            .bind(user_id)
+            .fetch_one(&self.repository.pool)
+            .await?;
+        if !exists {
+            return Err(AppError::NotFound("Transaction not found".to_string()));
+        }
 
         // Check if already manually excluded
         if self.repository.is_transaction_manually_excluded(overlay_id, transaction_id).await? {
@@ -221,50 +207,5 @@ fn to_dto(overlay: &OverlayWithMetrics) -> OverlayResponse {
                 amount: *amount,
             })
             .collect(),
-    }
-}
-
-fn v1_tx_to_dto(tx: &crate::models::transaction::TransactionResponse) -> TransactionResponse {
-    use crate::dto::categories::CategoryType;
-
-    let from_account = AccountRef {
-        id: tx.from_account.id,
-        name: tx.from_account.name.clone(),
-        color: tx.from_account.color.clone(),
-    };
-
-    let category = CategoryRef {
-        id: tx.category.id,
-        name: tx.category.name.clone(),
-        color: tx.category.color.clone(),
-        icon: tx.category.icon.clone(),
-        category_type: CategoryType::from_v1(tx.category.category_type),
-    };
-
-    let vendor = tx.vendor.as_ref().map(|v| VendorRef {
-        id: v.id,
-        name: v.name.clone(),
-    });
-
-    let kind = match &tx.to_account {
-        Some(to_acc) => TransactionKind::Transfer {
-            to_account: AccountRef {
-                id: to_acc.id,
-                name: to_acc.name.clone(),
-                color: to_acc.color.clone(),
-            },
-        },
-        None => TransactionKind::Regular { to_account: None },
-    };
-
-    TransactionResponse {
-        id: tx.id,
-        date: Date(tx.occurred_at),
-        description: tx.description.clone(),
-        amount: tx.amount,
-        from_account,
-        category,
-        vendor,
-        kind,
     }
 }

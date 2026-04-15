@@ -151,7 +151,9 @@ impl AppError {
 
 impl From<crate::crypto::CryptoError> for AppError {
     fn from(e: crate::crypto::CryptoError) -> Self {
-        AppError::Internal { message: format!("crypto: {e}") }
+        AppError::Internal {
+            message: format!("crypto: {e}"),
+        }
     }
 }
 

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::models::transaction::TransactionResponse;
 use chrono::{DateTime, NaiveDate, Utc};
 use rocket::serde::{Deserialize, Serialize};
