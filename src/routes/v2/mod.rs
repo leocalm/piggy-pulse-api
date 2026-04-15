@@ -5,7 +5,6 @@ pub mod accounts;
 pub mod auth;
 pub mod categories;
 pub mod currencies;
-pub mod dashboard;
 pub mod health;
 pub mod onboarding;
 pub mod periods;

@@ -6,8 +6,6 @@ pub mod category;
 pub mod category_target;
 pub mod category_v2;
 pub mod currency;
-pub mod dashboard;
-pub mod dashboard_v2;
 pub mod password_reset;
 pub mod pending_2fa_token;
 pub mod postgres_repository;

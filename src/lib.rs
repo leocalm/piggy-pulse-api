@@ -208,7 +208,6 @@ fn mount_v2_routes(mut rocket: Rocket<Build>, base_path: &str) -> Rocket<Build> 
     rocket = rocket.mount(join_base_path(base_path, "settings/export"), app_routes::v2::settings::export_routes());
     rocket = rocket.mount(join_base_path(base_path, "settings/import"), app_routes::v2::settings::import_routes());
     // Dashboard, reference data, system
-    rocket = rocket.mount(join_base_path(base_path, "dashboard"), app_routes::v2::dashboard::routes());
     rocket = rocket.mount(join_base_path(base_path, "subscriptions"), app_routes::v2::subscriptions::routes());
     rocket = rocket.mount(join_base_path(base_path, "currencies"), app_routes::v2::currencies::routes());
     rocket = rocket.mount(join_base_path(base_path, "onboarding"), app_routes::v2::onboarding::routes());

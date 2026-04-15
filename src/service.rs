@@ -2,7 +2,6 @@ pub mod account;
 pub mod auth;
 pub mod category;
 pub mod currency;
-pub mod dashboard;
 pub mod email;
 pub mod onboarding;
 pub mod period;
