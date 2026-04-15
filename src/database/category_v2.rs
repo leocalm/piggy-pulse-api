@@ -44,12 +44,6 @@ impl PostgresRepository {
         let rows = if let Some(cursor_id) = cursor {
             sqlx::query_as::<_, CategoryWithTxCountRow>(
                 r#"
-                WITH transaction_counts AS (
-                    SELECT category_id, COUNT(*)::bigint AS transaction_count
-                    FROM transaction
-                    WHERE user_id = $1
-                    GROUP BY category_id
-                )
                 SELECT
                     c.id, c.name,
                     COALESCE(c.color, '') as color,
@@ -58,9 +52,9 @@ impl PostgresRepository {
                     c.category_type::text as category_type,
                     c.is_archived, c.description, c.is_system,
                     c.behavior::text as behavior,
-                    COALESCE(tc.transaction_count, 0) AS transaction_count
+                    COALESCE(cat_all.tx_count, 0)::bigint AS transaction_count
                 FROM category c
-                LEFT JOIN transaction_counts tc ON c.id = tc.category_id
+                LEFT JOIN category_all_time cat_all ON cat_all.category_id = c.id
                 WHERE c.user_id = $1
                   AND c.is_system = FALSE
                   AND (c.created_at, c.id) < (SELECT created_at, id FROM category WHERE id = $2 AND user_id = $1)
@@ -76,12 +70,6 @@ impl PostgresRepository {
         } else {
             sqlx::query_as::<_, CategoryWithTxCountRow>(
                 r#"
-                WITH transaction_counts AS (
-                    SELECT category_id, COUNT(*)::bigint AS transaction_count
-                    FROM transaction
-                    WHERE user_id = $1
-                    GROUP BY category_id
-                )
                 SELECT
                     c.id, c.name,
                     COALESCE(c.color, '') as color,
@@ -90,9 +78,9 @@ impl PostgresRepository {
                     c.category_type::text as category_type,
                     c.is_archived, c.description, c.is_system,
                     c.behavior::text as behavior,
-                    COALESCE(tc.transaction_count, 0) AS transaction_count
+                    COALESCE(cat_all.tx_count, 0)::bigint AS transaction_count
                 FROM category c
-                LEFT JOIN transaction_counts tc ON c.id = tc.category_id
+                LEFT JOIN category_all_time cat_all ON cat_all.category_id = c.id
                 WHERE c.user_id = $1
                   AND c.is_system = FALSE
                 ORDER BY c.created_at DESC, c.id DESC
@@ -155,13 +143,12 @@ impl PostgresRepository {
             r#"
             WITH period_spend AS (
                 SELECT
-                    t.category_id,
-                    COALESCE(SUM(t.amount), 0)::bigint AS actual
-                FROM transaction t
-                WHERE t.user_id = $1
-                  AND t.occurred_at >= $2
-                  AND t.occurred_at <= $3
-                GROUP BY t.category_id
+                    cds.category_id,
+                    COALESCE(SUM(cds.sum_amount), 0)::bigint AS actual
+                FROM category_daily_spend cds
+                JOIN category ct ON ct.id = cds.category_id AND ct.user_id = $1
+                WHERE cds.day BETWEEN $2 AND $3
+                GROUP BY cds.category_id
             )
             SELECT
                 c.id, c.name,
@@ -234,13 +221,12 @@ impl PostgresRepository {
             r#"
             WITH period_spend AS (
                 SELECT
-                    t.category_id,
-                    COALESCE(SUM(t.amount), 0)::bigint AS spent
-                FROM transaction t
-                WHERE t.user_id = $1
-                  AND t.occurred_at >= $2
-                  AND t.occurred_at <= $3
-                GROUP BY t.category_id
+                    cds.category_id,
+                    COALESCE(SUM(cds.sum_amount), 0)::bigint AS spent
+                FROM category_daily_spend cds
+                JOIN category ct ON ct.id = cds.category_id AND ct.user_id = $1
+                WHERE cds.day BETWEEN $2 AND $3
+                GROUP BY cds.category_id
             )
             SELECT
                 bc.id AS target_id,
@@ -422,16 +408,13 @@ WHERE c.id = $1 AND c.user_id = $2
         // 3. Period spend, transaction count + budget
         let period_spend: i64 = sqlx::query_scalar(
             r#"
-SELECT COALESCE(SUM(t.amount), 0)::bigint
-FROM transaction t
-WHERE t.category_id = $1
-  AND t.user_id = $2
-  AND t.occurred_at >= $3
-  AND t.occurred_at <= $4
+SELECT COALESCE(SUM(cds.sum_amount), 0)::bigint
+FROM category_daily_spend cds
+WHERE cds.category_id = $1
+  AND cds.day BETWEEN $2 AND $3
             "#,
         )
         .bind(category_id)
-        .bind(user_id)
         .bind(period.start_date)
         .bind(period.end_date)
         .fetch_one(&self.pool)
@@ -439,16 +422,13 @@ WHERE t.category_id = $1
 
         let transaction_count: i64 = sqlx::query_scalar(
             r#"
-SELECT COUNT(*)::bigint
-FROM transaction t
-WHERE t.category_id = $1
-  AND t.user_id = $2
-  AND t.occurred_at >= $3
-  AND t.occurred_at <= $4
+SELECT COALESCE(SUM(cds.tx_count), 0)::bigint
+FROM category_daily_spend cds
+WHERE cds.category_id = $1
+  AND cds.day BETWEEN $2 AND $3
             "#,
         )
         .bind(category_id)
-        .bind(user_id)
         .bind(period.start_date)
         .bind(period.end_date)
         .fetch_one(&self.pool)
@@ -473,13 +453,11 @@ WHERE bc.category_id = $1 AND bc.user_id = $2 AND bc.is_excluded = FALSE
 SELECT
     bp.id AS period_id,
     bp.name AS period_name,
-    COALESCE(SUM(t.amount), 0)::bigint AS total_spend
+    COALESCE(SUM(cds.sum_amount), 0)::bigint AS total_spend
 FROM budget_period bp
-LEFT JOIN transaction t
-    ON t.category_id = $1
-    AND t.user_id = $2
-    AND t.occurred_at >= bp.start_date
-    AND t.occurred_at <= bp.end_date
+LEFT JOIN category_daily_spend cds
+       ON cds.category_id = $1
+      AND cds.day BETWEEN bp.start_date AND bp.end_date
 WHERE bp.user_id = $2
 GROUP BY bp.id, bp.name, bp.start_date
 ORDER BY bp.start_date DESC
@@ -491,7 +469,9 @@ LIMIT 6
         .fetch_all(&self.pool)
         .await?;
 
-        // 5. Recent transactions in this period (last 10)
+        // 5. Recent transactions in this period (last 10) — narrow ledger
+        // scan joined to logical_transaction_state to surface only the
+        // Latest_Row of effective logical transactions.
         let recent_txns = sqlx::query_as::<_, CategoryTxRow>(
             r#"
 SELECT
@@ -501,13 +481,15 @@ SELECT
     t.description,
     t.vendor_id,
     v.name AS vendor_name
-FROM transaction t
+FROM logical_transaction_state lts
+JOIN transaction t ON t.id = lts.id AND t.seq = lts.latest_seq
 LEFT JOIN vendor v ON v.id = t.vendor_id
 WHERE t.category_id = $1
-  AND t.user_id = $2
+  AND lts.user_id = $2
+  AND lts.is_effective
   AND t.occurred_at >= $3
   AND t.occurred_at <= $4
-ORDER BY t.occurred_at DESC, t.id DESC
+ORDER BY t.occurred_at DESC, lts.first_created_at DESC
 LIMIT 10
             "#,
         )

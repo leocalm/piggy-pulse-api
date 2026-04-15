@@ -1,0 +1,32 @@
+-- Drop the referential constraint between transaction.vendor_id and vendor(id).
+--
+-- Under the ledger model, merging two vendors must retarget effective
+-- transactions to the new vendor (via a same-id reversal + correction pair),
+-- and then delete the source vendor. With the previous ON DELETE CASCADE,
+-- the final vendor delete cascaded into historical rows in `transaction`
+-- (the original + reversal rows for every merged transaction), which are
+-- blocked by the immutability trigger. We cannot use ON DELETE SET NULL
+-- either — SET NULL is an UPDATE on the transaction rows, which the same
+-- trigger blocks.
+--
+-- The cleanest resolution is to drop the FK entirely. After the merge:
+--  * the correction row (= Latest_Row for that logical id) points at the
+--    target vendor and resolves normally via the LEFT JOIN on `vendor` in
+--    every read path;
+--  * the historical rows still carry `vendor_id = source` as a plain UUID,
+--    but they are only visible via seq != latest_seq and the read layer
+--    never surfaces them (it only joins at `t.seq = lts.latest_seq`);
+--  * the vendor aggregate tables (vendor_all_time, vendor_daily_spend,
+--    vendor_category_all_time) still have their own ON DELETE CASCADE FK,
+--    so deleting the source vendor cleanly removes the already-zero
+--    aggregate rows.
+--
+-- Integrity trade-off: new inserts are no longer checked against the
+-- vendor table at the storage layer. Ownership validation on POST/PUT
+-- paths still runs via `validate_transaction_ownership`, which does a
+-- `SELECT EXISTS` against vendor, so user-supplied vendor_ids remain
+-- validated at the API boundary. Internal ledger-insert helpers are only
+-- fed metadata copied from existing Latest_Rows, so they cannot introduce
+-- novel bad vendor_ids.
+
+ALTER TABLE transaction DROP CONSTRAINT transaction_vendor_id_fkey;

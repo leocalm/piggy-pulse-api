@@ -222,15 +222,28 @@ impl PostgresRepository {
     pub async fn update_category_with_target(&self, id: &Uuid, request: &CategoryRequest, target_value: i64, user_id: &Uuid) -> Result<Category, AppError> {
         let mut tx = self.pool.begin().await?;
 
-        // Guard: system categories cannot be updated
-        let is_system: bool = sqlx::query_scalar("SELECT is_system FROM category WHERE id = $1 AND user_id = $2")
-            .bind(id)
-            .bind(user_id)
-            .fetch_optional(&mut *tx)
-            .await?
-            .unwrap_or(false);
-        if is_system {
+        // Guard: system categories cannot be updated, and category_type is
+        // immutable after creation (see update_category for details).
+        #[derive(sqlx::FromRow)]
+        struct CategoryGuardRow {
+            is_system: bool,
+            category_type: String,
+        }
+        let existing: Option<CategoryGuardRow> =
+            sqlx::query_as("SELECT is_system, category_type::text AS category_type FROM category WHERE id = $1 AND user_id = $2")
+                .bind(id)
+                .bind(user_id)
+                .fetch_optional(&mut *tx)
+                .await?;
+        let existing = match existing {
+            Some(row) => row,
+            None => return Err(AppError::NotFound("Category not found".to_string())),
+        };
+        if existing.is_system {
             return Err(AppError::BadRequest("System categories cannot be modified.".to_string()));
+        }
+        if category_type_from_db(&existing.category_type) != request.category_type {
+            return Err(AppError::BadRequest("Category type cannot be changed after creation".to_string()));
         }
 
         // Validate parent_id
@@ -430,15 +443,31 @@ impl PostgresRepository {
     }
 
     pub async fn update_category(&self, id: &Uuid, request: &CategoryRequest, user_id: &Uuid) -> Result<Category, AppError> {
-        // Guard: system categories cannot be updated
-        let is_system: bool = sqlx::query_scalar("SELECT is_system FROM category WHERE id = $1 AND user_id = $2")
-            .bind(id)
-            .bind(user_id)
-            .fetch_optional(&self.pool)
-            .await?
-            .unwrap_or(false);
-        if is_system {
+        // Guard: system categories cannot be updated, and category_type is
+        // immutable after creation (enforced at the DB level by the
+        // `category_type_immutable` trigger from migration 20260327000004).
+        // We fetch both flags in one query and return a clean 400 for either
+        // guard violation instead of letting the trigger raise a 5xx.
+        #[derive(sqlx::FromRow)]
+        struct CategoryGuardRow {
+            is_system: bool,
+            category_type: String,
+        }
+        let existing: Option<CategoryGuardRow> =
+            sqlx::query_as("SELECT is_system, category_type::text AS category_type FROM category WHERE id = $1 AND user_id = $2")
+                .bind(id)
+                .bind(user_id)
+                .fetch_optional(&self.pool)
+                .await?;
+        let existing = match existing {
+            Some(row) => row,
+            None => return Err(AppError::NotFound("Category not found".to_string())),
+        };
+        if existing.is_system {
             return Err(AppError::BadRequest("System categories cannot be modified.".to_string()));
+        }
+        if category_type_from_db(&existing.category_type) != request.category_type {
+            return Err(AppError::BadRequest("Category type cannot be changed after creation".to_string()));
         }
 
         // Validate parent_id if being set

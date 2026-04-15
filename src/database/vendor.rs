@@ -123,19 +123,25 @@ impl PostgresRepository {
     }
 
     pub async fn delete_vendor(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
-        // Refuse deletion if any transactions still reference this vendor.
-        // Mirrors the behavior of accounts and categories: archive instead.
+        // Refuse deletion if any effective transactions still reference this
+        // vendor. Uses vendor_all_time (trigger-maintained, tx_count = distinct
+        // effective logical ids under this vendor) instead of scanning the
+        // ledger. Mirrors the behavior of accounts and categories: archive
+        // instead.
         let transaction_count: i64 = sqlx::query_scalar(
             r#"
-            SELECT COUNT(*)::bigint
-            FROM transaction
-            WHERE vendor_id = $1 AND user_id = $2
+            SELECT COALESCE((SELECT vat.tx_count
+                               FROM vendor_all_time vat
+                              WHERE vat.vendor_id = $1), 0)::bigint
+              FROM vendor v
+             WHERE v.id = $1 AND v.user_id = $2
             "#,
         )
         .bind(id)
         .bind(user_id)
-        .fetch_one(&self.pool)
-        .await?;
+        .fetch_optional(&self.pool)
+        .await?
+        .unwrap_or(0);
 
         if transaction_count > 0 {
             return Err(AppError::BadRequest(
@@ -263,13 +269,12 @@ SELECT v.id,
        v.name,
        v.description,
        v.archived,
-       COUNT(t.id)::bigint AS transaction_count,
-       COALESCE(SUM(t.amount), 0)::bigint AS total_spend
+       COALESCE(vat.tx_count, 0)::bigint   AS transaction_count,
+       COALESCE(vat.sum_amount, 0)::bigint AS total_spend
 FROM vendor v
-LEFT JOIN transaction t ON v.id = t.vendor_id AND t.user_id = $1
+LEFT JOIN vendor_all_time vat ON vat.vendor_id = v.id
 WHERE v.user_id = $1
   AND (v.created_at, v.id) < (SELECT created_at, id FROM vendor WHERE id = $2 AND user_id = $1)
-GROUP BY v.id, v.name, v.description, v.archived, v.created_at
 ORDER BY v.created_at DESC, v.id DESC
 LIMIT $3
                 "#,
@@ -286,12 +291,11 @@ SELECT v.id,
        v.name,
        v.description,
        v.archived,
-       COUNT(t.id)::bigint AS transaction_count,
-       COALESCE(SUM(t.amount), 0)::bigint AS total_spend
+       COALESCE(vat.tx_count, 0)::bigint   AS transaction_count,
+       COALESCE(vat.sum_amount, 0)::bigint AS total_spend
 FROM vendor v
-LEFT JOIN transaction t ON v.id = t.vendor_id AND t.user_id = $1
+LEFT JOIN vendor_all_time vat ON vat.vendor_id = v.id
 WHERE v.user_id = $1
-GROUP BY v.id, v.name, v.description, v.archived, v.created_at
 ORDER BY v.created_at DESC, v.id DESC
 LIMIT $2
                 "#,
@@ -340,21 +344,18 @@ LIMIT $2
             None => return Err(AppError::NotFound("Period not found".to_string())),
         };
 
-        // 3. Period spend + tx count
+        // 3. Period spend + tx count from vendor_daily_spend
         let stats = sqlx::query_as::<_, VendorPeriodStatsRow>(
             r#"
 SELECT
-    COUNT(t.id)::bigint AS transaction_count,
-    COALESCE(SUM(t.amount), 0)::bigint AS period_spend
-FROM transaction t
-WHERE t.vendor_id = $1
-  AND t.user_id = $2
-  AND t.occurred_at >= $3
-  AND t.occurred_at <= $4
+    COALESCE(SUM(vds.tx_count), 0)::bigint   AS transaction_count,
+    COALESCE(SUM(vds.sum_amount), 0)::bigint AS period_spend
+FROM vendor_daily_spend vds
+WHERE vds.vendor_id = $1
+  AND vds.day BETWEEN $2 AND $3
             "#,
         )
         .bind(vendor_id)
-        .bind(user_id)
         .bind(period.start_date)
         .bind(period.end_date)
         .fetch_one(&self.pool)
@@ -366,13 +367,11 @@ WHERE t.vendor_id = $1
 SELECT
     bp.id AS period_id,
     bp.name AS period_name,
-    COALESCE(SUM(t.amount), 0)::bigint AS total_spend
+    COALESCE(SUM(vds.sum_amount), 0)::bigint AS total_spend
 FROM budget_period bp
-LEFT JOIN transaction t
-    ON t.vendor_id = $1
-    AND t.user_id = $2
-    AND t.occurred_at >= bp.start_date
-    AND t.occurred_at <= bp.end_date
+LEFT JOIN vendor_daily_spend vds
+       ON vds.vendor_id = $1
+      AND vds.day BETWEEN bp.start_date AND bp.end_date
 WHERE bp.user_id = $2
 GROUP BY bp.id, bp.name, bp.start_date
 ORDER BY bp.start_date DESC
@@ -384,30 +383,27 @@ LIMIT 6
         .fetch_all(&self.pool)
         .await?;
 
-        // 5. Top categories (all-time, top 5)
-        let total_vendor_spend: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(amount), 0)::bigint FROM transaction WHERE vendor_id = $1 AND user_id = $2")
+        // 5. Top categories (all-time, top 5) from vendor_category_all_time
+        let total_vendor_spend: i64 = sqlx::query_scalar("SELECT COALESCE(sum_amount, 0)::bigint FROM vendor_all_time WHERE vendor_id = $1")
             .bind(vendor_id)
-            .bind(user_id)
-            .fetch_one(&self.pool)
-            .await?;
+            .fetch_optional(&self.pool)
+            .await?
+            .unwrap_or(0);
 
         let top_categories = sqlx::query_as::<_, VendorCategoryRow>(
             r#"
 SELECT
     c.id AS category_id,
     c.name AS category_name,
-    COALESCE(SUM(t.amount), 0)::bigint AS total_spend
-FROM transaction t
-JOIN category c ON c.id = t.category_id
-WHERE t.vendor_id = $1
-  AND t.user_id = $2
-GROUP BY c.id, c.name
-ORDER BY total_spend DESC
+    vcat.sum_amount::bigint AS total_spend
+FROM vendor_category_all_time vcat
+JOIN category c ON c.id = vcat.category_id
+WHERE vcat.vendor_id = $1
+ORDER BY vcat.sum_amount DESC
 LIMIT 5
             "#,
         )
         .bind(vendor_id)
-        .bind(user_id)
         .fetch_all(&self.pool)
         .await?;
 
@@ -421,11 +417,13 @@ SELECT
     t.description,
     t.category_id,
     c.name AS category_name
-FROM transaction t
+FROM logical_transaction_state lts
+JOIN transaction t ON t.id = lts.id AND t.seq = lts.latest_seq
 LEFT JOIN category c ON c.id = t.category_id
 WHERE t.vendor_id = $1
-  AND t.user_id = $2
-ORDER BY t.occurred_at DESC, t.id DESC
+  AND lts.user_id = $2
+  AND lts.is_effective
+ORDER BY t.occurred_at DESC, lts.first_created_at DESC
 LIMIT 10
             "#,
         )
@@ -456,18 +454,84 @@ LIMIT 10
             return Err(AppError::NotFound("Target vendor not found".to_string()));
         }
 
-        // Perform reassignment and deletion atomically
         let mut tx = self.pool.begin().await?;
 
-        // Reassign all transactions from source to target
-        sqlx::query("UPDATE transaction SET vendor_id = $1 WHERE vendor_id = $2 AND user_id = $3")
-            .bind(target_id)
-            .bind(source_id)
-            .bind(user_id)
-            .execute(&mut *tx)
+        // Lock every effective logical transaction currently assigned to the
+        // source vendor, ordered deterministically so concurrent merges don't
+        // deadlock. The join to `transaction` at `latest_seq` reads the
+        // current vendor_id from the Latest_Row, matching the user's view of
+        // "which transactions belong to this vendor".
+        #[derive(sqlx::FromRow)]
+        struct EffectiveRow {
+            id: Uuid,
+            current_sum: i64,
+            latest_seq: i64,
+        }
+
+        let effective: Vec<EffectiveRow> = sqlx::query_as::<_, EffectiveRow>(
+            r#"
+            SELECT lts.id, lts.current_sum, lts.latest_seq
+              FROM logical_transaction_state lts
+              JOIN transaction t ON t.id = lts.id AND t.seq = lts.latest_seq
+             WHERE lts.user_id = $1
+               AND lts.is_effective
+               AND t.vendor_id = $2
+             ORDER BY lts.id
+             FOR UPDATE OF lts
+            "#,
+        )
+        .bind(user_id)
+        .bind(source_id)
+        .fetch_all(&mut *tx)
+        .await?;
+
+        // For each effective transaction: insert a Full_Reversal_Row (copying
+        // the latest metadata, still pointing at the source vendor) and a
+        // Correction_Row (same metadata but vendor_id swapped to the target).
+        // The logical `id` is preserved so external references stay valid; the
+        // aggregate trigger decrements vendor_*_spend buckets for source and
+        // increments the same buckets for target automatically.
+        for row in &effective {
+            let latest = self.fetch_latest_row(&mut tx, &row.id, row.latest_seq).await?;
+
+            // Full_Reversal_Row: still under source vendor
+            self.insert_ledger_row_plain_in_tx(
+                &mut tx,
+                Some(&row.id),
+                user_id,
+                -row.current_sum,
+                &latest.description,
+                latest.occurred_at,
+                latest.category_id.as_ref(),
+                &latest.from_account_id,
+                latest.to_account_id.as_ref(),
+                latest.vendor_id.as_ref(),
+            )
             .await?;
 
-        // Delete the source vendor
+            // Correction_Row: retargeted to target vendor
+            self.insert_ledger_row_plain_in_tx(
+                &mut tx,
+                Some(&row.id),
+                user_id,
+                row.current_sum,
+                &latest.description,
+                latest.occurred_at,
+                latest.category_id.as_ref(),
+                &latest.from_account_id,
+                latest.to_account_id.as_ref(),
+                Some(target_id),
+            )
+            .await?;
+        }
+
+        // Delete the source vendor. The FK from `transaction.vendor_id` was
+        // dropped in migration 20260327000006, so historical source-vendor
+        // rows remain in place as dangling references — harmless because
+        // every read path resolves vendor via `LEFT JOIN vendor` at the
+        // Latest_Row only. The aggregate tables (vendor_all_time,
+        // vendor_daily_spend, vendor_category_all_time) still cascade on
+        // vendor delete and cleanly drop their already-zero rows.
         sqlx::query("DELETE FROM vendor WHERE id = $1 AND user_id = $2")
             .bind(source_id)
             .bind(user_id)
@@ -495,12 +559,11 @@ LIMIT 10
 
         let total_spend: i64 = sqlx::query_scalar(
             r#"
-SELECT COALESCE(SUM(t.amount), 0)::bigint
-FROM transaction t
-JOIN vendor v ON v.id = t.vendor_id
-WHERE t.user_id = $1
-  AND t.occurred_at >= $2
-  AND t.occurred_at <= $3
+SELECT COALESCE(SUM(vds.sum_amount), 0)::bigint
+FROM vendor_daily_spend vds
+JOIN vendor v ON v.id = vds.vendor_id
+WHERE v.user_id = $1
+  AND vds.day BETWEEN $2 AND $3
             "#,
         )
         .bind(user_id)
@@ -511,12 +574,12 @@ WHERE t.user_id = $1
 
         let vendors_with_spend: i64 = sqlx::query_scalar(
             r#"
-SELECT COUNT(DISTINCT t.vendor_id)
-FROM transaction t
-WHERE t.user_id = $1
-  AND t.vendor_id IS NOT NULL
-  AND t.occurred_at >= $2
-  AND t.occurred_at <= $3
+SELECT COUNT(DISTINCT vds.vendor_id)
+FROM vendor_daily_spend vds
+JOIN vendor v ON v.id = vds.vendor_id
+WHERE v.user_id = $1
+  AND vds.day BETWEEN $2 AND $3
+  AND vds.sum_amount > 0
             "#,
         )
         .bind(user_id)

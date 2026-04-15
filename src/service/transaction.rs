@@ -34,22 +34,19 @@ impl<'a> TransactionService<'a> {
     }
 
     pub async fn update_transaction(&self, id: &Uuid, request: &CreateTransactionRequest, user_id: &Uuid) -> Result<TransactionResponse, AppError> {
-        // Check existence first to return 404 instead of RowNotFound
-        let existing = self.repository.get_transaction_by_id(id, user_id).await?;
-        if existing.is_none() {
-            return Err(AppError::NotFound("Transaction not found".to_string()));
-        }
-
+        // Validation happens first (400 for bad amount/description), then the
+        // repository acquires a FOR UPDATE lock on logical_transaction_state
+        // and emits NotFound/Conflict atomically with the two-row insert.
         let v1_request = to_v1_request(request)?;
         let tx = self.repository.update_transaction(id, &v1_request, user_id).await?;
         Ok(to_v2_response(&tx))
     }
 
     pub async fn delete_transaction(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
-        let existing = self.repository.get_transaction_by_id(id, user_id).await?;
-        if existing.is_none() {
-            return Err(AppError::NotFound("Transaction not found".to_string()));
-        }
+        // The repository's void path acquires a FOR UPDATE lock on
+        // logical_transaction_state and returns NotFound (404) or Conflict
+        // (409 "Transaction has already been voided") atomically with the
+        // compensating row insert, so no pre-check is needed here.
         self.repository.delete_transaction(id, user_id).await
     }
 
