@@ -1,8 +1,22 @@
+#![allow(dead_code)]
 use crate::database::postgres_repository::PostgresRepository;
 use crate::dto::settings::{ColorTheme, DashboardLayout, DateFormat, NumberFormat, Theme};
 use crate::error::app_error::AppError;
 use crate::models::settings::Settings;
 use uuid::Uuid;
+
+#[derive(sqlx::FromRow)]
+pub struct ExportTransactionRow {
+    pub date: String,
+    pub description: String,
+    pub amount: i64,
+    pub currency: String,
+    pub category: String,
+    pub tx_type: String,
+    pub from_account: String,
+    pub to_account: String,
+    pub vendor: String,
+}
 
 // ── V2 helper types ──────────────────────────────────────────────────────────
 
@@ -22,19 +36,6 @@ struct PreferencesV2Row {
     compact_mode: bool,
     dashboard_layout: serde_json::Value,
     color_theme: String,
-}
-
-#[derive(sqlx::FromRow)]
-pub struct ExportTransactionRow {
-    pub date: String,
-    pub description: String,
-    pub amount: i64,
-    pub currency: String,
-    pub category: String,
-    pub tx_type: String,
-    pub from_account: String,
-    pub to_account: String,
-    pub vendor: String,
 }
 
 fn parse_theme(s: &str) -> Theme {
@@ -272,8 +273,12 @@ impl PostgresRepository {
         self.get_preferences_v2(user_id).await
     }
 
-    // ── V2 Export ─────────────────────────────────────────────────────────────
-
+    // ── V2 Export (retired) ───────────────────────────────────────────────────
+    //
+    // Export and import are retired under encryption-at-rest. The
+    // server no longer has plaintext access to transaction amounts,
+    // descriptions, or entity names, so it cannot produce a CSV or
+    // JSON dump. The client exports from its own decrypted view.
     pub async fn export_transactions_v2(&self, user_id: &Uuid) -> Result<Vec<ExportTransactionRow>, AppError> {
         let rows = sqlx::query_as::<_, ExportTransactionRow>(
             r#"

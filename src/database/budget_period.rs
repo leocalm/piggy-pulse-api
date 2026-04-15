@@ -255,15 +255,16 @@ impl PostgresRepository {
     /// Get a single period with its transaction count, scoped to user.
     /// Returns None if not found.
     pub async fn get_budget_period_v2(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<V2PeriodRow>, AppError> {
+        // Transaction count, total spent, and total budgeted were all
+        // computed from plaintext aggregate tables that no longer
+        // exist under encryption-at-rest. Returned as None so the
+        // client can compute them from its decrypted transaction list.
         let row = sqlx::query_as::<_, V2PeriodRow>(
             r#"
             SELECT bp.id, bp.name, bp.start_date, bp.end_date,
-                   COALESCE((SELECT SUM(udt.tx_count) FROM user_daily_totals udt WHERE udt.user_id = bp.user_id AND udt.day BETWEEN bp.start_date AND bp.end_date), 0)::INT8 as transaction_count,
-                   COALESCE((SELECT SUM(udt.spending) FROM user_daily_totals udt WHERE udt.user_id = bp.user_id AND udt.day BETWEEN bp.start_date AND bp.end_date), 0)::INT8 as total_spent,
-                   (
-                       COALESCE((SELECT SUM(bc2.budgeted_value) FROM budget_category bc2 JOIN category cat ON bc2.category_id = cat.id WHERE bc2.user_id = bp.user_id AND cat.category_type = 'Outgoing' AND bc2.is_excluded = FALSE), 0)
-                       + COALESCE((SELECT SUM(a2.spend_limit) FROM account a2 WHERE a2.user_id = bp.user_id AND a2.account_type = 'Allowance' AND a2.is_archived = false AND a2.spend_limit IS NOT NULL), 0)
-                   ) as total_budgeted
+                   NULL::INT8 as transaction_count,
+                   NULL::INT8 as total_spent,
+                   NULL::INT8 as total_budgeted
             FROM budget_period bp
             WHERE bp.id = $1 AND bp.user_id = $2
             "#,
@@ -288,12 +289,9 @@ impl PostgresRepository {
             sqlx::query_as::<_, V2PeriodRow>(
                 r#"
                 SELECT bp.id, bp.name, bp.start_date, bp.end_date,
-                       COALESCE((SELECT SUM(udt.tx_count) FROM user_daily_totals udt WHERE udt.user_id = bp.user_id AND udt.day BETWEEN bp.start_date AND bp.end_date), 0)::INT8 as transaction_count,
-                       COALESCE((SELECT SUM(udt.spending) FROM user_daily_totals udt WHERE udt.user_id = bp.user_id AND udt.day BETWEEN bp.start_date AND bp.end_date), 0)::INT8 as total_spent,
-                       (
-                           COALESCE((SELECT SUM(bc2.budgeted_value) FROM budget_category bc2 JOIN category cat ON bc2.category_id = cat.id WHERE bc2.user_id = bp.user_id AND cat.category_type = 'Outgoing' AND bc2.is_excluded = FALSE), 0)
-                           + COALESCE((SELECT SUM(a2.spend_limit) FROM account a2 WHERE a2.user_id = bp.user_id AND a2.account_type = 'Allowance' AND a2.is_archived = false AND a2.spend_limit IS NOT NULL), 0)
-                       ) as total_budgeted
+                       NULL::INT8 as transaction_count,
+                       NULL::INT8 as total_spent,
+                       NULL::INT8 as total_budgeted
                 FROM budget_period bp
                 WHERE bp.user_id = $1
                     AND (bp.start_date, bp.id) > (
@@ -312,12 +310,9 @@ impl PostgresRepository {
             sqlx::query_as::<_, V2PeriodRow>(
                 r#"
                 SELECT bp.id, bp.name, bp.start_date, bp.end_date,
-                       COALESCE((SELECT SUM(udt.tx_count) FROM user_daily_totals udt WHERE udt.user_id = bp.user_id AND udt.day BETWEEN bp.start_date AND bp.end_date), 0)::INT8 as transaction_count,
-                       COALESCE((SELECT SUM(udt.spending) FROM user_daily_totals udt WHERE udt.user_id = bp.user_id AND udt.day BETWEEN bp.start_date AND bp.end_date), 0)::INT8 as total_spent,
-                       (
-                           COALESCE((SELECT SUM(bc2.budgeted_value) FROM budget_category bc2 JOIN category cat ON bc2.category_id = cat.id WHERE bc2.user_id = bp.user_id AND cat.category_type = 'Outgoing' AND bc2.is_excluded = FALSE), 0)
-                           + COALESCE((SELECT SUM(a2.spend_limit) FROM account a2 WHERE a2.user_id = bp.user_id AND a2.account_type = 'Allowance' AND a2.is_archived = false AND a2.spend_limit IS NOT NULL), 0)
-                       ) as total_budgeted
+                       NULL::INT8 as transaction_count,
+                       NULL::INT8 as total_spent,
+                       NULL::INT8 as total_budgeted
                 FROM budget_period bp
                 WHERE bp.user_id = $1
                 ORDER BY bp.start_date ASC, bp.id ASC
