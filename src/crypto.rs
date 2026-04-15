@@ -14,7 +14,7 @@
 
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
-use rand::{Rng, RngExt};
+use rand::Rng;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// The per-user Data Encryption Key.

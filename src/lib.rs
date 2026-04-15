@@ -3,6 +3,7 @@ mod config;
 mod cron_tasks;
 pub mod crypto;
 mod database;
+pub mod session_dek;
 mod db;
 mod dto;
 mod error;
@@ -232,6 +233,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
 
     let mut rocket = rocket::build()
         .manage(config.clone())
+        .manage(session_dek::SessionDekStore::new())
         .attach(cors)
         .attach(RequestLogger)
         .attach(stage_db(config.database, config.logging.slow_query_ms));
