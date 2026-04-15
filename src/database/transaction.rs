@@ -668,4 +668,67 @@ impl PostgresRepository {
         tx.commit().await?;
         Ok(results)
     }
+
+    /// Read-side fetch for Phase 3: every effective logical transaction
+    /// whose Latest_Row's `occurred_at` falls in the inclusive date
+    /// range. Returns ciphertext; the client decrypts with its DEK and
+    /// computes every card/chart locally. No pagination, no filters —
+    /// the whole range comes back on one call.
+    pub async fn list_effective_transactions_in_range(&self, user_id: &Uuid, from: NaiveDate, to: NaiveDate) -> Result<Vec<LedgerInsertResult>, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            id: Uuid,
+            seq: i64,
+            created_at: chrono::DateTime<chrono::Utc>,
+            occurred_at: NaiveDate,
+            from_account_id: Uuid,
+            to_account_id: Option<Uuid>,
+            category_id: Option<Uuid>,
+            vendor_id: Option<Uuid>,
+            amount_enc: Vec<u8>,
+            description_enc: Vec<u8>,
+        }
+
+        let rows: Vec<Row> = sqlx::query_as(
+            r#"
+SELECT t.id,
+       t.seq,
+       lts.first_created_at AS created_at,
+       t.occurred_at,
+       t.from_account_id,
+       t.to_account_id,
+       t.category_id,
+       t.vendor_id,
+       t.amount_enc,
+       t.description_enc
+FROM logical_transaction_state lts
+JOIN transaction t ON t.id = lts.id AND t.seq = lts.latest_seq
+WHERE lts.user_id = $1
+  AND lts.is_effective
+  AND t.occurred_at BETWEEN $2 AND $3
+ORDER BY t.occurred_at DESC, t.seq DESC
+"#,
+        )
+        .bind(user_id)
+        .bind(from)
+        .bind(to)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| LedgerInsertResult {
+                id: r.id,
+                seq: r.seq,
+                first_created_at: r.created_at,
+                occurred_at: r.occurred_at,
+                from_account_id: r.from_account_id,
+                to_account_id: r.to_account_id,
+                category_id: r.category_id,
+                vendor_id: r.vendor_id,
+                amount_enc: r.amount_enc,
+                description_enc: r.description_enc,
+            })
+            .collect())
+    }
 }

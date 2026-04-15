@@ -1,10 +1,14 @@
 mod batch;
 mod create;
 mod delete;
+mod list;
+mod range;
 mod update;
 
 pub fn routes() -> Vec<rocket::Route> {
     rocket::routes![
+        range::list_transactions_range,
+        list::list_transactions,
         create::create_transaction,
         batch::batch_create_transactions,
         update::update_transaction,

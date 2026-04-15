@@ -1,30 +1,39 @@
 get:
   tags:
     - Transactions
-  summary: List transactions
-  operationId: listTransactions
+  summary: List effective transactions for a period
+  description: |
+    Returns every effective logical transaction whose Latest_Row's
+    occurred_at falls inside the given budget period. Amounts and
+    descriptions are returned as base64-encoded AES-GCM envelopes;
+    the client decrypts with its session DEK and reduces locally
+    into dashboards, breakdowns, and period totals.
+
+    No pagination, no filters, no server-side sorting — the whole
+    period comes back on one call.
+  operationId: listTransactionsByPeriod
   parameters:
-    - $ref: '../parameters/PeriodId.yaml'
-    - $ref: '../parameters/Cursor.yaml'
-    - $ref: '../parameters/Limit.yaml'
-    - $ref: '../parameters/Direction.yaml'
-    - $ref: '../parameters/AccountId.yaml'
-    - $ref: '../parameters/CategoryId.yaml'
-    - $ref: '../parameters/VendorId.yaml'
-    - $ref: '../parameters/FromDate.yaml'
-    - $ref: '../parameters/ToDate.yaml'
-    - $ref: '../parameters/Search.yaml'
+    - name: periodId
+      in: query
+      required: true
+      schema:
+        type: string
+        format: uuid
   responses:
     '200':
       description: OK
       content:
         application/json:
           schema:
-            $ref: '../schemas/Transaction.yaml#/TransactionListResponse'
+            type: array
+            items:
+              $ref: '../schemas/Transaction.yaml#/EncryptedTransactionResponse'
     '400':
       $ref: '../responses/BadRequest.yaml'
     '401':
       $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
     '500':
       $ref: '../responses/InternalServerError.yaml'
 

@@ -60,6 +60,26 @@ impl<'a> TransactionService<'a> {
     pub async fn delete_transaction(&self, id: &Uuid, user_id: &Uuid, dek: &Dek) -> Result<(), AppError> {
         self.repository.delete_transaction(id, user_id, dek).await
     }
+
+    /// List every effective logical transaction whose latest-row date
+    /// falls inside a period. Returns ciphertext for the client to
+    /// decrypt and reduce locally into dashboards, breakdowns, etc.
+    pub async fn list_by_period(&self, period_id: &Uuid, user_id: &Uuid) -> Result<Vec<EncryptedTransactionResponse>, AppError> {
+        let period = self.repository.get_budget_period(period_id, user_id).await?;
+        let rows = self
+            .repository
+            .list_effective_transactions_in_range(user_id, period.start_date, period.end_date)
+            .await?;
+        Ok(rows.into_iter().map(EncryptedTransactionResponse::from).collect())
+    }
+
+    /// Same as `list_by_period` but for an arbitrary date range. Used
+    /// by multi-period trend views where the client wants a window
+    /// that doesn't line up with a budget period boundary.
+    pub async fn list_by_range(&self, user_id: &Uuid, from: chrono::NaiveDate, to: chrono::NaiveDate) -> Result<Vec<EncryptedTransactionResponse>, AppError> {
+        let rows = self.repository.list_effective_transactions_in_range(user_id, from, to).await?;
+        Ok(rows.into_iter().map(EncryptedTransactionResponse::from).collect())
+    }
 }
 
 /// Converts the V2 direction string (from query param) to the V1 TransactionDirection
