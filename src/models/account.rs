@@ -1,11 +1,8 @@
-#![allow(dead_code)]
-use crate::models::currency::{Currency, CurrencyResponse};
-use chrono::NaiveDate;
 use rocket::serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use validator::Validate;
 
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq, Default, sqlx::Type)]
+#[sqlx(type_name = "text", rename_all = "PascalCase")]
 pub enum AccountType {
     #[default]
     Checking,
@@ -15,174 +12,25 @@ pub enum AccountType {
     Allowance,
 }
 
-#[derive(Clone, Default)]
+/// Raw account row as read from postgres. All monetary and label
+/// fields are AES-GCM envelopes; structural fields stay plaintext so
+/// the server can still route by account_type, resolve FKs, and
+/// enforce allowance/credit-card schedule semantics.
+#[derive(Debug, Clone, sqlx::FromRow)]
 pub struct Account {
     pub id: Uuid,
-    pub name: String,
-    pub color: String,
-    pub icon: String,
     pub account_type: AccountType,
-    pub currency: Currency,
-    pub balance: i64,
-    pub spend_limit: Option<i32>,
+    pub currency_id: Uuid,
     pub is_archived: bool,
-    pub next_transfer_amount: Option<i64>,
-    pub top_up_amount: Option<i64>,
+    pub name_enc: Vec<u8>,
+    pub color_enc: Vec<u8>,
+    pub icon_enc: Vec<u8>,
+    pub current_balance_enc: Vec<u8>,
+    pub spend_limit_enc: Option<Vec<u8>>,
+    pub next_transfer_amount_enc: Option<Vec<u8>>,
+    pub top_up_amount_enc: Option<Vec<u8>>,
     pub top_up_cycle: Option<String>,
     pub top_up_day: Option<i32>,
     pub statement_close_day: Option<i32>,
     pub payment_due_day: Option<i32>,
-}
-
-impl std::fmt::Debug for Account {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Account")
-            .field("id", &self.id)
-            .field("name", &self.name)
-            .field("account_type", &self.account_type)
-            .field("balance", &"[redacted]")
-            .field("spend_limit", &"[redacted]")
-            .field("next_transfer_amount", &"[redacted]")
-            .finish()
-    }
-}
-
-#[derive(Deserialize, Debug, Validate)]
-pub struct AccountRequest {
-    #[validate(length(min = 3))]
-    pub name: String,
-    #[validate(length(min = 3))]
-    pub color: String,
-    #[validate(length(min = 1))]
-    pub icon: String,
-    pub account_type: AccountType,
-    pub balance: i64,
-    pub spend_limit: Option<i32>,
-    pub next_transfer_amount: Option<i64>,
-    pub top_up_amount: Option<i64>,
-    pub top_up_cycle: Option<String>,
-    pub top_up_day: Option<i32>,
-    pub statement_close_day: Option<i32>,
-    pub payment_due_day: Option<i32>,
-}
-
-#[derive(Deserialize, Debug, Validate)]
-pub struct AccountUpdateRequest {
-    #[validate(length(min = 3))]
-    pub name: String,
-    #[validate(length(min = 3))]
-    pub color: String,
-    #[validate(length(min = 1))]
-    pub icon: String,
-    pub account_type: AccountType,
-    pub balance: Option<i64>,
-    pub spend_limit: Option<i32>,
-    pub next_transfer_amount: Option<i64>,
-    pub top_up_amount: Option<i64>,
-    pub top_up_cycle: Option<String>,
-    pub top_up_day: Option<i32>,
-    pub statement_close_day: Option<i32>,
-    pub payment_due_day: Option<i32>,
-}
-
-#[derive(Serialize, Debug)]
-pub struct AccountResponse {
-    pub id: Uuid,
-    pub name: String,
-    pub color: String,
-    pub icon: String,
-    pub account_type: AccountType,
-    pub currency: CurrencyResponse,
-    pub balance: i64,
-    pub spend_limit: Option<i32>,
-    pub is_archived: bool,
-    pub next_transfer_amount: Option<i64>,
-}
-
-impl From<&Account> for AccountResponse {
-    fn from(account: &Account) -> Self {
-        AccountResponse {
-            id: account.id,
-            name: account.name.clone(),
-            color: account.color.clone(),
-            icon: account.icon.clone(),
-            account_type: account.account_type,
-            currency: CurrencyResponse {
-                id: account.currency.id,
-                name: account.currency.name.clone(),
-                symbol: account.currency.symbol.clone(),
-                currency: account.currency.currency.clone(),
-                decimal_places: account.currency.decimal_places,
-                symbol_position: account.currency.symbol_position,
-            },
-            balance: account.balance,
-            spend_limit: account.spend_limit,
-            is_archived: account.is_archived,
-            next_transfer_amount: account.next_transfer_amount,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct AccountWithMetrics {
-    pub account: Account,
-    pub current_balance: i64,
-    pub balance_change_this_period: i64,
-    pub transaction_count: i64,
-}
-
-#[derive(Serialize, Debug)]
-pub struct AccountDetailResponse {
-    pub balance: i64,
-    pub balance_change: i64,
-    pub inflows: i64,
-    pub outflows: i64,
-    pub net: i64,
-    pub transaction_count: i64,
-    pub period_start: NaiveDate,
-    pub period_end: NaiveDate,
-}
-
-#[derive(Serialize, Debug)]
-pub struct AccountBalanceHistoryPoint {
-    pub date: String, // "YYYY-MM-DD"
-    pub balance: i64, // integer cents
-    pub transaction_count: i64,
-}
-
-#[derive(Serialize, Debug)]
-pub struct AccountTransactionResponse {
-    pub id: Uuid,
-    pub amount: i64,
-    pub description: String,
-    pub occurred_at: NaiveDate,
-    pub category_name: String,
-    pub category_color: String,
-    pub flow: String,         // "in" | "out"
-    pub running_balance: i64, // cents, server-computed
-}
-
-#[derive(Serialize, Debug)]
-pub struct CategoryImpactItem {
-    pub category_id: Uuid,
-    pub category_name: String,
-    pub amount: i64,
-    pub percentage: i32,
-}
-
-#[derive(Serialize, Debug)]
-pub struct AccountStability {
-    pub periods_closed_positive: i64,
-    pub periods_evaluated: i64,
-    pub avg_closing_balance: i64,
-    pub highest_closing_balance: i64,
-    pub lowest_closing_balance: i64,
-    pub largest_single_outflow: i64,
-    pub largest_single_outflow_category: String,
-}
-
-#[derive(Serialize, Debug)]
-pub struct AccountContextResponse {
-    pub category_impact: Vec<CategoryImpactItem>,
-    pub stability: AccountStability,
 }

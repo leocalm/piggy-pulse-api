@@ -12,9 +12,6 @@ mod routes;
 mod service;
 pub mod session_dek;
 
-#[cfg(test)]
-pub mod test_utils;
-
 pub use config::Config;
 pub use cron_tasks::{GeneratePeriodsResult, cleanup_expired_tokens, generate_periods};
 

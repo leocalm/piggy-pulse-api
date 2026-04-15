@@ -6,18 +6,14 @@ use uuid::Uuid;
 
 use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
-use crate::dto::accounts::AccountResponse;
+use crate::dto::accounts::EncryptedAccountResponse;
 use crate::error::app_error::AppError;
+use crate::service::account::AccountService;
 
 #[get("/<id>")]
-pub async fn get_account(pool: &State<PgPool>, user: CurrentUser, id: &str) -> Result<Json<AccountResponse>, AppError> {
+pub async fn get_account(pool: &State<PgPool>, user: CurrentUser, id: &str) -> Result<Json<EncryptedAccountResponse>, AppError> {
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid account id", e))?;
     let repo = PostgresRepository { pool: pool.inner().clone() };
-
-    let account = repo
-        .get_account_by_id(&uuid, &user.id)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Account not found".to_string()))?;
-
-    Ok(Json(AccountResponse::from(&account)))
+    let service = AccountService::new(&repo);
+    Ok(Json(service.get_account(&uuid, &user.id).await?))
 }

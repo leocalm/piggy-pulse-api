@@ -1,16 +1,14 @@
-use std::fmt;
-
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as B64;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use validator::Validate;
 
-use crate::dto::common::{Date, HEX_COLOR_REGEX, PaginatedResponse};
-use crate::dto::misc::{CurrencyResponse, SymbolPosition as DtoSymbolPosition};
-use crate::models::currency::SymbolPosition as ModelSymbolPosition;
+use crate::dto::common::PaginatedResponse;
 
-// ===== Enums =====
+// ===== Account type / status =====
 
-#[derive(Serialize, Debug, Copy, Clone, Eq, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
 pub enum AccountType {
     #[default]
     Checking,
@@ -28,30 +26,30 @@ pub enum AccountStatus {
     Inactive,
 }
 
-// ===== Account Response =====
+// ===== Encrypted response =====
+//
+// Monetary and label fields are returned as base64-encoded AES-GCM
+// ciphertext; the client decrypts with its DEK. Structural fields
+// (type, status, currency_id, allowance/credit-card schedule) stay
+// plaintext so the client can bucket accounts without decrypting.
 
 #[derive(Serialize, Debug)]
-#[serde(tag = "type")]
-pub enum AccountResponse {
-    Checking(AccountResponseFields),
-    Savings(AccountResponseFields),
-    CreditCard(AccountResponseFields),
-    Wallet(AccountResponseFields),
-    Allowance(AccountResponseFields),
-}
-
-#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AccountResponseFields {
+pub struct EncryptedAccountResponse {
     pub id: Uuid,
-    pub name: String,
-    pub color: String,
+    pub account_type: AccountType,
     pub status: AccountStatus,
-    pub initial_balance: i64,
-    pub currency: CurrencyResponse,
-    pub spend_limit: Option<i64>,
+    pub currency_id: Uuid,
+    pub name_enc: String,
+    pub color_enc: String,
+    pub icon_enc: String,
+    pub current_balance_enc: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_up_amount: Option<i64>,
+    pub spend_limit_enc: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_transfer_amount_enc: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_up_amount_enc: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub top_up_cycle: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -62,194 +60,41 @@ pub struct AccountResponseFields {
     pub payment_due_day: Option<i32>,
 }
 
-impl fmt::Debug for AccountResponseFields {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AccountResponseFields")
-            .field("id", &self.id)
-            .field("name", &self.name)
-            .field("initial_balance", &"[redacted]")
-            .field("spend_limit", &"[redacted]")
-            .finish()
-    }
-}
+pub type AccountListResponse = PaginatedResponse<EncryptedAccountResponse>;
 
-pub type AccountListResponse = PaginatedResponse<AccountResponse>;
-
-// ===== Account Option =====
+// ===== Lightweight option (used by selectors) =====
+//
+// The option endpoint also returns only ciphertext for the label. The
+// client decrypts and renders. No unencrypted "display name" leaks.
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountOptionResponse {
     pub id: Uuid,
-    pub name: String,
-    pub color: String,
+    pub account_type: AccountType,
+    pub name_enc: String,
+    pub color_enc: String,
 }
 
 pub type AccountOptionListResponse = Vec<AccountOptionResponse>;
 
-// ===== Account Summary =====
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AccountSummaryResponse {
-    pub id: Uuid,
-    pub name: String,
-    #[serde(rename = "type")]
-    pub account_type: AccountType,
-    pub color: String,
-    pub status: AccountStatus,
-    pub current_balance: i64,
-    pub net_change_this_period: i64,
-    pub next_transfer: Option<Date>,
-    pub balance_after_next_transfer: Option<i64>,
-    pub number_of_transactions: i64,
-}
-
-impl fmt::Debug for AccountSummaryResponse {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AccountSummaryResponse")
-            .field("id", &self.id)
-            .field("name", &self.name)
-            .field("account_type", &self.account_type)
-            .field("current_balance", &"[redacted]")
-            .field("net_change_this_period", &"[redacted]")
-            .finish()
-    }
-}
-
-pub type AccountSummaryListResponse = PaginatedResponse<AccountSummaryResponse>;
-
-// ===== Account Details =====
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct LargestOutflow {
-    pub category_name: String,
-    pub value: i64,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StabilityContext {
-    pub periods_on_target: i64,
-    pub average_closing_balance: i64,
-    pub highest_closing_balance: i64,
-    pub lowest_closing_balance: i64,
-    pub largest_single_outflow: Option<LargestOutflow>,
-}
-
-impl fmt::Debug for StabilityContext {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("StabilityContext")
-            .field("periods_on_target", &self.periods_on_target)
-            .field("average_closing_balance", &"[redacted]")
-            .field("highest_closing_balance", &"[redacted]")
-            .field("lowest_closing_balance", &"[redacted]")
-            .field("largest_single_outflow", &"[redacted]")
-            .finish()
-    }
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct CategoryBreakdownItem {
-    pub category_id: Uuid,
-    pub category_name: String,
-    pub value: i64,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct TransactionBreakdownItem {
-    pub date: Date,
-    pub description: String,
-    pub category_name: String,
-    pub amount: i64,
-    pub balance: i64,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AccountDetailsResponse {
-    #[serde(flatten)]
-    pub base: AccountSummaryResponse,
-    pub inflow: i64,
-    pub outflow: i64,
-    pub spend_limit: Option<i64>,
-    pub stability_context: StabilityContext,
-    pub categories_breakdown: Vec<CategoryBreakdownItem>,
-    pub transactions_breakdown: Vec<TransactionBreakdownItem>,
-    // Allowance-specific fields
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_up_amount: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_up_cycle: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_up_day: Option<i32>,
-    pub spent_this_cycle: i64,
-    // CreditCard-specific fields
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub statement_close_day: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub payment_due_day: Option<i32>,
-    // Checking-specific fields
-    pub avg_daily_balance: i64,
-}
-
-impl fmt::Debug for AccountDetailsResponse {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AccountDetailsResponse")
-            .field("base", &self.base)
-            .field("inflow", &"[redacted]")
-            .field("outflow", &"[redacted]")
-            .finish()
-    }
-}
-
-// ===== Account Balance History =====
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct AccountBalanceHistoryPoint {
-    pub date: Date,
-    pub balance: i64,
-    pub transaction_count: i64,
-}
-
-pub type AccountBalanceHistoryResponse = Vec<AccountBalanceHistoryPoint>;
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct BatchBalanceHistoryEntry {
-    pub account_id: Uuid,
-    pub points: Vec<AccountBalanceHistoryPoint>,
-}
-
-pub type BatchBalanceHistoryResponse = Vec<BatchBalanceHistoryEntry>;
-
-// ===== Account Requests =====
+// ===== Requests =====
+//
+// Create/update carry the plaintext fields: the server holds the DEK
+// for the session and encrypts before writing. All monetary amounts
+// are integer cents.
 
 #[derive(Deserialize, Debug)]
-#[serde(tag = "type")]
-pub enum CreateAccountRequest {
-    Checking(AccountRequestFields),
-    Savings(AccountRequestFields),
-    CreditCard(AccountRequestFields),
-    Wallet(AccountRequestFields),
-    Allowance(AccountRequestFields),
-}
-
-#[derive(Deserialize, Debug, Validate)]
 #[serde(rename_all = "camelCase")]
-pub struct AccountRequestFields {
-    #[validate(length(min = 3))]
+pub struct CreateAccountRequest {
+    pub account_type: AccountType,
     pub name: String,
-    #[validate(regex(path = *HEX_COLOR_REGEX))]
     pub color: String,
+    pub icon: String,
+    pub currency_id: Uuid,
     pub initial_balance: i64,
-    #[allow(dead_code)]
-    pub currency_id: Option<Uuid>,
     pub spend_limit: Option<i64>,
+    pub next_transfer_amount: Option<i64>,
     pub top_up_amount: Option<i64>,
     pub top_up_cycle: Option<String>,
     pub top_up_day: Option<i32>,
@@ -265,83 +110,6 @@ pub struct AdjustBalanceRequest {
     pub new_balance: i64,
 }
 
-// ===== Conversions from domain models to V2 DTOs =====
-
-use crate::models::account::{Account, AccountType as ModelAccountType};
-
-impl CreateAccountRequest {
-    pub fn fields(&self) -> &AccountRequestFields {
-        match self {
-            Self::Checking(f) | Self::Savings(f) | Self::CreditCard(f) | Self::Wallet(f) | Self::Allowance(f) => f,
-        }
-    }
-
-    pub fn model_account_type(&self) -> ModelAccountType {
-        match self {
-            Self::Checking(_) => ModelAccountType::Checking,
-            Self::Savings(_) => ModelAccountType::Savings,
-            Self::CreditCard(_) => ModelAccountType::CreditCard,
-            Self::Wallet(_) => ModelAccountType::Wallet,
-            Self::Allowance(_) => ModelAccountType::Allowance,
-        }
-    }
-}
-
-impl From<ModelAccountType> for AccountType {
-    fn from(t: ModelAccountType) -> Self {
-        match t {
-            ModelAccountType::Checking => AccountType::Checking,
-            ModelAccountType::Savings => AccountType::Savings,
-            ModelAccountType::CreditCard => AccountType::CreditCard,
-            ModelAccountType::Wallet => AccountType::Wallet,
-            ModelAccountType::Allowance => AccountType::Allowance,
-        }
-    }
-}
-
-fn convert_symbol_position(pos: ModelSymbolPosition) -> DtoSymbolPosition {
-    match pos {
-        ModelSymbolPosition::Before => DtoSymbolPosition::Before,
-        ModelSymbolPosition::After => DtoSymbolPosition::After,
-    }
-}
-
-impl From<&Account> for AccountResponse {
-    fn from(account: &Account) -> Self {
-        let is_allowance = matches!(account.account_type, ModelAccountType::Allowance);
-        let is_credit_card = matches!(account.account_type, ModelAccountType::CreditCard);
-
-        let fields = AccountResponseFields {
-            id: account.id,
-            name: account.name.clone(),
-            color: account.color.clone(),
-            status: if account.is_archived {
-                AccountStatus::Inactive
-            } else {
-                AccountStatus::Active
-            },
-            initial_balance: account.balance,
-            currency: CurrencyResponse {
-                id: account.currency.id,
-                name: account.currency.name.clone(),
-                symbol: account.currency.symbol.clone(),
-                code: account.currency.currency.clone(),
-                decimal_places: account.currency.decimal_places,
-                symbol_position: convert_symbol_position(account.currency.symbol_position),
-            },
-            spend_limit: account.spend_limit.map(|s| s as i64),
-            top_up_amount: if is_allowance { account.top_up_amount } else { None },
-            top_up_cycle: if is_allowance { account.top_up_cycle.clone() } else { None },
-            top_up_day: if is_allowance { account.top_up_day } else { None },
-            statement_close_day: if is_credit_card { account.statement_close_day } else { None },
-            payment_due_day: if is_credit_card { account.payment_due_day } else { None },
-        };
-        match account.account_type {
-            ModelAccountType::Checking => Self::Checking(fields),
-            ModelAccountType::Savings => Self::Savings(fields),
-            ModelAccountType::CreditCard => Self::CreditCard(fields),
-            ModelAccountType::Wallet => Self::Wallet(fields),
-            ModelAccountType::Allowance => Self::Allowance(fields),
-        }
-    }
+pub fn b64(bytes: &[u8]) -> String {
+    B64.encode(bytes)
 }
