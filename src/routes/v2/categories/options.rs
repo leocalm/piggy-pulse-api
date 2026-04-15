@@ -13,7 +13,5 @@ use crate::service::category::CategoryService;
 pub async fn list_category_options(pool: &State<PgPool>, user: CurrentUser) -> Result<Json<CategoryOptionListResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let service = CategoryService::new(&repo);
-
-    let response = service.list_category_options(&user.id).await?;
-    Ok(Json(response))
+    Ok(Json(service.list_category_options(&user.id).await?))
 }

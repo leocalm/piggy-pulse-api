@@ -6,8 +6,9 @@ use sqlx::PgPool;
 use validator::Validate;
 
 use crate::auth::CurrentUser;
+use crate::crypto::Dek;
 use crate::database::postgres_repository::PostgresRepository;
-use crate::dto::categories::{CategoryResponse, CreateCategoryRequest};
+use crate::dto::categories::{CreateCategoryRequest, EncryptedCategoryResponse};
 use crate::error::app_error::AppError;
 use crate::service::category::CategoryService;
 
@@ -15,13 +16,12 @@ use crate::service::category::CategoryService;
 pub async fn create_category(
     pool: &State<PgPool>,
     user: CurrentUser,
+    dek: Dek,
     payload: Json<CreateCategoryRequest>,
-) -> Result<(Status, Json<CategoryResponse>), AppError> {
+) -> Result<(Status, Json<EncryptedCategoryResponse>), AppError> {
     payload.validate()?;
-
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let service = CategoryService::new(&repo);
-
-    let response = service.create_category(&payload, &user.id).await?;
+    let response = service.create_category(&payload, &user.id, &dek).await?;
     Ok((Status::Created, Json(response)))
 }

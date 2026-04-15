@@ -4,7 +4,6 @@ pub mod audit;
 pub mod budget_period;
 pub mod category;
 pub mod category_target;
-pub mod category_v2;
 pub mod currency;
 pub mod password_reset;
 pub mod pending_2fa_token;

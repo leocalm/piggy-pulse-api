@@ -128,6 +128,7 @@ ORDER BY created_at DESC
     }
 
     /// Count active subscriptions for a given category
+    #[allow(dead_code)]
     pub async fn count_active_subscriptions_for_category(&self, category_id: &Uuid, user_id: &Uuid) -> Result<i64, AppError> {
         let count: i64 = sqlx::query_scalar(
             r#"

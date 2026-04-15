@@ -19,7 +19,6 @@
 //! are deleted outright at the call sites.
 
 use crate::crypto::Dek;
-use crate::database::category::category_type_from_db;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::models::category::CategoryType;
@@ -389,11 +388,11 @@ impl PostgresRepository {
         category_id: Option<&Uuid>,
     ) -> Result<Option<CategoryType>, AppError> {
         let Some(cat_id) = category_id else { return Ok(None) };
-        let row: Option<(String,)> = sqlx::query_as("SELECT category_type::text FROM category WHERE id = $1")
+        let row: Option<(CategoryType,)> = sqlx::query_as("SELECT category_type FROM category WHERE id = $1")
             .bind(cat_id)
             .fetch_optional(&mut **tx)
             .await?;
-        Ok(row.map(|r| category_type_from_db(&r.0)))
+        Ok(row.map(|r| r.0))
     }
 
     // ─────────────────────────────────────────────────────────────────

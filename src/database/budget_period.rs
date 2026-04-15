@@ -77,6 +77,7 @@ impl PostgresRepository {
         Ok(row.id)
     }
 
+    #[allow(dead_code)]
     pub async fn get_budget_period(&self, budget_period_id: &Uuid, user_id: &Uuid) -> Result<BudgetPeriod, AppError> {
         let budget_period = sqlx::query_as::<_, BudgetPeriod>(
             r#"

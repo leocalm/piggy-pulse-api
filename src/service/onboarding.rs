@@ -1,8 +1,8 @@
+use crate::crypto::Dek;
 use crate::database::postgres_repository::PostgresRepository;
-use crate::dto::categories::CategoryResponse;
+use crate::dto::categories::{CreateCategoryRequest, EncryptedCategoryResponse, to_encrypted_response};
 use crate::dto::misc::{ApplyTemplateRequest, CategoryTemplateCategory, CategoryTemplateResponse, OnboardingStatus, OnboardingStatusResponse, OnboardingStep};
 use crate::error::app_error::AppError;
-use crate::models::category::CategoryRequest;
 use uuid::Uuid;
 
 // ── Static template definitions ───────────────────────────────────────────────
@@ -223,7 +223,7 @@ impl<'a> OnboardingService<'a> {
             .collect()
     }
 
-    pub async fn apply_template(&self, request: &ApplyTemplateRequest, user_id: &Uuid) -> Result<Vec<CategoryResponse>, AppError> {
+    pub async fn apply_template(&self, request: &ApplyTemplateRequest, user_id: &Uuid, dek: &Dek) -> Result<Vec<EncryptedCategoryResponse>, AppError> {
         use crate::dto::categories::{CategoryBehavior, CategoryType};
 
         let template = TEMPLATES
@@ -234,34 +234,30 @@ impl<'a> OnboardingService<'a> {
         let mut created = Vec::with_capacity(template.categories.len());
 
         for cat_def in template.categories {
-            let v2_type: CategoryType = match cat_def.category_type {
+            let category_type: CategoryType = match cat_def.category_type {
                 "income" => CategoryType::Income,
                 "expense" => CategoryType::Expense,
                 _ => CategoryType::Transfer,
             };
-            let v2_behavior: Option<CategoryBehavior> = cat_def.behavior.and_then(|b| match b {
+            let behavior: Option<CategoryBehavior> = cat_def.behavior.and_then(|b| match b {
                 "fixed" => Some(CategoryBehavior::Fixed),
                 "variable" => Some(CategoryBehavior::Variable),
                 "subscription" => Some(CategoryBehavior::Subscription),
                 _ => None,
             });
 
-            let v1_type = v2_type.to_v1();
-            let v1_behavior = v2_behavior.map(|b| b.to_v1());
-            let computed_color = crate::dto::categories::compute_color(v1_type, v1_behavior);
-
-            let v1_request = CategoryRequest {
+            let req = CreateCategoryRequest {
                 name: cat_def.name.to_string(),
-                color: computed_color,
+                category_type,
+                behavior,
                 icon: cat_def.icon.to_string(),
-                parent_id: None,
-                category_type: v1_type,
+                color: None,
                 description: None,
-                behavior: v1_behavior.map(|b| crate::models::category::category_behavior_to_db(b).to_string()),
+                parent_id: None,
             };
 
-            let category = self.repository.create_category(&v1_request, user_id).await?;
-            created.push(CategoryResponse::from_model(&category));
+            let category = self.repository.create_category(&req, user_id, dek).await?;
+            created.push(to_encrypted_response(&category));
         }
 
         Ok(created)
