@@ -45,7 +45,7 @@ post:
       content:
         application/json:
           schema:
-            $ref: '../schemas/Transaction.yaml#/TransactionResponse'
+            $ref: '../schemas/Transaction.yaml#/EncryptedTransactionResponse'
     '400':
       $ref: '../responses/BadRequest.yaml'
     '422':

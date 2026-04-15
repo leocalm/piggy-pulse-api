@@ -1,278 +1,82 @@
-# ===== Embedded object shapes =====
-
-AccountRef:
+EncryptedTransactionResponse:
   type: object
   required:
     - id
-    - name
-    - color
-  properties:
-    id:
-      type: string
-      format: uuid
-      example: "123e4567-e89b-12d3-a456-426655440000"
-    name:
-      type: string
-      example: "Main Checking"
-    color:
-      type: string
-      example: "#38BDF8"
-
-CategoryRef:
-  type: object
-  required:
-    - id
-    - name
-    - color
-    - icon
-    - type
-  properties:
-    id:
-      type: string
-      format: uuid
-      example: "123e4567-e89b-12d3-a456-426655440000"
-    name:
-      type: string
-      example: "Groceries"
-    color:
-      type: string
-      example: "#6366F1"
-    icon:
-      type: string
-      example: "cart"
-    type:
-      type: string
-      enum: ["income", "expense", "transfer"]
-      example: "expense"
-
-VendorRef:
-  type: object
-  required:
-    - id
-    - name
-  properties:
-    id:
-      type: string
-      format: uuid
-      example: "123e4567-e89b-12d3-a456-426655440000"
-    name:
-      type: string
-      example: "Amazon"
-
-# ===== Response =====
-
-TransactionBase:
-  type: object
-  required:
-    - id
+    - seq
     - date
-    - description
-    - amount
-    - transactionType
-    - fromAccount
-    - category
-  properties:
-    id:
-      type: string
-      format: uuid
-      description: Transaction ID
-      example: "123e4567-e89b-12d3-a456-426655440000"
-    date:
-      type: string
-      format: date
-      description: Transaction date
-      example: "2024-01-15"
-    description:
-      type: string
-      description: Transaction description
-      example: "Grocery shopping"
-    amount:
-      type: integer
-      description: Transaction amount in cents
-      example: 5000
-      minimum: 0
-    transactionType:
-      type: string
-      enum: ["regular", "transfer"]
-      description: Used as discriminator
-      example: "regular"
-    fromAccount:
-      $ref: '#/AccountRef'
-    category:
-      $ref: '#/CategoryRef'
-    vendor:
-      oneOf:
-        - $ref: '#/VendorRef'
-        - type: "null"
-
-RegularTransactionResponse:
-  type: object
-  required:
-    - transactionType
-  properties:
-    transactionType:
-      type: string
-      enum: ["regular"]
-    toAccount:
-      type: "null"
-
-TransferTransactionResponse:
-  type: object
-  required:
-    - transactionType
-    - toAccount
-  properties:
-    transactionType:
-      type: string
-      enum: ["transfer"]
-    toAccount:
-      $ref: '#/AccountRef'
-
-TransactionResponse:
-  allOf:
-    - $ref: '#/TransactionBase'
-    - discriminator:
-        propertyName: transactionType
-        mapping:
-          regular: '#/RegularTransactionResponse'
-          transfer: '#/TransferTransactionResponse'
-      oneOf:
-        - $ref: '#/RegularTransactionResponse'
-        - $ref: '#/TransferTransactionResponse'
-
-TransactionListResponse:
-  allOf:
-    - $ref: '../schemas/Common.yaml#/PaginatedResponse'
-    - type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/TransactionResponse'
-
-# ===== Requests =====
-
-TransactionRequestBase:
-  type: object
-  required:
-    - date
-    - description
-    - amount
+    - firstCreatedAt
     - fromAccountId
-    - categoryId
-    - transactionType
+    - amountEnc
+    - descriptionEnc
   properties:
+    id:
+      type: string
+      format: uuid
+    seq:
+      type: integer
+      format: int64
+      description: Monotonic sequence number within the user's ledger
     date:
       type: string
       format: date
-      description: Transaction date
-      example: "2024-01-15"
-    description:
+      description: Occurred-at date (plaintext, structural)
+    firstCreatedAt:
       type: string
-      description: Transaction description
-      example: "Grocery shopping"
-    amount:
-      type: integer
-      description: Transaction amount in cents
-      example: 5000
-      minimum: 0
+      format: date-time
     fromAccountId:
       type: string
       format: uuid
-      description: Source account ID
-      example: "123e4567-e89b-12d3-a456-426655440000"
-    categoryId:
-      type: string
+    toAccountId:
+      type: [string, "null"]
       format: uuid
-      description: Category ID
-      example: "123e4567-e89b-12d3-a456-426655440000"
+    categoryId:
+      type: [string, "null"]
+      format: uuid
     vendorId:
       type: [string, "null"]
       format: uuid
-      description: Vendor ID (optional)
-      example: "123e4567-e89b-12d3-a456-426655440000"
-    transactionType:
+    amountEnc:
       type: string
-      enum: ["regular", "transfer"]
-      description: Used as discriminator
-
-CreateRegularTransactionRequest:
-  type: object
-  required:
-    - transactionType
-  properties:
-    transactionType:
+      description: Base64 AES-GCM envelope for the i64 LE amount in cents
+    descriptionEnc:
       type: string
-      enum: ["regular"]
-    toAccountId:
-      type: "null"
-
-CreateTransferTransactionRequest:
-  type: object
-  required:
-    - transactionType
-    - toAccountId
-  properties:
-    transactionType:
-      type: string
-      enum: ["transfer"]
-    toAccountId:
-      type: string
-      format: uuid
-      description: Destination account ID
-      example: "123e4567-e89b-12d3-a456-426655440000"
+      description: Base64 AES-GCM envelope for the UTF-8 description
 
 CreateTransactionRequest:
-  allOf:
-    - $ref: '#/TransactionRequestBase'
-    - discriminator:
-        propertyName: transactionType
-        mapping:
-          regular: '#/CreateRegularTransactionRequest'
-          transfer: '#/CreateTransferTransactionRequest'
-      oneOf:
-        - $ref: '#/CreateRegularTransactionRequest'
-        - $ref: '#/CreateTransferTransactionRequest'
+  type: object
+  description: |
+    Plaintext transaction fields. The server encrypts amount and
+    description with the caller's DEK before inserting a new ledger
+    row.
+  required:
+    - amount
+    - description
+    - occurredAt
+    - categoryId
+    - fromAccountId
+  properties:
+    amount:
+      type: integer
+      minimum: 0
+    description:
+      type: string
+      minLength: 3
+    occurredAt:
+      type: string
+      format: date
+    categoryId:
+      type: string
+      format: uuid
+    fromAccountId:
+      type: string
+      format: uuid
+    toAccountId:
+      type: [string, "null"]
+      format: uuid
+    vendorId:
+      type: [string, "null"]
+      format: uuid
 
 UpdateTransactionRequest:
   allOf:
     - $ref: '#/CreateTransactionRequest'
-
-HasTransactionsResponse:
-  type: object
-  required:
-    - hasTransactions
-  properties:
-    hasTransactions:
-      type: boolean
-      description: Whether the user has created at least one transaction
-      example: true
-
-TransactionStatsResponse:
-  type: object
-  required:
-    - totalInflows
-    - totalOutflows
-    - netAmount
-    - transactionCount
-  properties:
-    totalInflows:
-      type: integer
-      format: int64
-      description: Sum of all income transaction amounts in the period (in cents)
-      example: 500000
-    totalOutflows:
-      type: integer
-      format: int64
-      description: Sum of all expense transaction amounts in the period (in cents)
-      example: 350000
-    netAmount:
-      type: integer
-      format: int64
-      description: Net amount (inflows minus outflows) in cents
-      example: 150000
-    transactionCount:
-      type: integer
-      format: int64
-      description: Total number of transactions in the period (excluding transfers)
-      example: 42

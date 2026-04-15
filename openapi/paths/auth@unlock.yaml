@@ -1,0 +1,31 @@
+post:
+  tags:
+    - Auth
+  summary: Upload the session DEK after local password unlock
+  description: |
+    The client derives its KEK from the password via Argon2id,
+    unwraps the per-user DEK, and uploads the 32-byte DEK to the
+    server. The server caches it in the session-keyed in-memory
+    store (keyed on the session cookie) so subsequent encrypted
+    requests can reuse it without the client having to re-send.
+  operationId: unlockSession
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required: [dek]
+          properties:
+            dek:
+              type: string
+              description: Base64-encoded 32-byte DEK
+  responses:
+    '204':
+      description: DEK stored
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

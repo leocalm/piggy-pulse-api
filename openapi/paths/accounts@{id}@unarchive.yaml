@@ -6,12 +6,8 @@ post:
   parameters:
     - $ref: '../parameters/Id.yaml'
   responses:
-    '200':
+    '204':
       description: Account unarchived
-      content:
-        application/json:
-          schema:
-            $ref: '../schemas/Accounts.yaml#/AccountResponse'
     '400':
       $ref: '../responses/BadRequest.yaml'
     '401':

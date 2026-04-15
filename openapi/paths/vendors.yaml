@@ -37,7 +37,7 @@ post:
       content:
         application/json:
           schema:
-            $ref: '../schemas/Vendor.yaml#/VendorResponse'
+            $ref: '../schemas/Vendor.yaml#/EncryptedVendorResponse'
     '400':
       $ref: '../responses/BadRequest.yaml'
     '422':

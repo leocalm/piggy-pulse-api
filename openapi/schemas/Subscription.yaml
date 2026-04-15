@@ -1,200 +1,65 @@
 SubscriptionStatus:
   type: string
-  enum:
-    - active
-    - cancelled
-    - paused
-  description: Current status of the subscription
-  example: active
+  enum: [active, cancelled, paused]
 
 BillingCycle:
   type: string
-  enum:
-    - monthly
-    - quarterly
-    - yearly
-  description: How often the subscription is billed
-  example: monthly
+  enum: [monthly, quarterly, yearly]
 
-SubscriptionResponse:
+EncryptedSubscriptionResponse:
   type: object
   required:
     - id
-    - name
     - categoryId
-    - billingAmount
     - billingCycle
     - billingDay
     - nextChargeDate
     - status
     - createdAt
     - updatedAt
+    - nameEnc
+    - billingAmountEnc
   properties:
     id:
       type: string
       format: uuid
-      description: Subscription ID
-      example: "123e4567-e89b-12d3-a456-426655440000"
-    name:
-      type: string
-      description: Name of the subscription
-      example: "Netflix"
     categoryId:
       type: string
       format: uuid
-      description: Category ID this subscription belongs to
-      example: "123e4567-e89b-12d3-a456-426655440001"
     vendorId:
       type: [string, "null"]
       format: uuid
-      description: Optional vendor ID associated with this subscription
-      example: "123e4567-e89b-12d3-a456-426655440002"
-    billingAmount:
-      type: integer
-      format: int64
-      description: Billing amount in smallest currency unit (e.g. cents)
-      example: 1599
-      minimum: 1
     billingCycle:
       $ref: '#/BillingCycle'
     billingDay:
       type: integer
-      format: int32
-      description: Day of month the subscription is billed (1–31)
-      example: 15
       minimum: 1
       maximum: 31
     nextChargeDate:
       type: string
       format: date
-      description: Date of the next expected charge
-      example: "2026-04-15"
     status:
       $ref: '#/SubscriptionStatus'
     cancelledAt:
       type: [string, "null"]
       format: date-time
-      description: Timestamp when the subscription was cancelled, if applicable
-      example: null
     createdAt:
       type: string
       format: date-time
-      description: Timestamp when the subscription was created
-      example: "2026-01-01T00:00:00Z"
     updatedAt:
       type: string
       format: date-time
-      description: Timestamp when the subscription was last updated
-      example: "2026-03-01T00:00:00Z"
-
-BillingEventResponse:
-  type: object
-  required:
-    - id
-    - subscriptionId
-    - amount
-    - date
-    - detected
-    - postCancellation
-  properties:
-    id:
+    nameEnc:
       type: string
-      format: uuid
-      description: Billing event ID
-      example: "123e4567-e89b-12d3-a456-426655440010"
-    subscriptionId:
+      description: Base64 AES-GCM envelope for the subscription name
+    billingAmountEnc:
       type: string
-      format: uuid
-      description: The subscription this billing event belongs to
-      example: "123e4567-e89b-12d3-a456-426655440000"
-    transactionId:
-      type: [string, "null"]
-      format: uuid
-      description: Linked transaction ID, if the charge was matched to a real transaction
-      example: null
-    amount:
-      type: integer
-      format: int64
-      description: Billed amount in smallest currency unit (e.g. cents)
-      example: 1599
-    date:
-      type: string
-      format: date
-      description: Date the billing event occurred
-      example: "2026-03-15"
-    detected:
-      type: boolean
-      description: Whether this billing event was automatically detected from transactions
-      example: true
-    postCancellation:
-      type: boolean
-      description: Whether this billing event occurred after the subscription was cancelled
-      example: false
-
-SubscriptionDetailResponse:
-  allOf:
-    - $ref: '#/SubscriptionResponse'
-    - type: object
-      required:
-        - billingHistory
-      properties:
-        billingHistory:
-          type: array
-          description: Historical billing events for this subscription
-          items:
-            $ref: '#/BillingEventResponse'
+      description: Base64 AES-GCM envelope for the i64 LE billing amount in cents
 
 SubscriptionListResponse:
   type: array
-  description: List of subscriptions
   items:
-    $ref: '#/SubscriptionResponse'
-
-UpcomingChargeItem:
-  type: object
-  required:
-    - subscriptionId
-    - name
-    - billingAmount
-    - billingCycle
-    - nextChargeDate
-  properties:
-    subscriptionId:
-      type: string
-      format: uuid
-      description: Subscription ID
-      example: "123e4567-e89b-12d3-a456-426655440000"
-    name:
-      type: string
-      description: Name of the subscription
-      example: "Netflix"
-    billingAmount:
-      type: integer
-      format: int64
-      description: Amount of the upcoming charge in smallest currency unit (e.g. cents)
-      example: 1599
-    billingCycle:
-      $ref: '#/BillingCycle'
-    nextChargeDate:
-      type: string
-      format: date
-      description: Date of the upcoming charge
-      example: "2026-04-15"
-    vendorId:
-      type: [string, "null"]
-      format: uuid
-      description: Optional vendor ID
-      example: null
-    vendorName:
-      type: [string, "null"]
-      description: Optional vendor name
-      example: "Netflix Inc."
-
-UpcomingChargesResponse:
-  type: array
-  description: List of upcoming subscription charges
-  items:
-    $ref: '#/UpcomingChargeItem'
+    $ref: '#/EncryptedSubscriptionResponse'
 
 CreateSubscriptionRequest:
   type: object
@@ -208,87 +73,30 @@ CreateSubscriptionRequest:
   properties:
     name:
       type: string
-      description: Name of the subscription
       minLength: 1
       maxLength: 255
-      example: "Netflix"
     categoryId:
       type: string
       format: uuid
-      description: Category ID this subscription belongs to
-      example: "123e4567-e89b-12d3-a456-426655440001"
     vendorId:
       type: [string, "null"]
       format: uuid
-      description: Optional vendor ID associated with this subscription
-      example: null
     billingAmount:
       type: integer
-      format: int64
-      description: Billing amount in smallest currency unit (e.g. cents)
-      example: 1599
       minimum: 1
     billingCycle:
       $ref: '#/BillingCycle'
     billingDay:
       type: integer
-      format: int32
-      description: Day of month the subscription is billed (1–31)
-      example: 15
       minimum: 1
       maximum: 31
     nextChargeDate:
       type: string
       format: date
-      description: Date of the next expected charge
-      example: "2026-04-15"
 
 UpdateSubscriptionRequest:
-  type: object
-  required:
-    - name
-    - categoryId
-    - billingAmount
-    - billingCycle
-    - billingDay
-    - nextChargeDate
-  properties:
-    name:
-      type: string
-      description: Name of the subscription
-      minLength: 1
-      maxLength: 255
-      example: "Netflix"
-    categoryId:
-      type: string
-      format: uuid
-      description: Category ID this subscription belongs to
-      example: "123e4567-e89b-12d3-a456-426655440001"
-    vendorId:
-      type: [string, "null"]
-      format: uuid
-      description: Optional vendor ID associated with this subscription
-      example: null
-    billingAmount:
-      type: integer
-      format: int64
-      description: Billing amount in smallest currency unit (e.g. cents)
-      example: 1599
-      minimum: 1
-    billingCycle:
-      $ref: '#/BillingCycle'
-    billingDay:
-      type: integer
-      format: int32
-      description: Day of month the subscription is billed (1–31)
-      example: 15
-      minimum: 1
-      maximum: 31
-    nextChargeDate:
-      type: string
-      format: date
-      description: Date of the next expected charge
-      example: "2026-04-15"
+  allOf:
+    - $ref: '#/CreateSubscriptionRequest'
 
 CancelSubscriptionRequest:
   type: object
@@ -296,5 +104,3 @@ CancelSubscriptionRequest:
     cancellationDate:
       type: [string, "null"]
       format: date
-      description: Date the subscription was cancelled (or will be cancelled). Defaults to today if omitted.
-      example: "2026-04-01"

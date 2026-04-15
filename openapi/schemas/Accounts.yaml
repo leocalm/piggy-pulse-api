@@ -1,55 +1,54 @@
-AccountBase:
+EncryptedAccountResponse:
   type: object
   required:
     - id
-    - name
-    - type
-    - color
+    - accountType
     - status
+    - currencyId
+    - nameEnc
+    - colorEnc
+    - iconEnc
+    - currentBalanceEnc
   properties:
     id:
       type: string
       format: uuid
-      description: Account ID
-      example: "123e4567-e89b-12d3-a456-426655440000"
-    name:
+    accountType:
       type: string
-      description: Account name
-      example: "Main Checking Account"
-    color:
-      type: string
-      description: Account color in #RRGGBB hex format
-      pattern: '^#[0-9A-Fa-f]{6}$'
-      example: "#000000"
-    type:
-      type: string
-      description: Account type
-      enum: ["Checking", "Savings", "CreditCard", "Allowance", "Wallet"]
+      enum: [checking, savings, creditcard, wallet, allowance]
     status:
       type: string
-      enum: ["active", "inactive"]
-      description: Account status
-      example: "active"
-
-AccountResponse:
-  allOf:
-    - $ref: '#/AccountBase'
-    - type: object
-      required:
-        - initialBalance
-        - currency
-        - spendLimit
-      properties:
-        initialBalance:
-          type: integer
-          example: 10000
-        currency:
-          $ref: './Misc.yaml#/CurrencyResponse'
-        spendLimit:
-          type: [integer, "null"]
-          description: Spend limit in cents. Always null for checking, savings, and wallet accounts.
-          minimum: 0
-          example: 50000
+      enum: [active, inactive]
+    currencyId:
+      type: string
+      format: uuid
+    nameEnc:
+      type: string
+      description: Base64-encoded AES-GCM envelope (12-byte nonce + ciphertext + 16-byte tag) for the UTF-8 name
+    colorEnc:
+      type: string
+      description: Base64-encoded AES-GCM envelope for the color string
+    iconEnc:
+      type: string
+      description: Base64-encoded AES-GCM envelope for the icon string
+    currentBalanceEnc:
+      type: string
+      description: Base64-encoded AES-GCM envelope for the i64 LE balance in cents
+    spendLimitEnc:
+      type: [string, "null"]
+    nextTransferAmountEnc:
+      type: [string, "null"]
+    topUpAmountEnc:
+      type: [string, "null"]
+    topUpCycle:
+      type: [string, "null"]
+      enum: ["weekly", "bi-weekly", "monthly", null]
+    topUpDay:
+      type: [integer, "null"]
+    statementCloseDay:
+      type: [integer, "null"]
+    paymentDueDay:
+      type: [integer, "null"]
 
 AccountListResponse:
   allOf:
@@ -59,69 +58,51 @@ AccountListResponse:
         data:
           type: array
           items:
-            $ref: '#/AccountResponse'
+            $ref: '#/EncryptedAccountResponse'
 
 CreateAccountRequest:
   type: object
+  description: |
+    Plaintext account fields. The server encrypts name, color, icon,
+    initialBalance, spendLimit, nextTransferAmount, and topUpAmount
+    using the caller's session DEK before inserting the row.
   required:
+    - accountType
     - name
-    - type
     - color
-    - initialBalance
+    - icon
     - currencyId
+    - initialBalance
   properties:
+    accountType:
+      type: string
+      enum: [checking, savings, creditcard, wallet, allowance]
     name:
       type: string
-      description: Account name
-      example: "Main Checking Account"
     color:
       type: string
-      description: Account color in #RRGGBB hex format
-      pattern: '^#[0-9A-Fa-f]{6}$'
-      example: "#000000"
-    initialBalance:
-      type: integer
-      description: Initial balance in cents
-      example: 10000
+    icon:
+      type: string
     currencyId:
       type: string
       format: uuid
-      description: Currency ID
-      example: "123e4567-e89b-12d3-a456-426655440000"
-    type:
-      type: string
-      enum: ["Checking", "Savings", "CreditCard", "Allowance", "Wallet"]
+    initialBalance:
+      type: integer
     spendLimit:
       type: [integer, "null"]
-      description: Optional spend limit in cents. Only meaningful for creditCard and allowance accounts.
-      minimum: 0
-      example: 50000
+    nextTransferAmount:
+      type: [integer, "null"]
     topUpAmount:
       type: [integer, "null"]
-      description: Top-up amount in cents. Only meaningful for Allowance accounts.
-      minimum: 0
-      example: 20000
     topUpCycle:
       type: [string, "null"]
-      description: Top-up frequency. Only meaningful for Allowance accounts.
       enum: ["weekly", "bi-weekly", "monthly", null]
-      example: "monthly"
     topUpDay:
       type: [integer, "null"]
-      description: Day of week (0–6) or day of month (1–31) for the top-up, depending on cycle. Only meaningful for Allowance accounts.
-      example: 1
     statementCloseDay:
       type: [integer, "null"]
-      description: Day of month the statement closes (1–31). Only meaningful for CreditCard accounts.
-      minimum: 1
-      maximum: 31
-      example: 25
     paymentDueDay:
       type: [integer, "null"]
-      description: Day of month the payment is due (1–31). Only meaningful for CreditCard accounts.
-      minimum: 1
-      maximum: 31
-      example: 15
 
 UpdateAccountRequest:
   allOf:
@@ -131,284 +112,25 @@ AccountOptionResponse:
   type: object
   required:
     - id
-    - name
-    - color
+    - accountType
+    - nameEnc
+    - colorEnc
   properties:
     id:
       type: string
       format: uuid
-      description: Account ID
-      example: "123e4567-e89b-12d3-a456-426655440000"
-    name:
+    accountType:
       type: string
-      description: Account name
-      example: "Main Checking Account"
-    color:
+      enum: [checking, savings, creditcard, wallet, allowance]
+    nameEnc:
       type: string
-      description: Account color in #RRGGBB hex format
-      pattern: '^#[0-9A-Fa-f]{6}$'
-      example: "#000000"
+    colorEnc:
+      type: string
 
 AccountOptionListResponse:
   type: array
   items:
     $ref: '#/AccountOptionResponse'
-
-AccountSummaryResponse:
-  allOf:
-    - $ref: '#/AccountBase'
-    - type: object
-      required:
-        - currentBalance
-        - netChangeThisPeriod
-        - nextTransfer
-        - balanceAfterNextTransfer
-        - numberOfTransactions
-      properties:
-        currentBalance:
-          type: integer
-          description: Current balance in cents
-          example: 10000
-        netChangeThisPeriod:
-          type: integer
-          description: Net change this period in cents
-          example: 1000
-        nextTransfer:
-          type: [string, "null"]
-          format: date
-          description: Next transfer date
-          example: "2023-01-02"
-        balanceAfterNextTransfer:
-          type: [integer, "null"]
-          description: Balance after next transfer in cents
-          example: 1000
-        numberOfTransactions:
-          type: integer
-          description: Number of transactions
-          example: 10
-          minimum: 0
-
-AccountSummaryListResponse:
-  allOf:
-    - $ref: './Common.yaml#/PaginatedResponse'
-    - type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/AccountSummaryResponse'
-
-LargestOutflow:
-  type: object
-  required:
-    - categoryName
-    - value
-  properties:
-    categoryName:
-      type: string
-      description: Category name
-      example: "Groceries"
-    value:
-      type: integer
-      description: Value in cents
-      example: 1000
-      minimum: 0
-
-StabilityContext:
-  type: object
-  required:
-    - periodsOnTarget
-    - averageClosingBalance
-    - highestClosingBalance
-    - lowestClosingBalance
-    - largestSingleOutflow
-  properties:
-    periodsOnTarget:
-      type: integer
-      description: Periods on target
-      example: 10
-      minimum: 0
-    averageClosingBalance:
-      type: integer
-      description: Average closing balance in cents
-      example: 10000
-    highestClosingBalance:
-      type: integer
-      description: Highest closing balance in cents
-      example: 10000
-    lowestClosingBalance:
-      type: integer
-      description: Lowest closing balance in cents
-      example: 10000
-    largestSingleOutflow:
-      oneOf:
-        - type: "null"
-        - $ref: '#/LargestOutflow'
-
-CategoryBreakdownItem:
-  type: object
-  required:
-    - categoryId
-    - categoryName
-    - value
-  properties:
-    categoryId:
-      type: string
-      format: uuid
-      description: Category ID
-      example: "123e4567-e89b-12d3-a456-426655440000"
-    categoryName:
-      type: string
-      example: "Groceries"
-    value:
-      type: integer
-      minimum: 0
-      example: 1000
-
-TransactionBreakdownItem:
-  type: object
-  required:
-    - date
-    - description
-    - categoryName
-    - amount
-    - balance
-  properties:
-    date:
-      type: string
-      format: date
-    description:
-      type: string
-    categoryName:
-      type: string
-    amount:
-      type: integer
-      minimum: 0
-    balance:
-      type: integer
-
-AccountCategoriesBreakdown:
-  type: array
-  items:
-    $ref: '#/CategoryBreakdownItem'
-
-AccountTransactionsBreakdown:
-  type: array
-  items:
-    $ref: '#/TransactionBreakdownItem'
-
-AccountDetailsResponse:
-  allOf:
-    - $ref: '#/AccountSummaryResponse'
-    - type: object
-      required:
-        - inflow
-        - outflow
-        - stabilityContext
-        - categoriesBreakdown
-        - transactionsBreakdown
-        - spentThisCycle
-        - avgDailyBalance
-      properties:
-        inflow:
-          type: integer
-          description: Inflow in cents
-          example: 1000
-          minimum: 0
-        outflow:
-          type: integer
-          description: Outflow in cents
-          example: 1000
-          minimum: 0
-        spendLimit:
-          type: [integer, "null"]
-          description: Optional spend limit in cents. Only present for CreditCard and Allowance accounts.
-          minimum: 0
-          example: 50000
-        stabilityContext:
-          $ref: '#/StabilityContext'
-        categoriesBreakdown:
-          $ref: '#/AccountCategoriesBreakdown'
-        transactionsBreakdown:
-          $ref: '#/AccountTransactionsBreakdown'
-        topUpAmount:
-          type: [integer, "null"]
-          description: Top-up amount in cents. Only present for Allowance accounts.
-          minimum: 0
-          example: 20000
-        topUpCycle:
-          type: [string, "null"]
-          description: Top-up frequency. Only present for Allowance accounts.
-          enum: ["weekly", "bi-weekly", "monthly", null]
-          example: "monthly"
-        topUpDay:
-          type: [integer, "null"]
-          description: Day of week (0–6) or day of month (1–31) for the top-up, depending on cycle. Only present for Allowance accounts.
-          example: 1
-        spentThisCycle:
-          type: integer
-          description: Amount spent in the current top-up cycle in cents. Always 0 for non-Allowance accounts.
-          minimum: 0
-          example: 5000
-        statementCloseDay:
-          type: [integer, "null"]
-          description: Day of month the statement closes (1–31). Only present for CreditCard accounts.
-          example: 25
-        paymentDueDay:
-          type: [integer, "null"]
-          description: Day of month the payment is due (1–31). Only present for CreditCard accounts.
-          example: 15
-        avgDailyBalance:
-          type: integer
-          description: Average daily balance this period in cents. Always 0 for non-Checking accounts.
-          example: 120000
-
-AccountBalanceHistoryPoint:
-  type: object
-  required:
-    - date
-    - balance
-    - transactionCount
-  properties:
-    date:
-      type: string
-      format: date
-      example: "2024-01-15"
-    balance:
-      type: integer
-      description: Account balance in cents at end of day
-      example: 150000
-    transactionCount:
-      type: integer
-      minimum: 0
-      example: 3
-
-AccountBalanceHistoryResponse:
-  type: array
-  items:
-    $ref: '#/AccountBalanceHistoryPoint'
-
-BatchBalanceHistoryEntry:
-  type: object
-  required:
-    - accountId
-    - points
-  properties:
-    accountId:
-      type: string
-      format: uuid
-      description: Account ID
-      example: "123e4567-e89b-12d3-a456-426655440000"
-    points:
-      type: array
-      items:
-        $ref: '#/AccountBalanceHistoryPoint'
-
-BatchBalanceHistoryResponse:
-  type: array
-  description: Balance history for all active accounts
-  items:
-    $ref: '#/BatchBalanceHistoryEntry'
 
 AdjustBalanceRequest:
   type: object
@@ -417,5 +139,4 @@ AdjustBalanceRequest:
   properties:
     newBalance:
       type: integer
-      description: New absolute balance in cents
-      example: 150000
+      description: New absolute balance in cents. The server encrypts it and writes to current_balance_enc under SELECT FOR UPDATE.

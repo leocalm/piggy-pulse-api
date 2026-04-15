@@ -41,7 +41,7 @@ post:
       content:
         application/json:
           schema:
-            $ref: '../schemas/Subscription.yaml#/SubscriptionResponse'
+            $ref: '../schemas/Subscription.yaml#/EncryptedSubscriptionResponse'
     '400':
       $ref: '../responses/BadRequest.yaml'
     '422':

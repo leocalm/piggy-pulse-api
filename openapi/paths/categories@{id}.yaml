@@ -17,7 +17,7 @@ put:
       content:
         application/json:
           schema:
-            $ref: '../schemas/Category.yaml#/CategoryResponse'
+            $ref: '../schemas/Category.yaml#/EncryptedCategoryResponse'
     '400':
       $ref: '../responses/BadRequest.yaml'
     '422':
