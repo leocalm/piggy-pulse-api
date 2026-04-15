@@ -1,6 +1,7 @@
 mod auth;
 mod config;
 mod cron_tasks;
+pub mod crypto;
 mod database;
 mod db;
 mod dto;

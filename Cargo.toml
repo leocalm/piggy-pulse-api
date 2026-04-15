@@ -39,6 +39,7 @@ qrcode = "0.14"
 aes-gcm = "0.10"
 base64 = "0.22"
 urlencoding = "2.1"
+zeroize = { version = "1.8.2", features = ["zeroize_derive"] }
 
 [dev-dependencies]
 proptest = "1.11"

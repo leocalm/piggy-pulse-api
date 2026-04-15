@@ -74,6 +74,8 @@ pub enum AppError {
 
     #[error("Conflict: {0}")]
     Conflict(String),
+    #[error("Internal server error")]
+    Internal { message: String },
 }
 
 impl AppError {
@@ -136,7 +138,20 @@ impl From<&AppError> for Status {
             AppError::AccountLocked { .. } => Status { code: 423 },
             AppError::TwoFactorTokenRequired { .. } => Status::Forbidden,
             AppError::Conflict(_) => Status::Conflict,
+            AppError::Internal { .. } => Status::InternalServerError,
         }
+    }
+}
+
+impl AppError {
+    pub fn internal(message: impl Into<String>) -> Self {
+        Self::Internal { message: message.into() }
+    }
+}
+
+impl From<crate::crypto::CryptoError> for AppError {
+    fn from(e: crate::crypto::CryptoError) -> Self {
+        AppError::Internal { message: format!("crypto: {e}") }
     }
 }
 
