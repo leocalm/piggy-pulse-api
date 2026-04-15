@@ -48,6 +48,7 @@ RETURNING {CATEGORY_COLUMNS}
         Ok(category)
     }
 
+    #[allow(dead_code)]
     pub async fn get_category_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Category>, AppError> {
         let category = sqlx::query_as::<_, Category>(&format!("SELECT {CATEGORY_COLUMNS} FROM category WHERE id = $1 AND user_id = $2",))
             .bind(id)

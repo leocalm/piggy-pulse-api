@@ -6,8 +6,9 @@ use sqlx::PgPool;
 use validator::Validate;
 
 use crate::auth::CurrentUser;
+use crate::crypto::Dek;
 use crate::database::postgres_repository::PostgresRepository;
-use crate::dto::subscriptions::{CreateSubscriptionRequest, SubscriptionResponse};
+use crate::dto::subscriptions::{CreateSubscriptionRequest, EncryptedSubscriptionResponse};
 use crate::error::app_error::AppError;
 use crate::service::subscription::SubscriptionService;
 
@@ -15,12 +16,11 @@ use crate::service::subscription::SubscriptionService;
 pub async fn create_subscription(
     pool: &State<PgPool>,
     user: CurrentUser,
+    dek: Dek,
     payload: Json<CreateSubscriptionRequest>,
-) -> Result<(Status, Json<SubscriptionResponse>), AppError> {
+) -> Result<(Status, Json<EncryptedSubscriptionResponse>), AppError> {
     payload.validate()?;
-
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let service = SubscriptionService::new(&repo);
-    let response = service.create(&payload, &user.id).await?;
-    Ok((Status::Created, Json(response)))
+    Ok((Status::Created, Json(service.create(&payload, &user.id, &dek).await?)))
 }

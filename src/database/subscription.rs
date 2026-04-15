@@ -1,398 +1,165 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use uuid::Uuid;
 
+use crate::crypto::Dek;
 use crate::database::postgres_repository::PostgresRepository;
-use crate::dto::common::Date;
 use crate::dto::subscriptions::{
-    BillingCycle, BillingEventResponse, CreateSubscriptionRequest, SubscriptionDetailResponse, SubscriptionResponse, SubscriptionStatus, UpcomingChargeItem,
-    UpcomingChargesResponse, UpdateSubscriptionRequest,
+    BillingCycle, CreateSubscriptionRequest, EncryptedSubscriptionResponse, SubscriptionStatus, UpdateSubscriptionRequest, to_response,
 };
 use crate::error::app_error::AppError;
-
-// ─── Raw rows ────────────────────────────────────────────────────────────────
 
 #[derive(sqlx::FromRow)]
 struct SubscriptionRow {
     id: Uuid,
-    name: String,
     category_id: Uuid,
     vendor_id: Option<Uuid>,
-    billing_amount: i64,
-    billing_cycle: String,
+    billing_cycle: BillingCycle,
     billing_day: i16,
     next_charge_date: NaiveDate,
-    status: String,
+    status: SubscriptionStatus,
     cancelled_at: Option<DateTime<Utc>>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+    name_enc: Vec<u8>,
+    billing_amount_enc: Vec<u8>,
 }
 
-#[derive(sqlx::FromRow)]
-struct BillingEventRow {
-    id: Uuid,
-    subscription_id: Uuid,
-    transaction_id: Option<Uuid>,
-    amount: i64,
-    date: NaiveDate,
-    detected: bool,
-}
-
-#[derive(sqlx::FromRow)]
-struct UpcomingRow {
-    subscription_id: Uuid,
-    name: String,
-    billing_amount: i64,
-    billing_cycle: String,
-    next_charge_date: NaiveDate,
-    vendor_id: Option<Uuid>,
-    vendor_name: Option<String>,
-}
-
-// ─── Conversion helpers ───────────────────────────────────────────────────────
-
-fn billing_cycle_from_db(s: &str) -> BillingCycle {
-    match s {
-        "quarterly" => BillingCycle::Quarterly,
-        "yearly" => BillingCycle::Yearly,
-        _ => BillingCycle::Monthly,
+impl From<SubscriptionRow> for EncryptedSubscriptionResponse {
+    fn from(row: SubscriptionRow) -> Self {
+        to_response(
+            row.id,
+            row.category_id,
+            row.vendor_id,
+            row.billing_cycle,
+            row.billing_day,
+            row.next_charge_date,
+            row.status,
+            row.cancelled_at,
+            row.created_at,
+            row.updated_at,
+            &row.name_enc,
+            &row.billing_amount_enc,
+        )
     }
 }
 
-fn billing_cycle_to_db(c: BillingCycle) -> &'static str {
-    match c {
-        BillingCycle::Quarterly => "quarterly",
-        BillingCycle::Monthly => "monthly",
-        BillingCycle::Yearly => "yearly",
-    }
-}
-
-fn status_from_db(s: &str) -> SubscriptionStatus {
-    match s {
-        "cancelled" => SubscriptionStatus::Cancelled,
-        "paused" => SubscriptionStatus::Paused,
-        _ => SubscriptionStatus::Active,
-    }
-}
-
-fn row_to_response(row: SubscriptionRow) -> SubscriptionResponse {
-    SubscriptionResponse {
-        id: row.id,
-        name: row.name,
-        category_id: row.category_id,
-        vendor_id: row.vendor_id,
-        billing_amount: row.billing_amount,
-        billing_cycle: billing_cycle_from_db(&row.billing_cycle),
-        billing_day: row.billing_day,
-        next_charge_date: Date(row.next_charge_date),
-        status: status_from_db(&row.status),
-        cancelled_at: row.cancelled_at,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-    }
-}
-
-// ─── Repository methods ───────────────────────────────────────────────────────
+const COLS: &str = "id, category_id, vendor_id, billing_cycle::text as billing_cycle, billing_day, next_charge_date, status::text as status, cancelled_at, created_at, updated_at, name_enc, billing_amount_enc";
 
 impl PostgresRepository {
-    pub async fn list_subscriptions(
-        &self,
-        user_id: &Uuid,
-        status_filter: Option<SubscriptionStatus>,
-        category_id: Option<Uuid>,
-    ) -> Result<Vec<SubscriptionResponse>, AppError> {
-        let status_str: Option<&str> = status_filter.map(|s| match s {
-            SubscriptionStatus::Active => "active",
-            SubscriptionStatus::Cancelled => "cancelled",
-            SubscriptionStatus::Paused => "paused",
-        });
-
-        let rows = sqlx::query_as::<_, SubscriptionRow>(
-            r#"
-SELECT id, name, category_id, vendor_id, billing_amount,
-       billing_cycle::text, billing_day, next_charge_date,
-       status::text, cancelled_at, created_at, updated_at
-FROM subscription
-WHERE user_id = $1
-  AND ($2::text IS NULL OR status::text = $2)
-  AND ($3::uuid IS NULL OR category_id = $3)
-ORDER BY created_at DESC
-            "#,
-        )
-        .bind(user_id)
-        .bind(status_str)
-        .bind(category_id)
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(rows.into_iter().map(row_to_response).collect())
+    pub async fn list_subscriptions(&self, user_id: &Uuid) -> Result<Vec<EncryptedSubscriptionResponse>, AppError> {
+        let rows: Vec<SubscriptionRow> = sqlx::query_as(&format!("SELECT {COLS} FROM subscription WHERE user_id = $1 ORDER BY id"))
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows.into_iter().map(Into::into).collect())
     }
 
-    /// Count active subscriptions for a given category
-    #[allow(dead_code)]
-    pub async fn count_active_subscriptions_for_category(&self, category_id: &Uuid, user_id: &Uuid) -> Result<i64, AppError> {
-        let count: i64 = sqlx::query_scalar(
+    pub async fn create_subscription(&self, req: &CreateSubscriptionRequest, user_id: &Uuid, dek: &Dek) -> Result<EncryptedSubscriptionResponse, AppError> {
+        let name_enc = dek.encrypt_string(&req.name)?;
+        let amount_enc = dek.encrypt_i64(req.billing_amount)?;
+        let row: SubscriptionRow = sqlx::query_as(&format!(
             r#"
-SELECT COUNT(*)
-FROM subscription
-WHERE category_id = $1 AND user_id = $2 AND status = 'active'
-            "#,
-        )
-        .bind(category_id)
+INSERT INTO subscription (
+    id, user_id, category_id, vendor_id, billing_cycle, billing_day,
+    next_charge_date, status, created_at, updated_at, name_enc, billing_amount_enc
+) VALUES (
+    gen_random_uuid(), $1, $2, $3, $4::text::billing_cycle, $5, $6, 'active'::subscription_status, now(), now(), $7, $8
+)
+RETURNING {COLS}
+"#,
+        ))
         .bind(user_id)
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(count)
-    }
-
-    /// Compute the monthly-normalized target from active subscriptions for a category
-    pub async fn compute_monthly_target_for_category(&self, category_id: &Uuid, user_id: &Uuid) -> Result<i64, AppError> {
-        let total: i64 = sqlx::query_scalar(
-            r#"
-SELECT COALESCE(SUM(
-    CASE billing_cycle::text
-        WHEN 'monthly' THEN billing_amount
-        WHEN 'quarterly' THEN ROUND(billing_amount / 3.0)
-        WHEN 'yearly' THEN ROUND(billing_amount / 12.0)
-        ELSE 0
-    END
-), 0)::bigint
-FROM subscription
-WHERE category_id = $1 AND user_id = $2 AND status = 'active'
-            "#,
-        )
-        .bind(category_id)
-        .bind(user_id)
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(total)
-    }
-
-    /// Upsert the budget_category target for a category (used by auto-computation).
-    /// On insert, sets is_excluded = FALSE. On update, preserves the existing is_excluded value
-    /// so we don't silently un-exclude a category the user intentionally excluded.
-    pub async fn upsert_category_target(&self, category_id: &Uuid, value: i64, user_id: &Uuid) -> Result<(), AppError> {
-        let i32_value = i32::try_from(value).map_err(|_| AppError::BadRequest("Target value out of range".to_string()))?;
-        sqlx::query(
-            r#"
-INSERT INTO budget_category (user_id, category_id, budgeted_value, is_excluded)
-VALUES ($1, $2, $3, FALSE)
-ON CONFLICT (user_id, category_id)
-DO UPDATE SET budgeted_value = EXCLUDED.budgeted_value
-            "#,
-        )
-        .bind(user_id)
-        .bind(category_id)
-        .bind(i32_value)
-        .execute(&self.pool)
-        .await?;
-
-        Ok(())
-    }
-
-    pub async fn get_subscription(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<SubscriptionResponse>, AppError> {
-        let row = sqlx::query_as::<_, SubscriptionRow>(
-            r#"
-SELECT id, name, category_id, vendor_id, billing_amount,
-       billing_cycle::text, billing_day, next_charge_date,
-       status::text, cancelled_at, created_at, updated_at
-FROM subscription
-WHERE id = $1 AND user_id = $2
-            "#,
-        )
-        .bind(id)
-        .bind(user_id)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(row.map(row_to_response))
-    }
-
-    pub async fn get_subscription_detail(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<SubscriptionDetailResponse>, AppError> {
-        let sub = match self.get_subscription(id, user_id).await? {
-            Some(s) => s,
-            None => return Ok(None),
-        };
-
-        let event_rows = sqlx::query_as::<_, BillingEventRow>(
-            r#"
-SELECT id, subscription_id, transaction_id, amount, date, detected
-FROM subscription_billing_event
-WHERE subscription_id = $1
-ORDER BY date DESC
-            "#,
-        )
-        .bind(id)
-        .fetch_all(&self.pool)
-        .await?;
-
-        let cancelled_at = sub.cancelled_at;
-        let billing_history = event_rows
-            .into_iter()
-            .map(|e| {
-                let post_cancellation = cancelled_at.map(|ca| e.date > ca.date_naive()).unwrap_or(false);
-                BillingEventResponse {
-                    id: e.id,
-                    subscription_id: e.subscription_id,
-                    transaction_id: e.transaction_id,
-                    amount: e.amount,
-                    date: Date(e.date),
-                    detected: e.detected,
-                    post_cancellation,
-                }
-            })
-            .collect();
-
-        Ok(Some(SubscriptionDetailResponse {
-            subscription: sub,
-            billing_history,
-        }))
-    }
-
-    pub async fn create_subscription(&self, req: &CreateSubscriptionRequest, user_id: &Uuid) -> Result<SubscriptionResponse, AppError> {
-        let row = sqlx::query_as::<_, SubscriptionRow>(
-            r#"
-INSERT INTO subscription
-    (user_id, name, category_id, vendor_id, billing_amount, billing_cycle, billing_day, next_charge_date)
-VALUES
-    ($1, $2, $3, $4, $5, $6::subscription_billing_cycle, $7, $8)
-RETURNING id, name, category_id, vendor_id, billing_amount,
-          billing_cycle::text, billing_day, next_charge_date,
-          status::text, cancelled_at, created_at, updated_at
-            "#,
-        )
-        .bind(user_id)
-        .bind(&req.name)
         .bind(req.category_id)
         .bind(req.vendor_id)
-        .bind(req.billing_amount)
-        .bind(billing_cycle_to_db(req.billing_cycle))
+        .bind(billing_cycle_str(req.billing_cycle))
         .bind(req.billing_day)
         .bind(req.next_charge_date.0)
+        .bind(&name_enc)
+        .bind(&amount_enc)
         .fetch_one(&self.pool)
-        .await
-        .map_err(|e| match &e {
-            sqlx::Error::Database(db_err) if db_err.is_foreign_key_violation() => {
-                AppError::BadRequest("Referenced category or vendor does not exist".to_string())
-            }
-            _ => e.into(),
-        })?;
-
-        Ok(row_to_response(row))
+        .await?;
+        Ok(row.into())
     }
 
-    pub async fn update_subscription(&self, id: &Uuid, req: &UpdateSubscriptionRequest, user_id: &Uuid) -> Result<Option<SubscriptionResponse>, AppError> {
-        let row = sqlx::query_as::<_, SubscriptionRow>(
+    pub async fn update_subscription(
+        &self,
+        id: &Uuid,
+        req: &UpdateSubscriptionRequest,
+        user_id: &Uuid,
+        dek: &Dek,
+    ) -> Result<EncryptedSubscriptionResponse, AppError> {
+        let name_enc = dek.encrypt_string(&req.name)?;
+        let amount_enc = dek.encrypt_i64(req.billing_amount)?;
+        let row: Option<SubscriptionRow> = sqlx::query_as(&format!(
             r#"
 UPDATE subscription
-SET name = $3,
-    category_id = $4,
-    vendor_id = $5,
-    billing_amount = $6,
-    billing_cycle = $7::subscription_billing_cycle,
-    billing_day = $8,
-    next_charge_date = $9,
-    updated_at = NOW()
-WHERE id = $1 AND user_id = $2
-RETURNING id, name, category_id, vendor_id, billing_amount,
-          billing_cycle::text, billing_day, next_charge_date,
-          status::text, cancelled_at, created_at, updated_at
-            "#,
-        )
-        .bind(id)
-        .bind(user_id)
-        .bind(&req.name)
+SET category_id = $1,
+    vendor_id = $2,
+    billing_cycle = $3::text::billing_cycle,
+    billing_day = $4,
+    next_charge_date = $5,
+    name_enc = $6,
+    billing_amount_enc = $7,
+    updated_at = now()
+WHERE id = $8 AND user_id = $9
+RETURNING {COLS}
+"#,
+        ))
         .bind(req.category_id)
         .bind(req.vendor_id)
-        .bind(req.billing_amount)
-        .bind(billing_cycle_to_db(req.billing_cycle))
+        .bind(billing_cycle_str(req.billing_cycle))
         .bind(req.billing_day)
         .bind(req.next_charge_date.0)
+        .bind(&name_enc)
+        .bind(&amount_enc)
+        .bind(id)
+        .bind(user_id)
         .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| match &e {
-            sqlx::Error::Database(db_err) if db_err.is_foreign_key_violation() => {
-                AppError::BadRequest("Referenced category or vendor does not exist".to_string())
-            }
-            _ => e.into(),
-        })?;
-
-        Ok(row.map(row_to_response))
+        .await?;
+        row.map(Into::into).ok_or_else(|| AppError::NotFound("Subscription not found".to_string()))
     }
 
-    pub async fn delete_subscription(&self, id: &Uuid, user_id: &Uuid) -> Result<bool, AppError> {
+    pub async fn delete_subscription(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
         let result = sqlx::query("DELETE FROM subscription WHERE id = $1 AND user_id = $2")
             .bind(id)
             .bind(user_id)
             .execute(&self.pool)
             .await?;
-
-        Ok(result.rows_affected() > 0)
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("Subscription not found".to_string()));
+        }
+        Ok(())
     }
 
     pub async fn cancel_subscription(
         &self,
         id: &Uuid,
         user_id: &Uuid,
-        cancellation_date: Option<&chrono::NaiveDate>,
-    ) -> Result<Option<SubscriptionResponse>, AppError> {
-        let row = sqlx::query_as::<_, SubscriptionRow>(
+        cancellation_date: Option<&NaiveDate>,
+    ) -> Result<EncryptedSubscriptionResponse, AppError> {
+        let row: Option<SubscriptionRow> = sqlx::query_as(&format!(
             r#"
 UPDATE subscription
-SET status = 'cancelled',
-    cancelled_at = COALESCE($3::date, NOW()::date)::timestamp AT TIME ZONE 'UTC',
-    updated_at = NOW()
-WHERE id = $1 AND user_id = $2 AND status != 'cancelled'
-RETURNING id, name, category_id, vendor_id, billing_amount,
-          billing_cycle::text, billing_day, next_charge_date,
-          status::text, cancelled_at, created_at, updated_at
-            "#,
-        )
+SET status = 'cancelled'::subscription_status,
+    cancelled_at = COALESCE($1::date::timestamptz, now()),
+    updated_at = now()
+WHERE id = $2 AND user_id = $3
+RETURNING {COLS}
+"#,
+        ))
+        .bind(cancellation_date)
         .bind(id)
         .bind(user_id)
-        .bind(cancellation_date)
         .fetch_optional(&self.pool)
         .await?;
-
-        Ok(row.map(row_to_response))
+        row.map(Into::into).ok_or_else(|| AppError::NotFound("Subscription not found".to_string()))
     }
+}
 
-    pub async fn get_upcoming_charges(&self, user_id: &Uuid, limit: i64) -> Result<UpcomingChargesResponse, AppError> {
-        let rows = sqlx::query_as::<_, UpcomingRow>(
-            r#"
-SELECT
-    s.id AS subscription_id,
-    s.name,
-    s.billing_amount,
-    s.billing_cycle::text AS billing_cycle,
-    s.next_charge_date,
-    s.vendor_id,
-    v.name AS vendor_name
-FROM subscription s
-LEFT JOIN vendor v ON v.id = s.vendor_id
-WHERE s.user_id = $1
-  AND s.status = 'active'
-ORDER BY s.next_charge_date ASC
-LIMIT $2
-            "#,
-        )
-        .bind(user_id)
-        .bind(limit)
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(rows
-            .into_iter()
-            .map(|r| UpcomingChargeItem {
-                subscription_id: r.subscription_id,
-                name: r.name,
-                billing_amount: r.billing_amount,
-                billing_cycle: billing_cycle_from_db(&r.billing_cycle),
-                next_charge_date: Date(r.next_charge_date),
-                vendor_id: r.vendor_id,
-                vendor_name: r.vendor_name,
-            })
-            .collect())
+fn billing_cycle_str(c: BillingCycle) -> &'static str {
+    match c {
+        BillingCycle::Quarterly => "quarterly",
+        BillingCycle::Monthly => "monthly",
+        BillingCycle::Yearly => "yearly",
     }
 }
