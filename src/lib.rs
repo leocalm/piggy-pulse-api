@@ -199,7 +199,6 @@ fn mount_v2_routes(mut rocket: Rocket<Build>, base_path: &str) -> Rocket<Build> 
     rocket = rocket.mount(join_base_path(base_path, "accounts"), app_routes::v2::accounts::routes());
     rocket = rocket.mount(join_base_path(base_path, "categories"), app_routes::v2::categories::routes());
     rocket = rocket.mount(join_base_path(base_path, "vendors"), app_routes::v2::vendors::routes());
-    rocket = rocket.mount(join_base_path(base_path, "overlays"), app_routes::v2::overlays::routes());
     rocket = rocket.mount(join_base_path(base_path, "periods"), app_routes::v2::periods::routes());
     rocket = rocket.mount(join_base_path(base_path, "targets"), app_routes::v2::targets::routes());
     rocket = rocket.mount(join_base_path(base_path, "transactions"), app_routes::v2::transactions::routes());

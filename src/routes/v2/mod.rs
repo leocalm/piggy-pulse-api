@@ -8,7 +8,6 @@ pub mod currencies;
 pub mod dashboard;
 pub mod health;
 pub mod onboarding;
-pub mod overlays;
 pub mod periods;
 pub mod settings;
 pub mod subscriptions;

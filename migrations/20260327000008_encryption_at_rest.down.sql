@@ -88,4 +88,6 @@ ALTER TABLE users
 
 -- The aggregate tables and trigger are NOT recreated here. Reverting fully
 -- would require re-running migrations 20260327000004 and 20260327000007.
--- This down-migration is a stub for local dev rollback only.
+-- The overlay tables are also NOT recreated — re-running
+-- 20260209163106_add_period_schedule_and_overlays is required to restore
+-- them. This down-migration is a stub for local dev rollback only.

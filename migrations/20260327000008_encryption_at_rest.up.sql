@@ -169,3 +169,13 @@ ALTER TABLE subscription
     ADD COLUMN name_enc BYTEA NOT NULL,
     DROP COLUMN billing_amount,
     ADD COLUMN billing_amount_enc BYTEA NOT NULL;
+
+-- ───────────────────────────────────────────────────────────────────────
+-- 11. Retire overlays feature
+-- ───────────────────────────────────────────────────────────────────────
+-- Overlays are disabled for v1. Drop the tables rather than keeping
+-- empty plaintext shells around; a future re-introduction will design
+-- them from scratch under encryption.
+DROP TABLE IF EXISTS overlay_transaction_inclusions;
+DROP TABLE IF EXISTS overlay_category_caps;
+DROP TABLE IF EXISTS overlays;
