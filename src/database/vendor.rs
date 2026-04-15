@@ -1,558 +1,152 @@
-use crate::database::postgres_repository::{PostgresRepository, is_unique_violation};
+use crate::crypto::Dek;
+use crate::database::postgres_repository::PostgresRepository;
+use crate::dto::vendors::{CreateVendorRequest, UpdateVendorRequest};
 use crate::error::app_error::AppError;
-use crate::models::vendor::{Vendor, VendorRequest};
-use chrono::NaiveDate;
+use crate::models::vendor::Vendor;
 use uuid::Uuid;
 
-// ─── Helper DB rows (vendor analytics) ───────────────────────────────────────
-
-#[derive(sqlx::FromRow)]
-pub struct PeriodDateRow {
-    #[allow(dead_code)]
-    pub id: Uuid,
-    #[allow(dead_code)]
-    pub name: String,
-    pub start_date: NaiveDate,
-    pub end_date: NaiveDate,
-}
-
-#[derive(sqlx::FromRow)]
-pub struct VendorPeriodStatsRow {
-    pub transaction_count: i64,
-    pub period_spend: i64,
-}
-
-#[derive(sqlx::FromRow)]
-pub struct VendorTrendRow {
-    pub period_id: Uuid,
-    pub period_name: String,
-    pub total_spend: i64,
-}
-
-#[derive(sqlx::FromRow)]
-pub struct VendorCategoryRow {
-    pub category_id: Uuid,
-    pub category_name: String,
-    pub total_spend: i64,
-}
-
-#[derive(sqlx::FromRow)]
-pub struct VendorRecentTxRow {
-    pub id: Uuid,
-    pub date: NaiveDate,
-    pub amount: i64,
-    pub description: String,
-    pub category_id: Option<Uuid>,
-    pub category_name: Option<String>,
-}
-
-pub struct VendorDetailDb {
-    pub vendor: Vendor,
-    pub period_spend: i64,
-    pub transaction_count: i64,
-    pub total_vendor_spend: i64,
-    pub trend: Vec<VendorTrendRow>,
-    pub top_categories: Vec<VendorCategoryRow>,
-    pub recent_txns: Vec<VendorRecentTxRow>,
-}
-
-pub struct VendorStatsDb {
-    pub total_vendors: i64,
-    pub total_spend: i64,
-    pub avg_spend_per_vendor: i64,
-}
+const VENDOR_COLUMNS: &str = "id, archived, name_enc, description_enc";
 
 impl PostgresRepository {
-    pub async fn create_vendor(&self, request: &VendorRequest, user_id: &Uuid) -> Result<Vendor, AppError> {
-        let name_exists: bool = sqlx::query_scalar(
+    pub async fn create_vendor(&self, request: &CreateVendorRequest, user_id: &Uuid, dek: &Dek) -> Result<Vendor, AppError> {
+        let mut tx = self.pool.begin().await?;
+
+        lock_user_row(&mut tx, user_id).await?;
+        check_vendor_name_unique(&mut tx, dek, user_id, &request.name, None).await?;
+
+        let name_enc = dek.encrypt_string(&request.name)?;
+        let description_enc = request.description.as_deref().map(|d| dek.encrypt_string(d)).transpose()?;
+
+        let vendor: Vendor = sqlx::query_as(&format!(
             r#"
-            SELECT EXISTS (
-                SELECT 1
-                FROM vendor
-                WHERE user_id = $1 AND name = $2
-            )
-            "#,
-        )
+INSERT INTO vendor (id, user_id, archived, name_enc, description_enc)
+VALUES (gen_random_uuid(), $1, false, $2, $3)
+RETURNING {VENDOR_COLUMNS}
+"#,
+        ))
         .bind(user_id)
-        .bind(&request.name)
-        .fetch_one(&self.pool)
+        .bind(&name_enc)
+        .bind(description_enc.as_deref())
+        .fetch_one(&mut *tx)
         .await?;
 
-        if name_exists {
-            return Err(AppError::BadRequest("Vendor name already exists".to_string()));
-        }
-
-        let vendor = sqlx::query_as::<_, Vendor>(
-            r#"
-            INSERT INTO vendor (user_id, name, description)
-            VALUES ($1, $2, $3)
-            RETURNING id, name, description, archived
-            "#,
-        )
-        .bind(user_id)
-        .bind(&request.name)
-        .bind(&request.description)
-        .fetch_one(&self.pool)
-        .await;
-
-        let vendor = match vendor {
-            Ok(vendor) => vendor,
-            Err(err) if is_unique_violation(&err) => {
-                return Err(AppError::BadRequest("Vendor name already exists".to_string()));
-            }
-            Err(err) => return Err(err.into()),
-        };
-
+        tx.commit().await?;
         Ok(vendor)
     }
 
+    #[allow(dead_code)]
     pub async fn get_vendor_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Vendor>, AppError> {
-        let vendor = sqlx::query_as::<_, Vendor>(
+        let vendor = sqlx::query_as::<_, Vendor>(&format!("SELECT {VENDOR_COLUMNS} FROM vendor WHERE id = $1 AND user_id = $2",))
+            .bind(id)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(vendor)
+    }
+
+    pub async fn list_vendors(&self, user_id: &Uuid) -> Result<Vec<Vendor>, AppError> {
+        let vendors = sqlx::query_as::<_, Vendor>(&format!("SELECT {VENDOR_COLUMNS} FROM vendor WHERE user_id = $1 ORDER BY id",))
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(vendors)
+    }
+
+    pub async fn update_vendor(&self, id: &Uuid, request: &UpdateVendorRequest, user_id: &Uuid, dek: &Dek) -> Result<Vendor, AppError> {
+        let mut tx = self.pool.begin().await?;
+
+        lock_user_row(&mut tx, user_id).await?;
+        check_vendor_name_unique(&mut tx, dek, user_id, &request.name, Some(id)).await?;
+
+        let name_enc = dek.encrypt_string(&request.name)?;
+        let description_enc = request.description.as_deref().map(|d| dek.encrypt_string(d)).transpose()?;
+
+        let vendor: Vendor = sqlx::query_as(&format!(
             r#"
-            SELECT id, name, description, archived
-            FROM vendor
-            WHERE id = $1 AND user_id = $2
-            "#,
-        )
+UPDATE vendor
+SET name_enc = $1, description_enc = $2
+WHERE id = $3 AND user_id = $4
+RETURNING {VENDOR_COLUMNS}
+"#,
+        ))
+        .bind(&name_enc)
+        .bind(description_enc.as_deref())
         .bind(id)
         .bind(user_id)
-        .fetch_optional(&self.pool)
-        .await?;
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Vendor not found".to_string()))?;
 
+        tx.commit().await?;
         Ok(vendor)
     }
 
     pub async fn delete_vendor(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
-        // Refuse deletion if any effective transactions still reference this
-        // vendor. Uses vendor_all_time (trigger-maintained, tx_count = distinct
-        // effective logical ids under this vendor) instead of scanning the
-        // ledger. Mirrors the behavior of accounts and categories: archive
-        // instead.
-        let transaction_count: i64 = sqlx::query_scalar(
-            r#"
-            SELECT COALESCE((SELECT vat.tx_count
-                               FROM vendor_all_time vat
-                              WHERE vat.vendor_id = $1), 0)::bigint
-              FROM vendor v
-             WHERE v.id = $1 AND v.user_id = $2
-            "#,
-        )
-        .bind(id)
-        .bind(user_id)
-        .fetch_optional(&self.pool)
-        .await?
-        .unwrap_or(0);
-
-        if transaction_count > 0 {
-            return Err(AppError::BadRequest(
-                "Cannot delete vendor with existing transactions. Archive it instead.".to_string(),
-            ));
-        }
-
-        sqlx::query("DELETE FROM vendor WHERE id = $1 AND user_id = $2")
+        let result = sqlx::query("DELETE FROM vendor WHERE id = $1 AND user_id = $2")
             .bind(id)
             .bind(user_id)
             .execute(&self.pool)
             .await?;
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("Vendor not found".to_string()));
+        }
         Ok(())
     }
 
-    pub async fn update_vendor(&self, id: &Uuid, request: &VendorRequest, user_id: &Uuid) -> Result<Vendor, AppError> {
-        let name_exists: bool = sqlx::query_scalar(
-            r#"
-            SELECT EXISTS (
-                SELECT 1
-                FROM vendor
-                WHERE user_id = $1 AND name = $2 AND id <> $3
-            )
-            "#,
-        )
-        .bind(user_id)
-        .bind(&request.name)
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await?;
-
-        if name_exists {
-            return Err(AppError::BadRequest("Vendor name already exists".to_string()));
-        }
-
-        let vendor = sqlx::query_as::<_, Vendor>(
-            r#"
-            UPDATE vendor
-            SET name = $1, description = $2
-            WHERE id = $3 AND user_id = $4
-            RETURNING id, name, description, archived
-            "#,
-        )
-        .bind(&request.name)
-        .bind(&request.description)
-        .bind(id)
-        .bind(user_id)
-        .fetch_one(&self.pool)
-        .await;
-
-        let vendor = match vendor {
-            Ok(vendor) => vendor,
-            Err(err) if is_unique_violation(&err) => {
-                return Err(AppError::BadRequest("Vendor name already exists".to_string()));
-            }
-            Err(err) => return Err(err.into()),
-        };
-
-        Ok(vendor)
-    }
-
-    /// Returns all **non-archived** vendors for the user, ordered by name.
-    ///
-    /// This intentionally excludes archived vendors because the result is used
-    /// to populate transaction-creation dropdowns. Archived vendors should not
-    /// be assignable to new transactions. Use [`list_vendors_with_status`] with
-    /// `archived = true` if you need to enumerate archived vendors.
-    pub async fn list_all_vendors(&self, user_id: &Uuid) -> Result<Vec<Vendor>, AppError> {
-        let vendors = sqlx::query_as::<_, Vendor>(
-            r#"
-            SELECT id, name, description, archived
-            FROM vendor
-            WHERE user_id = $1 AND archived = FALSE
-            ORDER BY name ASC
-            "#,
-        )
-        .bind(user_id)
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(vendors)
-    }
-
-    pub async fn archive_vendor(&self, id: &Uuid, user_id: &Uuid) -> Result<Vendor, AppError> {
-        let vendor = sqlx::query_as::<_, Vendor>(
-            r#"
-            UPDATE vendor
-            SET archived = TRUE
-            WHERE id = $1 AND user_id = $2
-            RETURNING id, name, description, archived
-            "#,
-        )
-        .bind(id)
-        .bind(user_id)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        vendor.ok_or_else(|| AppError::NotFound("Vendor not found".to_string()))
-    }
-
-    /// Lists vendors with all-time transaction count and total spend for V2 paginated list.
-    /// Returns `(rows, total_count)`. Fetches `limit + 1` rows so the caller can detect `has_more`.
-    pub async fn list_vendors_v2(&self, cursor: Option<Uuid>, limit: i64, user_id: &Uuid) -> Result<(Vec<(Vendor, i64, i64)>, i64), AppError> {
-        let total_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM vendor WHERE user_id = $1")
+    pub async fn archive_vendor(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
+        let result = sqlx::query("UPDATE vendor SET archived = true WHERE id = $1 AND user_id = $2")
+            .bind(id)
             .bind(user_id)
-            .fetch_one(&self.pool)
+            .execute(&self.pool)
             .await?;
-
-        #[derive(sqlx::FromRow)]
-        struct Row {
-            id: Uuid,
-            name: String,
-            description: Option<String>,
-            archived: bool,
-            transaction_count: i64,
-            total_spend: i64,
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("Vendor not found".to_string()));
         }
-
-        let fetch_limit = limit + 1;
-
-        let rows = if let Some(cursor_id) = cursor {
-            sqlx::query_as::<_, Row>(
-                r#"
-SELECT v.id,
-       v.name,
-       v.description,
-       v.archived,
-       COALESCE(vat.tx_count, 0)::bigint   AS transaction_count,
-       COALESCE(vat.sum_amount, 0)::bigint AS total_spend
-FROM vendor v
-LEFT JOIN vendor_all_time vat ON vat.vendor_id = v.id
-WHERE v.user_id = $1
-  AND (v.created_at, v.id) < (SELECT created_at, id FROM vendor WHERE id = $2 AND user_id = $1)
-ORDER BY v.created_at DESC, v.id DESC
-LIMIT $3
-                "#,
-            )
-            .bind(user_id)
-            .bind(cursor_id)
-            .bind(fetch_limit)
-            .fetch_all(&self.pool)
-            .await?
-        } else {
-            sqlx::query_as::<_, Row>(
-                r#"
-SELECT v.id,
-       v.name,
-       v.description,
-       v.archived,
-       COALESCE(vat.tx_count, 0)::bigint   AS transaction_count,
-       COALESCE(vat.sum_amount, 0)::bigint AS total_spend
-FROM vendor v
-LEFT JOIN vendor_all_time vat ON vat.vendor_id = v.id
-WHERE v.user_id = $1
-ORDER BY v.created_at DESC, v.id DESC
-LIMIT $2
-                "#,
-            )
-            .bind(user_id)
-            .bind(fetch_limit)
-            .fetch_all(&self.pool)
-            .await?
-        };
-
-        Ok((
-            rows.into_iter()
-                .map(|r| {
-                    (
-                        Vendor {
-                            id: r.id,
-                            name: r.name,
-                            description: r.description,
-                            archived: r.archived,
-                        },
-                        r.transaction_count,
-                        r.total_spend,
-                    )
-                })
-                .collect(),
-            total_count,
-        ))
+        Ok(())
     }
 
-    pub async fn get_vendor_detail_v2(&self, vendor_id: &Uuid, user_id: &Uuid, period_id: &Uuid) -> Result<Option<VendorDetailDb>, AppError> {
-        // 1. Verify vendor exists
-        let vendor = match self.get_vendor_by_id(vendor_id, user_id).await? {
-            Some(v) => v,
-            None => return Ok(None),
-        };
-
-        // 2. Period date range
-        let period = sqlx::query_as::<_, PeriodDateRow>("SELECT id, name, start_date, end_date FROM budget_period WHERE id = $1 AND user_id = $2")
-            .bind(period_id)
+    pub async fn unarchive_vendor(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
+        let result = sqlx::query("UPDATE vendor SET archived = false WHERE id = $1 AND user_id = $2")
+            .bind(id)
             .bind(user_id)
-            .fetch_optional(&self.pool)
+            .execute(&self.pool)
             .await?;
-
-        let period = match period {
-            Some(p) => p,
-            None => return Err(AppError::NotFound("Period not found".to_string())),
-        };
-
-        // 3. Period spend + tx count from vendor_daily_spend
-        let stats = sqlx::query_as::<_, VendorPeriodStatsRow>(
-            r#"
-SELECT
-    COALESCE(SUM(vds.tx_count), 0)::bigint   AS transaction_count,
-    COALESCE(SUM(vds.sum_amount), 0)::bigint AS period_spend
-FROM vendor_daily_spend vds
-WHERE vds.vendor_id = $1
-  AND vds.day BETWEEN $2 AND $3
-            "#,
-        )
-        .bind(vendor_id)
-        .bind(period.start_date)
-        .bind(period.end_date)
-        .fetch_one(&self.pool)
-        .await?;
-
-        // 4. Trend: last 6 periods ordered by start_date
-        let trend = sqlx::query_as::<_, VendorTrendRow>(
-            r#"
-SELECT
-    bp.id AS period_id,
-    bp.name AS period_name,
-    COALESCE(SUM(vds.sum_amount), 0)::bigint AS total_spend
-FROM budget_period bp
-LEFT JOIN vendor_daily_spend vds
-       ON vds.vendor_id = $1
-      AND vds.day BETWEEN bp.start_date AND bp.end_date
-WHERE bp.user_id = $2
-GROUP BY bp.id, bp.name, bp.start_date
-ORDER BY bp.start_date DESC
-LIMIT 6
-            "#,
-        )
-        .bind(vendor_id)
-        .bind(user_id)
-        .fetch_all(&self.pool)
-        .await?;
-
-        // 5. Top categories (all-time, top 5) from vendor_category_all_time
-        let total_vendor_spend: i64 = sqlx::query_scalar("SELECT COALESCE(sum_amount, 0)::bigint FROM vendor_all_time WHERE vendor_id = $1")
-            .bind(vendor_id)
-            .fetch_optional(&self.pool)
-            .await?
-            .unwrap_or(0);
-
-        let top_categories = sqlx::query_as::<_, VendorCategoryRow>(
-            r#"
-SELECT
-    c.id AS category_id,
-    c.name AS category_name,
-    vcat.sum_amount::bigint AS total_spend
-FROM vendor_category_all_time vcat
-JOIN category c ON c.id = vcat.category_id
-WHERE vcat.vendor_id = $1
-ORDER BY vcat.sum_amount DESC
-LIMIT 5
-            "#,
-        )
-        .bind(vendor_id)
-        .fetch_all(&self.pool)
-        .await?;
-
-        // 6. Recent transactions (last 10)
-        let recent_txns = sqlx::query_as::<_, VendorRecentTxRow>(
-            r#"
-SELECT
-    t.id,
-    t.occurred_at AS date,
-    t.amount,
-    t.description,
-    t.category_id,
-    c.name AS category_name
-FROM logical_transaction_state lts
-JOIN transaction t ON t.id = lts.id AND t.seq = lts.latest_seq
-LEFT JOIN category c ON c.id = t.category_id
-WHERE t.vendor_id = $1
-  AND lts.user_id = $2
-  AND lts.is_effective
-ORDER BY t.occurred_at DESC, lts.first_created_at DESC
-LIMIT 10
-            "#,
-        )
-        .bind(vendor_id)
-        .bind(user_id)
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(Some(VendorDetailDb {
-            vendor,
-            period_spend: stats.period_spend,
-            transaction_count: stats.transaction_count,
-            total_vendor_spend,
-            trend,
-            top_categories,
-            recent_txns,
-        }))
-    }
-
-    pub async fn merge_vendor(&self, source_id: &Uuid, target_id: &Uuid, user_id: &Uuid) -> Result<bool, AppError> {
-        // Verify both vendors belong to this user
-        let source = self.get_vendor_by_id(source_id, user_id).await?;
-        if source.is_none() {
-            return Ok(false);
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("Vendor not found".to_string()));
         }
-        let target = self.get_vendor_by_id(target_id, user_id).await?;
-        if target.is_none() {
-            return Err(AppError::NotFound("Target vendor not found".to_string()));
+        Ok(())
+    }
+}
+
+async fn lock_user_row(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, user_id: &Uuid) -> Result<(), AppError> {
+    sqlx::query("SELECT 1 FROM users WHERE id = $1 FOR UPDATE")
+        .bind(user_id)
+        .fetch_one(&mut **tx)
+        .await?;
+    Ok(())
+}
+
+async fn check_vendor_name_unique(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    dek: &Dek,
+    user_id: &Uuid,
+    candidate: &str,
+    exclude_id: Option<&Uuid>,
+) -> Result<(), AppError> {
+    let rows: Vec<(Uuid, Vec<u8>)> = sqlx::query_as("SELECT id, name_enc FROM vendor WHERE user_id = $1")
+        .bind(user_id)
+        .fetch_all(&mut **tx)
+        .await?;
+
+    let candidate_lower = candidate.to_lowercase();
+    for (row_id, name_enc) in rows {
+        if exclude_id.is_some_and(|id| *id == row_id) {
+            continue;
         }
-
-        let _tx = self.pool.begin().await?;
-
-        // Lock every effective logical transaction currently assigned to the
-        // source vendor, ordered deterministically so concurrent merges don't
-        // deadlock. The join to `transaction` at `latest_seq` reads the
-        // current vendor_id from the Latest_Row, matching the user's view of
-        // "which transactions belong to this vendor".
-        // TODO(Phase 2c): re-implement merge_vendor under encryption.
-        // The encrypted version needs the caller's DEK to:
-        //   1. Read lts.current_sum_enc for each source-vendor transaction,
-        //      decrypt to prev_sum
-        //   2. Encrypt(-prev_sum) for the reversal row's amount_enc
-        //   3. Encrypt(prev_sum) for the correction row's amount_enc
-        //   4. Copy description_enc bytes verbatim between reversal +
-        //      correction rows (no decryption needed)
-        //   5. Maintain lts.current_sum_enc via upsert_lts_in_tx
-        //   6. Apply account balance deltas via apply_category_balance_effect
-        //      (same as create_transaction's balance side effect, twice:
-        //      once to undo the old vendor membership, once to apply it
-        //      under the target)
-        // For Phase 2b this is stubbed: merge_vendor rejects at the service
-        // layer so the rest of the write path can compile and run. Phase 2c
-        // adds the &Dek parameter to the signature and implements the above.
-        let _ = user_id;
-        let _ = source_id;
-        let _ = target_id;
-        Err(AppError::BadRequest(
-            "merge_vendor is temporarily unavailable during the encryption refactor".to_string(),
-        ))
+        let existing = dek.decrypt_string(&name_enc)?;
+        if existing.to_lowercase() == candidate_lower {
+            return Err(AppError::Conflict(format!("A vendor named '{}' already exists", candidate)));
+        }
     }
-
-    pub async fn get_vendor_stats_v2(&self, user_id: &Uuid, period_id: &Uuid) -> Result<VendorStatsDb, AppError> {
-        let period = sqlx::query_as::<_, PeriodDateRow>("SELECT id, name, start_date, end_date FROM budget_period WHERE id = $1 AND user_id = $2")
-            .bind(period_id)
-            .bind(user_id)
-            .fetch_optional(&self.pool)
-            .await?;
-
-        let period = period.ok_or_else(|| AppError::NotFound("Period not found".to_string()))?;
-
-        let total_vendors: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM vendor WHERE user_id = $1")
-            .bind(user_id)
-            .fetch_one(&self.pool)
-            .await?;
-
-        let total_spend: i64 = sqlx::query_scalar(
-            r#"
-SELECT COALESCE(SUM(vds.sum_amount), 0)::bigint
-FROM vendor_daily_spend vds
-JOIN vendor v ON v.id = vds.vendor_id
-WHERE v.user_id = $1
-  AND vds.day BETWEEN $2 AND $3
-            "#,
-        )
-        .bind(user_id)
-        .bind(period.start_date)
-        .bind(period.end_date)
-        .fetch_one(&self.pool)
-        .await?;
-
-        let vendors_with_spend: i64 = sqlx::query_scalar(
-            r#"
-SELECT COUNT(DISTINCT vds.vendor_id)
-FROM vendor_daily_spend vds
-JOIN vendor v ON v.id = vds.vendor_id
-WHERE v.user_id = $1
-  AND vds.day BETWEEN $2 AND $3
-  AND vds.sum_amount > 0
-            "#,
-        )
-        .bind(user_id)
-        .bind(period.start_date)
-        .bind(period.end_date)
-        .fetch_one(&self.pool)
-        .await?;
-
-        let avg_spend_per_vendor = if vendors_with_spend > 0 { total_spend / vendors_with_spend } else { 0 };
-
-        Ok(VendorStatsDb {
-            total_vendors,
-            total_spend,
-            avg_spend_per_vendor,
-        })
-    }
-
-    pub async fn restore_vendor(&self, id: &Uuid, user_id: &Uuid) -> Result<Vendor, AppError> {
-        let vendor = sqlx::query_as::<_, Vendor>(
-            r#"
-            UPDATE vendor
-            SET archived = FALSE
-            WHERE id = $1 AND user_id = $2
-            RETURNING id, name, description, archived
-            "#,
-        )
-        .bind(id)
-        .bind(user_id)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        vendor.ok_or_else(|| AppError::NotFound("Vendor not found".to_string()))
-    }
+    Ok(())
 }

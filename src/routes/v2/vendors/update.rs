@@ -6,19 +6,23 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::auth::CurrentUser;
+use crate::crypto::Dek;
 use crate::database::postgres_repository::PostgresRepository;
-use crate::dto::vendors::{UpdateVendorRequest, VendorResponse};
+use crate::dto::vendors::{EncryptedVendorResponse, UpdateVendorRequest};
 use crate::error::app_error::AppError;
 use crate::service::vendor::VendorService;
 
 #[put("/<id>", data = "<payload>")]
-pub async fn update_vendor(pool: &State<PgPool>, user: CurrentUser, id: &str, payload: Json<UpdateVendorRequest>) -> Result<Json<VendorResponse>, AppError> {
+pub async fn update_vendor(
+    pool: &State<PgPool>,
+    user: CurrentUser,
+    dek: Dek,
+    id: &str,
+    payload: Json<UpdateVendorRequest>,
+) -> Result<Json<EncryptedVendorResponse>, AppError> {
     payload.validate()?;
-
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid vendor id", e))?;
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let service = VendorService::new(&repo);
-
-    let response = service.update_vendor(&uuid, &payload, &user.id).await?;
-    Ok(Json(response))
+    Ok(Json(service.update_vendor(&uuid, &payload, &user.id, &dek).await?))
 }

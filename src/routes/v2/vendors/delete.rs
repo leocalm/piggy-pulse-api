@@ -14,7 +14,6 @@ pub async fn delete_vendor(pool: &State<PgPool>, user: CurrentUser, id: &str) ->
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid vendor id", e))?;
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let service = VendorService::new(&repo);
-
     service.delete_vendor(&uuid, &user.id).await?;
     Ok(Status::NoContent)
 }
