@@ -570,7 +570,7 @@ impl PostgresRepository {
             .into_iter()
             .map(|(category_id, (name, amount))| (category_id, name, amount))
             .collect();
-        category_breakdown.sort_by(|a, b| b.2.cmp(&a.2));
+        category_breakdown.sort_by_key(|b| std::cmp::Reverse(b.2));
 
         Ok((spent_amount, transaction_count, category_breakdown))
     }
