@@ -93,6 +93,24 @@ pub struct RegisterRequest {
     pub password: String,
     #[validate(length(min = 1))]
     pub name: String,
+    pub wrapped_dek: Option<String>,
+    pub dek_wrap_params: Option<serde_json::Value>,
+}
+
+// ===== Wrapped DEK =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WrappedDekResponse {
+    pub wrapped_dek: Option<String>,
+    pub dek_wrap_params: Option<serde_json::Value>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateWrappedDekRequest {
+    pub wrapped_dek: String,
+    pub dek_wrap_params: serde_json::Value,
 }
 
 // ===== 2FA Complete (after challenge) =====

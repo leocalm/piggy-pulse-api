@@ -1,3 +1,4 @@
+use base64::Engine;
 use rocket::State;
 use rocket::http::Status;
 use rocket::post;
@@ -27,6 +28,13 @@ pub async fn register(
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let auth = AuthService::new(&repo, config);
 
+    let wrapped_dek_bytes = payload
+        .wrapped_dek
+        .as_deref()
+        .map(|s| base64::engine::general_purpose::STANDARD.decode(s))
+        .transpose()
+        .map_err(|_| AppError::BadRequest("Invalid base64 in wrappedDek".to_string()))?;
+
     let (user, session_id) = auth
         .register(
             &payload.email,
@@ -34,6 +42,8 @@ pub async fn register(
             &payload.name,
             user_agent.0.as_deref(),
             client_ip.0.as_deref(),
+            wrapped_dek_bytes.as_deref(),
+            payload.dek_wrap_params.as_ref(),
         )
         .await?;
 

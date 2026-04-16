@@ -467,6 +467,8 @@ paths:
     $ref: './paths/auth@password.yaml'
   /auth/unlock:
     $ref: './paths/auth@unlock.yaml'
+  /auth/wrapped-dek:
+    $ref: './paths/auth@wrapped-dek.yaml'
 
   /settings/sessions/{id}:
     $ref: './paths/settings@sessions@{id}.yaml'

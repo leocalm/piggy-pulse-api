@@ -291,3 +291,32 @@ ChangePasswordRequest:
       type: string
       format: password
       example: "correct-horse-battery-staple"
+
+# ===== Wrapped DEK =====
+
+WrappedDekResponse:
+  type: object
+  properties:
+    wrappedDek:
+      type: [string, "null"]
+      description: Base64-encoded wrapped DEK (AES-GCM envelope of the 32-byte DEK, encrypted with the KEK)
+    dekWrapParams:
+      type: [object, "null"]
+      description: |
+        Argon2id parameters used to derive the KEK from the user's
+        password. Contains salt (base64), m (memory in KiB), t
+        (iterations), p (parallelism), and the AES-GCM nonce used
+        for the wrap operation.
+
+UpdateWrappedDekRequest:
+  type: object
+  required:
+    - wrappedDek
+    - dekWrapParams
+  properties:
+    wrappedDek:
+      type: string
+      description: Base64-encoded wrapped DEK
+    dekWrapParams:
+      type: object
+      description: Argon2id parameters + wrap nonce

@@ -1,0 +1,49 @@
+get:
+  tags:
+    - Auth
+  summary: Retrieve the wrapped DEK and Argon2 parameters
+  description: |
+    Returns the user's wrapped DEK (base64) and the Argon2id key-derivation
+    parameters used to derive the KEK that wraps it. The client uses
+    these to re-derive the KEK from the password and unwrap the DEK
+    on login or device setup.
+
+    Returns null fields if the user registered before encryption was
+    enabled or hasn't completed the wrapping flow yet.
+  operationId: getWrappedDek
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Auth.yaml#/WrappedDekResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
+
+put:
+  tags:
+    - Auth
+  summary: Store or replace the wrapped DEK
+  description: |
+    Stores a new wrapped DEK and Argon2 parameters. Used during
+    initial setup (first login after registration) or password change
+    (re-derive KEK, re-wrap DEK, upload).
+  operationId: updateWrappedDek
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../schemas/Auth.yaml#/UpdateWrappedDekRequest'
+  responses:
+    '200':
+      description: Wrapped DEK stored
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
