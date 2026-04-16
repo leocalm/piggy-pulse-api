@@ -1,0 +1,113 @@
+# .github/workflows/publish-and-deploy-staging.yml
+#
+# Builds API and Cron images tagged :staging on push to the `staging` branch,
+# then triggers the staging deploy webhook. Mirrors publish-and-deploy.yml
+# (prod) but targets the staging environment and skips the ARM64 build.
+
+name: Publish & Deploy (Staging)
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-deploy-staging
+  cancel-in-progress: true
+
+jobs:
+  build-api:
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags
+        id: vars
+        run: |
+          echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push API image
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ghcr.io/${{ steps.vars.outputs.owner }}/piggy-pulse-api:staging
+            ghcr.io/${{ steps.vars.outputs.owner }}/piggy-pulse-api:staging-${{ steps.vars.outputs.short_sha }}
+          cache-from: type=registry,ref=ghcr.io/${{ steps.vars.outputs.owner }}/piggy-pulse-api:buildcache-staging
+          cache-to: type=registry,ref=ghcr.io/${{ steps.vars.outputs.owner }}/piggy-pulse-api:buildcache-staging,mode=max
+
+  build-cron:
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags
+        id: vars
+        run: |
+          echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push Cron image
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.cron
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ghcr.io/${{ steps.vars.outputs.owner }}/piggy-pulse-cron:staging
+            ghcr.io/${{ steps.vars.outputs.owner }}/piggy-pulse-cron:staging-${{ steps.vars.outputs.short_sha }}
+          cache-from: type=registry,ref=ghcr.io/${{ steps.vars.outputs.owner }}/piggy-pulse-cron:buildcache-staging
+          cache-to: type=registry,ref=ghcr.io/${{ steps.vars.outputs.owner }}/piggy-pulse-cron:buildcache-staging,mode=max
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build-api, build-cron]
+    steps:
+      - name: Trigger staging deploy webhook
+        run: |
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-Webhook-Secret: ${{ secrets.STAGING_DEPLOY_WEBHOOK_SECRET }}" \
+            -d '{"commit": "${{ github.sha }}", "ref": "${{ github.ref }}"}' \
+            "${{ secrets.STAGING_DEPLOY_WEBHOOK_URL }}")
+
+          echo "Webhook responded with HTTP $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::error::Staging deploy webhook failed with status $HTTP_STATUS"
+            exit 1
+          fi
+
+          echo "✅ Staging deploy triggered for ${GITHUB_SHA::7}"

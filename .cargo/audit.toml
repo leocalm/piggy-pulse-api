@@ -3,4 +3,9 @@ ignore = [
   # Transitive through sqlx's macro toolchain (sqlx-mysql/rsa), not directly used by this Postgres-only API.
   # RustSec currently reports no fixed upgrade available.
   "RUSTSEC-2023-0071",
+
+  # Unsound `rand::rng()` with custom logger. Pulled in transitively via sqlx-postgres (0.8.5)
+  # and proptest (0.9.2). No fix available upstream; impact requires a custom rand logger,
+  # which this codebase does not install.
+  "RUSTSEC-2026-0097",
 ]
