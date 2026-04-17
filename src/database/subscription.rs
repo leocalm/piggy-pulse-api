@@ -63,7 +63,7 @@ INSERT INTO subscription (
     id, user_id, category_id, vendor_id, billing_cycle, billing_day,
     next_charge_date, status, created_at, updated_at, name_enc, billing_amount_enc
 ) VALUES (
-    gen_random_uuid(), $1, $2, $3, $4::text::billing_cycle, $5, $6, 'active'::subscription_status, now(), now(), $7, $8
+    gen_random_uuid(), $1, $2, $3, $4::text::subscription_billing_cycle, $5, $6, 'active'::subscription_status, now(), now(), $7, $8
 )
 RETURNING {COLS}
 "#,
@@ -95,7 +95,7 @@ RETURNING {COLS}
 UPDATE subscription
 SET category_id = $1,
     vendor_id = $2,
-    billing_cycle = $3::text::billing_cycle,
+    billing_cycle = $3::text::subscription_billing_cycle,
     billing_day = $4,
     next_charge_date = $5,
     name_enc = $6,
