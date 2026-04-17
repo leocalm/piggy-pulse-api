@@ -93,7 +93,6 @@ fn to_encrypted_response(account: &Account) -> EncryptedAccountResponse {
         currency_id: account.currency_id,
         name_enc: b64(&account.name_enc),
         color_enc: b64(&account.color_enc),
-        icon_enc: b64(&account.icon_enc),
         current_balance_enc: b64(&account.current_balance_enc),
         spend_limit_enc: account.spend_limit_enc.as_deref().map(b64),
         next_transfer_amount_enc: account.next_transfer_amount_enc.as_deref().map(b64),

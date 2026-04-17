@@ -24,7 +24,6 @@ pub struct Account {
     pub is_archived: bool,
     pub name_enc: Vec<u8>,
     pub color_enc: Vec<u8>,
-    pub icon_enc: Vec<u8>,
     pub current_balance_enc: Vec<u8>,
     pub spend_limit_enc: Option<Vec<u8>>,
     pub next_transfer_amount_enc: Option<Vec<u8>>,

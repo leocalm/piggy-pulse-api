@@ -22,9 +22,13 @@ pub struct UpdateProfileRequest {
     pub name: String,
     #[validate(regex(path = *ISO_4217_REGEX))]
     pub currency: String,
-    // max 64 chars — matches the maxLength constraint in openapi/schemas/Settings.yaml
+    // Optional — clients that don't want to change the avatar can omit the
+    // field. When absent the DB keeps the existing value (see COALESCE in
+    // `update_profile_v2`). max 64 chars — matches the maxLength constraint
+    // in openapi/schemas/Settings.yaml.
+    #[serde(default)]
     #[validate(length(max = 64))]
-    pub avatar: String,
+    pub avatar: Option<String>,
 }
 
 // ===== Preferences =====

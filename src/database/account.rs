@@ -20,7 +20,6 @@ impl PostgresRepository {
 
         let name_enc = dek.encrypt_string(&request.name)?;
         let color_enc = dek.encrypt_string(&request.color)?;
-        let icon_enc = dek.encrypt_string(&request.icon)?;
         let current_balance_enc = dek.encrypt_i64(request.initial_balance)?;
         let spend_limit_enc = request.spend_limit.map(|v| dek.encrypt_i64(v)).transpose()?;
         let next_transfer_amount_enc = request.next_transfer_amount.map(|v| dek.encrypt_i64(v)).transpose()?;
@@ -30,18 +29,18 @@ impl PostgresRepository {
             r#"
 INSERT INTO account (
     id, user_id, account_type, currency_id, is_archived,
-    name_enc, color_enc, icon_enc, current_balance_enc,
+    name_enc, color_enc, current_balance_enc,
     spend_limit_enc, next_transfer_amount_enc, top_up_amount_enc,
     top_up_cycle, top_up_day, statement_close_day, payment_due_day
 ) VALUES (
-    gen_random_uuid(), $1, $2, $3, false,
-    $4, $5, $6, $7,
-    $8, $9, $10,
-    $11, $12, $13, $14
+    gen_random_uuid(), $1, $2::text::account_type, $3, false,
+    $4, $5, $6,
+    $7, $8, $9,
+    $10, $11, $12, $13
 )
 RETURNING
-    id, account_type, currency_id, is_archived,
-    name_enc, color_enc, icon_enc, current_balance_enc,
+    id, account_type::text AS account_type, currency_id, is_archived,
+    name_enc, color_enc, current_balance_enc,
     spend_limit_enc, next_transfer_amount_enc, top_up_amount_enc,
     top_up_cycle, top_up_day, statement_close_day, payment_due_day
 "#,
@@ -51,7 +50,6 @@ RETURNING
         .bind(request.currency_id)
         .bind(&name_enc)
         .bind(&color_enc)
-        .bind(&icon_enc)
         .bind(&current_balance_enc)
         .bind(spend_limit_enc.as_deref())
         .bind(next_transfer_amount_enc.as_deref())
@@ -70,8 +68,8 @@ RETURNING
     pub async fn get_account_by_id(&self, id: &Uuid, user_id: &Uuid) -> Result<Option<Account>, AppError> {
         let account = sqlx::query_as::<_, Account>(
             r#"
-SELECT id, account_type, currency_id, is_archived,
-    name_enc, color_enc, icon_enc, current_balance_enc,
+SELECT id, account_type::text AS account_type, currency_id, is_archived,
+    name_enc, color_enc, current_balance_enc,
     spend_limit_enc, next_transfer_amount_enc, top_up_amount_enc,
     top_up_cycle, top_up_day, statement_close_day, payment_due_day
 FROM account
@@ -91,8 +89,8 @@ WHERE id = $1 AND user_id = $2
     pub async fn list_accounts(&self, user_id: &Uuid) -> Result<Vec<Account>, AppError> {
         let accounts = sqlx::query_as::<_, Account>(
             r#"
-SELECT id, account_type, currency_id, is_archived,
-    name_enc, color_enc, icon_enc, current_balance_enc,
+SELECT id, account_type::text AS account_type, currency_id, is_archived,
+    name_enc, color_enc, current_balance_enc,
     spend_limit_enc, next_transfer_amount_enc, top_up_amount_enc,
     top_up_cycle, top_up_day, statement_close_day, payment_due_day
 FROM account
@@ -114,7 +112,6 @@ ORDER BY id
 
         let name_enc = dek.encrypt_string(&request.name)?;
         let color_enc = dek.encrypt_string(&request.color)?;
-        let icon_enc = dek.encrypt_string(&request.icon)?;
         let spend_limit_enc = request.spend_limit.map(|v| dek.encrypt_i64(v)).transpose()?;
         let next_transfer_amount_enc = request.next_transfer_amount.map(|v| dek.encrypt_i64(v)).transpose()?;
         let top_up_amount_enc = request.top_up_amount.map(|v| dek.encrypt_i64(v)).transpose()?;
@@ -122,22 +119,21 @@ ORDER BY id
         let account: Account = sqlx::query_as(
             r#"
 UPDATE account
-SET account_type = $1,
+SET account_type = $1::text::account_type,
     currency_id = $2,
     name_enc = $3,
     color_enc = $4,
-    icon_enc = $5,
-    spend_limit_enc = $6,
-    next_transfer_amount_enc = $7,
-    top_up_amount_enc = $8,
-    top_up_cycle = $9,
-    top_up_day = $10,
-    statement_close_day = $11,
-    payment_due_day = $12
-WHERE id = $13 AND user_id = $14
+    spend_limit_enc = $5,
+    next_transfer_amount_enc = $6,
+    top_up_amount_enc = $7,
+    top_up_cycle = $8,
+    top_up_day = $9,
+    statement_close_day = $10,
+    payment_due_day = $11
+WHERE id = $12 AND user_id = $13
 RETURNING
-    id, account_type, currency_id, is_archived,
-    name_enc, color_enc, icon_enc, current_balance_enc,
+    id, account_type::text AS account_type, currency_id, is_archived,
+    name_enc, color_enc, current_balance_enc,
     spend_limit_enc, next_transfer_amount_enc, top_up_amount_enc,
     top_up_cycle, top_up_day, statement_close_day, payment_due_day
 "#,
@@ -146,7 +142,6 @@ RETURNING
         .bind(request.currency_id)
         .bind(&name_enc)
         .bind(&color_enc)
-        .bind(&icon_enc)
         .bind(spend_limit_enc.as_deref())
         .bind(next_transfer_amount_enc.as_deref())
         .bind(top_up_amount_enc.as_deref())
@@ -223,8 +218,8 @@ UPDATE account
 SET current_balance_enc = $1
 WHERE id = $2 AND user_id = $3
 RETURNING
-    id, account_type, currency_id, is_archived,
-    name_enc, color_enc, icon_enc, current_balance_enc,
+    id, account_type::text AS account_type, currency_id, is_archived,
+    name_enc, color_enc, current_balance_enc,
     spend_limit_enc, next_transfer_amount_enc, top_up_amount_enc,
     top_up_cycle, top_up_day, statement_close_day, payment_due_day
 "#,

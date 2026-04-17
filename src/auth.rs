@@ -30,6 +30,18 @@ pub(crate) fn parse_session_cookie_value(value: &str) -> Option<(Uuid, Uuid)> {
     Some((session_id, user_id))
 }
 
+impl CurrentUser {
+    /// Returns the per-device auth principal id for this user: the session id
+    /// for cookie auth, the api token row id for bearer auth. Used as the key
+    /// for per-device server-side state (e.g. the session DEK store).
+    ///
+    /// Session ids and api token ids live in different tables but are both
+    /// random UUIDs, so a single `Uuid` key space has no collision risk.
+    pub fn principal_id(&self) -> Option<Uuid> {
+        self.session_id.or(self.api_token_id)
+    }
+}
+
 #[rocket::async_trait]
 impl<'r> FromRequest<'r> for CurrentUser {
     type Error = AppError;

@@ -9,6 +9,7 @@ use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
 use crate::middleware::{ClientIp, UserAgent};
 use crate::service::auth::AuthService;
+use crate::session_dek::SessionDekStore;
 
 #[post("/logout")]
 pub async fn logout(
@@ -17,6 +18,7 @@ pub async fn logout(
     cookies: &rocket::http::CookieJar<'_>,
     user_agent: UserAgent,
     client_ip: ClientIp,
+    dek_store: &State<SessionDekStore>,
     user: CurrentUser,
 ) -> Result<Status, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
@@ -30,6 +32,10 @@ pub async fn logout(
     }
 
     auth.logout(&user.id, user.session_id, client_ip.0.clone(), user_agent.0.clone()).await?;
+
+    if let Some(principal_id) = user.principal_id() {
+        dek_store.remove(&principal_id).await;
+    }
 
     cookies.remove_private(Cookie::build("user").build());
 

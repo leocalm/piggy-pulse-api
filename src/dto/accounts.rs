@@ -42,7 +42,6 @@ pub struct EncryptedAccountResponse {
     pub currency_id: Uuid,
     pub name_enc: String,
     pub color_enc: String,
-    pub icon_enc: String,
     pub current_balance_enc: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spend_limit_enc: Option<String>,
@@ -90,7 +89,6 @@ pub struct CreateAccountRequest {
     pub account_type: AccountType,
     pub name: String,
     pub color: String,
-    pub icon: String,
     pub currency_id: Uuid,
     pub initial_balance: i64,
     pub spend_limit: Option<i64>,

@@ -7,7 +7,6 @@ EncryptedAccountResponse:
     - currencyId
     - nameEnc
     - colorEnc
-    - iconEnc
     - currentBalanceEnc
   properties:
     id:
@@ -28,9 +27,6 @@ EncryptedAccountResponse:
     colorEnc:
       type: string
       description: Base64-encoded AES-GCM envelope for the color string
-    iconEnc:
-      type: string
-      description: Base64-encoded AES-GCM envelope for the icon string
     currentBalanceEnc:
       type: string
       description: Base64-encoded AES-GCM envelope for the i64 LE balance in cents
@@ -63,14 +59,13 @@ AccountListResponse:
 CreateAccountRequest:
   type: object
   description: |
-    Plaintext account fields. The server encrypts name, color, icon,
+    Plaintext account fields. The server encrypts name, color,
     initialBalance, spendLimit, nextTransferAmount, and topUpAmount
     using the caller's session DEK before inserting the row.
   required:
     - accountType
     - name
     - color
-    - icon
     - currencyId
     - initialBalance
   properties:
@@ -80,8 +75,6 @@ CreateAccountRequest:
     name:
       type: string
     color:
-      type: string
-    icon:
       type: string
     currencyId:
       type: string

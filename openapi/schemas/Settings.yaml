@@ -24,7 +24,6 @@ UpdateProfileRequest:
   required:
     - name
     - currency
-    - avatar
   properties:
     name:
       type: string
@@ -35,7 +34,7 @@ UpdateProfileRequest:
     avatar:
       type: string
       maxLength: 64
-      description: Emoji used as the user's avatar
+      description: Emoji used as the user's avatar. Optional — omit to keep the existing value.
       example: "🐷"
 
 # ===== Preferences =====

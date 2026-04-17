@@ -173,11 +173,11 @@ impl PostgresRepository {
         user_id: &Uuid,
         name: &str,
         currency_code: &str,
-        avatar: &str,
+        avatar: Option<&str>,
     ) -> Result<crate::dto::settings::ProfileResponse, AppError> {
         let mut tx = self.pool.begin().await?;
 
-        sqlx::query("UPDATE users SET name = $1, avatar = $2 WHERE id = $3")
+        sqlx::query("UPDATE users SET name = $1, avatar = COALESCE($2, avatar) WHERE id = $3")
             .bind(name)
             .bind(avatar)
             .bind(user_id)

@@ -2,23 +2,26 @@
 //!
 //! See `.kiro/specs/encryption-at-rest/design.md` §"DEK transport" for the
 //! design. The v1 implementation is an in-process `Arc<RwLock<HashMap>>`
-//! keyed by session_id; it is registered as Rocket managed state by
-//! `build_rocket`. Phase 5 replaces the in-process store with a
-//! Redis-backed one.
+//! keyed by the per-device auth principal id — session_id for cookie auth
+//! (web), api_token_id for bearer auth (mobile). It is registered as Rocket
+//! managed state by `build_rocket`. Phase 5 replaces the in-process store
+//! with a Redis-backed one.
 //!
 //! Flow:
-//!   1. User logs in → Rocket sets a session cookie. No DEK yet.
+//!   1. User logs in → cookie session or bearer token is issued. No DEK yet.
 //!   2. Client POSTs the plaintext DEK to `/v2/auth/unlock`.
-//!      The unlock handler calls `SessionDekStore::put` keyed by session_id.
+//!      The unlock handler calls `SessionDekStore::put` keyed by the
+//!      principal id (`CurrentUser::principal_id`).
 //!   3. Subsequent authenticated requests that need encryption accept a
-//!      `Dek` parameter via the `FromRequest` guard below, which reads the
-//!      session cookie, looks up the DEK, and returns a cloned copy.
-//!   4. Logout deletes both the session row and the store entry.
+//!      `Dek` parameter via the `FromRequest` guard below, which resolves
+//!      `CurrentUser` and looks up the DEK by that same principal id.
+//!   4. Logout / session revoke deletes the store entry alongside the
+//!      session/token row.
 //!
 //! The `Dek` type is zeroize-on-drop, so clones from the store are cleaned
 //! up automatically when the handler returns.
 
-use crate::auth::parse_session_cookie_value;
+use crate::auth::CurrentUser;
 use crate::crypto::Dek;
 use crate::error::app_error::AppError;
 use rocket::http::Status;
@@ -29,7 +32,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-/// In-process session → DEK mapping.
+/// In-process principal → DEK mapping. The principal id is either a
+/// session_id (cookie auth) or an api_token_id (bearer auth); both are
+/// random UUIDs drawn from non-overlapping tables.
 #[derive(Clone)]
 pub struct SessionDekStore {
     inner: Arc<RwLock<HashMap<Uuid, Dek>>>,
@@ -42,39 +47,40 @@ impl SessionDekStore {
         }
     }
 
-    /// Store a DEK for the given session. Overwrites any existing entry.
+    /// Store a DEK for the given principal. Overwrites any existing entry.
     /// The old Dek is zeroed on drop automatically.
-    pub async fn put(&self, session_id: Uuid, dek: Dek) {
+    pub async fn put(&self, principal_id: Uuid, dek: Dek) {
         let mut guard = self.inner.write().await;
-        guard.insert(session_id, dek);
+        guard.insert(principal_id, dek);
     }
 
-    /// Return an owned clone of the DEK for the given session if present.
+    /// Return an owned clone of the DEK for the given principal if present.
     /// The clone is a fresh `Dek` that the caller owns; it is zeroed on drop.
-    pub async fn get_cloned(&self, session_id: &Uuid) -> Option<Dek> {
+    pub async fn get_cloned(&self, principal_id: &Uuid) -> Option<Dek> {
         let guard = self.inner.read().await;
-        guard.get(session_id).map(|d| d.clone_for_request())
+        guard.get(principal_id).map(|d| d.clone_for_request())
     }
 
-    /// Remove the DEK entry for a session. Used on logout and session
-    /// expiry. The removed Dek is dropped (and zeroed) synchronously.
-    pub async fn remove(&self, session_id: &Uuid) {
+    /// Remove the DEK entry for a principal. Used on logout, session
+    /// revoke, and session expiry. The removed Dek is dropped (and zeroed)
+    /// synchronously.
+    pub async fn remove(&self, principal_id: &Uuid) {
         let mut guard = self.inner.write().await;
-        guard.remove(session_id);
+        guard.remove(principal_id);
     }
 
-    /// Remove every session entry for a given user. Used during password
-    /// change to invalidate DEK caches on other devices, and during
+    /// Remove every entry for a given user. Used during password change to
+    /// invalidate DEK caches on other devices, and during
     /// `delete_all_user_data`. We can't key by user_id directly because the
-    /// map is session-keyed, so callers must pass the list of session ids
-    /// they want invalidated.
+    /// map is principal-keyed, so callers must pass the list of principal
+    /// ids (session ids and/or api token ids) they want invalidated.
     ///
     /// This helper is a placeholder until Phase 5 adds a secondary
-    /// `session_id → user_id` index to the store.
+    /// `principal_id → user_id` index to the store.
     #[allow(dead_code)]
-    pub async fn remove_many(&self, session_ids: &[Uuid]) {
+    pub async fn remove_many(&self, principal_ids: &[Uuid]) {
         let mut guard = self.inner.write().await;
-        for id in session_ids {
+        for id in principal_ids {
             guard.remove(id);
         }
     }
@@ -89,15 +95,11 @@ impl Default for SessionDekStore {
 /// Request guard that yields the session DEK to route handlers.
 ///
 /// Usage: add a `dek: Dek` parameter to any handler that needs to
-/// encrypt or decrypt. The guard rejects the request with 401 if:
-///   * there is no session cookie (user is not logged in), or
-///   * the session cookie is present but the store has no DEK for it
-///     (user is logged in but has not yet completed the unlock flow).
-///
-/// The guard does NOT validate session expiry; pair it with
-/// `CurrentUser` on the same handler if you need both. Rocket runs
-/// guards in parameter order, so session validity is checked by
-/// `CurrentUser` before `Dek` runs.
+/// encrypt or decrypt. The guard resolves `CurrentUser` to identify the
+/// authenticated principal (cookie session or bearer token) and looks up
+/// the DEK by that principal's id. Rejects with 401 if:
+///   * the caller is not authenticated, or
+///   * the caller is authenticated but has not yet completed `/v2/auth/unlock`.
 #[rocket::async_trait]
 impl<'r> FromRequest<'r> for Dek {
     type Error = AppError;
@@ -108,15 +110,17 @@ impl<'r> FromRequest<'r> for Dek {
             None => return Outcome::Error((Status::InternalServerError, AppError::internal("SessionDekStore not registered"))),
         };
 
-        let cookies = req.cookies();
-        let Some(cookie) = cookies.get_private("user") else {
-            return Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials));
+        let user = match req.guard::<CurrentUser>().await {
+            Outcome::Success(u) => u,
+            Outcome::Error(e) => return Outcome::Error(e),
+            Outcome::Forward(f) => return Outcome::Forward(f),
         };
-        let Some((session_id, _user_id)) = parse_session_cookie_value(cookie.value()) else {
+
+        let Some(principal_id) = user.principal_id() else {
             return Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials));
         };
 
-        match store.get_cloned(&session_id).await {
+        match store.get_cloned(&principal_id).await {
             Some(dek) => Outcome::Success(dek),
             None => Outcome::Error((Status::Unauthorized, AppError::Unauthorized)),
         }

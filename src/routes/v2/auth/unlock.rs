@@ -25,7 +25,8 @@ pub struct UnlockRequest {
 }
 
 /// `POST /v2/auth/unlock` — establishes the per-session DEK for this
-/// cookie-authenticated session.
+/// authenticated session, whether authenticated by cookie (web) or by
+/// bearer token (mobile).
 ///
 /// Client flow:
 ///   1. Log in via `POST /v2/auth/login`. Response body includes the
@@ -40,18 +41,14 @@ pub struct UnlockRequest {
 /// The plaintext DEK only exists in:
 ///   * client memory between derive and upload
 ///   * the Rocket request body buffer briefly
-///   * the in-process `SessionDekStore` for the session lifetime
+///   * the in-process `SessionDekStore` for the session/token lifetime
 ///
-/// Returns 204 on success, 400 on malformed input, 401 if the session
-/// cookie is missing or invalid. Unlock is idempotent — calling it with
-/// a different DEK simply overwrites the previous entry.
+/// Returns 204 on success, 400 on malformed input, 401 if the caller is
+/// not authenticated. Unlock is idempotent — calling it with a different
+/// DEK simply overwrites the previous entry for the same principal.
 #[post("/unlock", data = "<payload>")]
 pub async fn unlock(user: CurrentUser, store: &State<SessionDekStore>, payload: Json<UnlockRequest>) -> Result<Status, AppError> {
-    let session_id = user.session_id.ok_or_else(|| {
-        // Bearer-token callers cannot unlock. Only cookie-based sessions
-        // are eligible; enforce at the boundary.
-        AppError::BadRequest("unlock is only available for cookie-based sessions".to_string())
-    })?;
+    let principal_id = user.principal_id().ok_or(AppError::Unauthorized)?;
 
     let raw = BASE64
         .decode(payload.dek.as_bytes())
@@ -65,7 +62,7 @@ pub async fn unlock(user: CurrentUser, store: &State<SessionDekStore>, payload: 
     bytes.copy_from_slice(&raw);
     let dek = Dek::from_bytes(bytes);
 
-    store.put(session_id, dek).await;
+    store.put(principal_id, dek).await;
 
     // Drop the raw vec (was never sensitive beyond the copy we already
     // moved into the Dek), but be explicit anyway for memory hygiene.
