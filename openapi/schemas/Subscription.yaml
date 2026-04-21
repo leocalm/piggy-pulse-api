@@ -6,6 +6,10 @@ BillingCycle:
   type: string
   enum: [monthly, quarterly, yearly]
 
+# SubscriptionResponse is an alias for the encrypted response.
+SubscriptionResponse:
+  $ref: '#/EncryptedSubscriptionResponse'
+
 EncryptedSubscriptionResponse:
   type: object
   required:
@@ -104,3 +108,49 @@ CancelSubscriptionRequest:
     cancellationDate:
       type: [string, "null"]
       format: date
+
+SubscriptionDetailResponse:
+  allOf:
+    - $ref: '#/EncryptedSubscriptionResponse'
+
+BillingEventResponse:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    subscriptionId:
+      type: string
+      format: uuid
+    billingDate:
+      type: string
+      format: date
+    amountEnc:
+      type: string
+      description: Base64 AES-GCM envelope for the i64 LE billing amount in cents
+
+UpcomingChargeItem:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    nameEnc:
+      type: string
+      description: Base64 AES-GCM envelope for the subscription name
+    billingAmountEnc:
+      type: string
+      description: Base64 AES-GCM envelope for the i64 LE billing amount in cents
+    nextChargeDate:
+      type: string
+      format: date
+    billingCycle:
+      $ref: '#/BillingCycle'
+
+UpcomingChargesResponse:
+  type: object
+  properties:
+    charges:
+      type: array
+      items:
+        $ref: '#/UpcomingChargeItem'
