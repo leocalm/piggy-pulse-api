@@ -8,7 +8,7 @@ use super::auth::get_eur_currency_id;
 pub async fn create_account(client: &Client, name: &str, balance: i64) -> String {
     let eur_id = get_eur_currency_id(client).await;
     let payload = serde_json::json!({
-        "type": "Checking",
+        "accountType": "checking",
         "name": name,
         "color": "#1a2b3c",
         "initialBalance": balance,

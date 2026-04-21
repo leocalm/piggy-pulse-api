@@ -1,4 +1,5 @@
 use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use rocket::State;
 use rocket::http::Status;
 use rocket::post;
@@ -31,7 +32,7 @@ pub async fn register(
     let wrapped_dek_bytes = payload
         .wrapped_dek
         .as_deref()
-        .map(|s| base64::engine::general_purpose::STANDARD.decode(s))
+        .map(|s| BASE64.decode(s))
         .transpose()
         .map_err(|_| AppError::BadRequest("Invalid base64 in wrappedDek".to_string()))?;
 
@@ -49,7 +50,22 @@ pub async fn register(
 
     set_session_cookie(cookies, config, session_id, user.id);
 
-    let (access_token, _) = auth.issue_bearer_token(&user.id).await?;
-    let user_response = auth.build_user_response(user).await?;
-    Ok((Status::Created, Json(AuthenticatedResponse::new(user_response, Some(access_token)))))
+    let user_id = user.id;
+    drop(user);
+
+    let (access_token, _) = auth.issue_bearer_token(&user_id).await?;
+    let user_response = auth.get_user_response(&user_id).await?;
+
+    // Fetch stored wrapped DEK to return to client
+    let (stored_wrapped_dek, stored_dek_params) = repo.get_wrapped_dek(&user_id).await?;
+
+    Ok((
+        Status::Created,
+        Json(AuthenticatedResponse::with_dek(
+            user_response,
+            Some(access_token),
+            stored_wrapped_dek.map(|b| BASE64.encode(&b)),
+            stored_dek_params,
+        )),
+    ))
 }

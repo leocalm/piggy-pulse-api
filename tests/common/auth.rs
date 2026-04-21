@@ -1,3 +1,5 @@
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use rocket::http::{ContentType, Status};
 use rocket::local::asynchronous::Client;
 use serde_json::Value;
@@ -19,8 +21,29 @@ pub async fn get_eur_currency_id_unauthenticated(client: &Client) -> String {
     get_eur_currency_id(client).await
 }
 
+/// Unlocks the session with a test DEK (all zeros for integration tests).
+/// This must be called after login/register for any authenticated operations.
+pub async fn unlock_session(client: &Client) {
+    // Generate a test DEK (32 bytes of zeros, base64-encoded)
+    let test_dek = BASE64.encode([0u8; 32]);
+
+    let payload = serde_json::json!({
+        "dek": test_dek
+    });
+
+    let resp = client
+        .post(format!("{}/auth/unlock", super::V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+
+    assert_eq!(resp.status(), Status::NoContent, "unlock failed: {:?}", resp.status());
+}
+
 /// Creates a unique user via V2 register, sets currency (EUR), and returns `(user_id, email)`.
 /// The client retains the session cookie set by register.
+/// Also unlocks the session for encrypted operations.
 pub async fn create_user_and_login(client: &Client) -> (String, String) {
     let unique = Uuid::new_v4();
     let email = format!("test.{}@example.com", unique);
@@ -56,6 +79,9 @@ pub async fn create_user_and_login(client: &Client) -> (String, String) {
         .dispatch()
         .await;
     assert_eq!(profile_resp.status(), Status::Ok, "set currency on profile failed");
+
+    // Unlock session for encrypted operations
+    unlock_session(client).await;
 
     (user_id, email)
 }

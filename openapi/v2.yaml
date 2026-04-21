@@ -61,48 +61,7 @@ components:
   schemas:
     HealthResponse:
       $ref: './schemas/Health.yaml#/HealthResponse'
-    CurrentPeriod:
-      $ref: './schemas/Dashboard.yaml#/CurrentPeriod'
-    NetPosition:
-      $ref: './schemas/Dashboard.yaml#/NetPosition'
-    BudgetStability:
-      $ref: './schemas/Dashboard.yaml#/BudgetStability'
-    NetPositionHistoryPoint:
-      $ref: './schemas/Dashboard.yaml#/NetPositionHistoryPoint'
-    NetPositionHistoryResponse:
-      $ref: './schemas/Dashboard.yaml#/NetPositionHistoryResponse'
-    CurrentPeriodHistoryPoint:
-      $ref: './schemas/Dashboard.yaml#/CurrentPeriodHistoryPoint'
-    CurrentPeriodHistoryResponse:
-      $ref: './schemas/Dashboard.yaml#/CurrentPeriodHistoryResponse'
-    CashFlowResponse:
-      $ref: './schemas/Dashboard.yaml#/CashFlowResponse'
-    SpendingTrendItem:
-      $ref: './schemas/Dashboard.yaml#/SpendingTrendItem'
-    SpendingTrendResponse:
-      $ref: './schemas/Dashboard.yaml#/SpendingTrendResponse'
-    TopVendorItem:
-      $ref: './schemas/Dashboard.yaml#/TopVendorItem'
-    TopVendorsResponse:
-      $ref: './schemas/Dashboard.yaml#/TopVendorsResponse'
-    FixedCategoryStatus:
-      $ref: './schemas/Dashboard.yaml#/FixedCategoryStatus'
-    FixedCategoryItem:
-      $ref: './schemas/Dashboard.yaml#/FixedCategoryItem'
-    FixedCategoriesResponse:
-      $ref: './schemas/Dashboard.yaml#/FixedCategoriesResponse'
-    VariableCategoryItem:
-      $ref: './schemas/Dashboard.yaml#/VariableCategoryItem'
-    VariableCategoriesResponse:
-      $ref: './schemas/Dashboard.yaml#/VariableCategoriesResponse'
-    SubscriptionDisplayStatus:
-      $ref: './schemas/Dashboard.yaml#/SubscriptionDisplayStatus'
-    DashboardBillingCycle:
-      $ref: './schemas/Dashboard.yaml#/DashboardBillingCycle'
-    SubscriptionDashboardItem:
-      $ref: './schemas/Dashboard.yaml#/SubscriptionDashboardItem'
-    SubscriptionsDashboardResponse:
-      $ref: './schemas/Dashboard.yaml#/SubscriptionsDashboardResponse'
+    # Dashboard schemas removed - now client-side computed from encrypted store
     DurationBased:
       $ref: './schemas/Period.yaml#/DurationBased'
     ManualEndDate:
@@ -345,10 +304,7 @@ components:
     UpdateSubscriptionRequest:
       $ref: './schemas/Subscription.yaml#/UpdateSubscriptionRequest'
 
-    UncategorizedTransaction:
-      $ref: './schemas/Dashboard.yaml#/UncategorizedTransaction'
-    UncategorizedResponse:
-      $ref: './schemas/Dashboard.yaml#/UncategorizedResponse'
+    # Uncategorized removed - now client-side computed
 
     # Misc
     CategoryTemplateCategory:
