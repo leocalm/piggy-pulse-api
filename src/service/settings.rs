@@ -130,9 +130,9 @@ impl<'a> SettingsService<'a> {
         self.repository.verify_password(&user, password).await.map_err(|_| AppError::InvalidCredentials)
     }
 
-    pub async fn reset_structure(&self, user_id: &Uuid, password: &str) -> Result<(), AppError> {
+    pub async fn reset_structure(&self, user_id: &Uuid, password: &str, dek: &crate::crypto::Dek) -> Result<(), AppError> {
         self.verify_password(user_id, password).await?;
-        self.repository.reset_structure_v2(user_id).await
+        self.repository.reset_structure_v2(user_id, dek).await
     }
 
     pub async fn delete_account(&self, user_id: &Uuid, password: &str) -> Result<(), AppError> {

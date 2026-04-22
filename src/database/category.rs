@@ -109,6 +109,17 @@ RETURNING {CATEGORY_COLUMNS}
     }
 
     pub async fn delete_category(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
+        // Check if category has any transactions
+        let has_transactions: Option<(i32,)> = sqlx::query_as("SELECT 1 FROM transaction WHERE category_id = $1 AND user_id = $2 LIMIT 1")
+            .bind(id)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        if has_transactions.is_some() {
+            return Err(AppError::Conflict("Cannot delete category with existing transactions".to_string()));
+        }
+
         let result = sqlx::query("DELETE FROM category WHERE id = $1 AND user_id = $2 AND NOT is_system")
             .bind(id)
             .bind(user_id)

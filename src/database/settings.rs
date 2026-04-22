@@ -552,7 +552,7 @@ impl PostgresRepository {
     // ── V2 Reset Structure ───────────────────────────────────────────────────
 
     /// V2 reset: also deletes vendors (unlike V1)
-    pub async fn reset_structure_v2(&self, user_id: &Uuid) -> Result<(), AppError> {
+    pub async fn reset_structure_v2(&self, user_id: &Uuid, dek: &crate::crypto::Dek) -> Result<(), AppError> {
         let mut tx = self.pool.begin().await?;
 
         // Bulk reset legitimately cascade-deletes transactions via the
@@ -576,14 +576,21 @@ impl PostgresRepository {
 
         sqlx::query("DELETE FROM vendor WHERE user_id = $1").bind(user_id).execute(&mut *tx).await?;
 
-        // Re-create the system Transfer category
+        // Encrypt the system category fields before storing.
+        let name_enc = dek.encrypt_string("Transfer").map_err(AppError::from)?;
+        let color_enc = dek.encrypt_string("#868E96").map_err(AppError::from)?;
+        let icon_enc = dek.encrypt_string("↔").map_err(AppError::from)?;
+
         sqlx::query(
             r#"
-            INSERT INTO category (user_id, name, color, icon, category_type, is_system)
-            VALUES ($1, 'Transfer', '#868E96', '↔', 'Transfer'::category_type, TRUE)
+            INSERT INTO category (user_id, name_enc, color_enc, icon_enc, category_type, is_system)
+            VALUES ($1, $2, $3, $4, 'Transfer'::category_type, TRUE)
             "#,
         )
         .bind(user_id)
+        .bind(&name_enc)
+        .bind(&color_enc)
+        .bind(&icon_enc)
         .execute(&mut *tx)
         .await?;
 

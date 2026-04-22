@@ -83,5 +83,17 @@ pub async fn create_user_and_login(client: &Client) -> (String, String) {
     // Unlock session for encrypted operations
     unlock_session(client).await;
 
+    // Reset structure to create the system Transfer category and clean slate
+    let reset_payload = serde_json::json!({
+        "password": super::TEST_PASSWORD
+    });
+    let reset_resp = client
+        .post(format!("{}/settings/reset-structure", super::V2_BASE))
+        .header(ContentType::JSON)
+        .body(reset_payload.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(reset_resp.status(), Status::NoContent, "reset-structure failed");
+
     (user_id, email)
 }
