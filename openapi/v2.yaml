@@ -85,40 +85,20 @@ components:
     UpdatePeriodScheduleRequest:
       $ref: './schemas/Period.yaml#/UpdatePeriodScheduleRequest'
     # Accounts
-    AccountBase:
-      $ref: './schemas/Accounts.yaml#/AccountBase'
-    AccountResponse:
-      $ref: './schemas/Accounts.yaml#/AccountResponse'
     AccountListResponse:
       $ref: './schemas/Accounts.yaml#/AccountListResponse'
     AccountOptionResponse:
       $ref: './schemas/Accounts.yaml#/AccountOptionResponse'
     AccountOptionListResponse:
       $ref: './schemas/Accounts.yaml#/AccountOptionListResponse'
-    AccountSummaryResponse:
-      $ref: './schemas/Accounts.yaml#/AccountSummaryResponse'
-    AccountSummaryListResponse:
-      $ref: './schemas/Accounts.yaml#/AccountSummaryListResponse'
-    AccountDetailsResponse:
-      $ref: './schemas/Accounts.yaml#/AccountDetailsResponse'
     CreateAccountRequest:
       $ref: './schemas/Accounts.yaml#/CreateAccountRequest'
     UpdateAccountRequest:
       $ref: './schemas/Accounts.yaml#/UpdateAccountRequest'
-    AccountBalanceHistoryPoint:
-      $ref: './schemas/Accounts.yaml#/AccountBalanceHistoryPoint'
-    AccountBalanceHistoryResponse:
-      $ref: './schemas/Accounts.yaml#/AccountBalanceHistoryResponse'
     AdjustBalanceRequest:
       $ref: './schemas/Accounts.yaml#/AdjustBalanceRequest'
 
     # Vendors
-    VendorBase:
-      $ref: './schemas/Vendor.yaml#/VendorBase'
-    VendorResponse:
-      $ref: './schemas/Vendor.yaml#/VendorResponse'
-    VendorSummaryResponse:
-      $ref: './schemas/Vendor.yaml#/VendorSummaryResponse'
     VendorListResponse:
       $ref: './schemas/Vendor.yaml#/VendorListResponse'
     VendorOptionResponse:
@@ -129,34 +109,8 @@ components:
       $ref: './schemas/Vendor.yaml#/CreateVendorRequest'
     UpdateVendorRequest:
       $ref: './schemas/Vendor.yaml#/UpdateVendorRequest'
-    MergeVendorRequest:
-      $ref: './schemas/Vendor.yaml#/MergeVendorRequest'
-    VendorTrendItem:
-      $ref: './schemas/Vendor.yaml#/VendorTrendItem'
-    VendorTopCategoryItem:
-      $ref: './schemas/Vendor.yaml#/VendorTopCategoryItem'
-    VendorTransactionItem:
-      $ref: './schemas/Vendor.yaml#/VendorTransactionItem'
-    VendorDetailResponse:
-      $ref: './schemas/Vendor.yaml#/VendorDetailResponse'
-    VendorStatsResponse:
-      $ref: './schemas/Vendor.yaml#/VendorStatsResponse'
 
     # Categories
-    CategoryBase:
-      $ref: './schemas/Category.yaml#/CategoryBase'
-    CategoryResponse:
-      $ref: './schemas/Category.yaml#/CategoryResponse'
-    CategoryManagementListItem:
-      $ref: './schemas/Category.yaml#/CategoryManagementListItem'
-    CategoryManagementListResponse:
-      $ref: './schemas/Category.yaml#/CategoryManagementListResponse'
-    CategorySummaryItem:
-      $ref: './schemas/Category.yaml#/CategorySummaryItem'
-    CategoryOverviewSummary:
-      $ref: './schemas/Category.yaml#/CategoryOverviewSummary'
-    CategoryOverviewResponse:
-      $ref: './schemas/Category.yaml#/CategoryOverviewResponse'
     CategoryOptionResponse:
       $ref: './schemas/Category.yaml#/CategoryOptionResponse'
     CategoryOptionListResponse:
@@ -165,49 +119,17 @@ components:
       $ref: './schemas/Category.yaml#/CreateCategoryRequest'
     UpdateCategoryRequest:
       $ref: './schemas/Category.yaml#/UpdateCategoryRequest'
-    CategoryTrendItem:
-      $ref: './schemas/Category.yaml#/CategoryTrendItem'
-    CategoryTransactionItem:
-      $ref: './schemas/Category.yaml#/CategoryTransactionItem'
-    CategoryDetailResponse:
-      $ref: './schemas/Category.yaml#/CategoryDetailResponse'
 
     # Targets
-    TargetStatus:
-      $ref: './schemas/Category.yaml#/TargetStatus'
-    TargetItem:
-      $ref: './schemas/Category.yaml#/TargetItem'
-    TargetSummary:
-      $ref: './schemas/Category.yaml#/TargetSummary'
-    CategoryTargetsResponse:
-      $ref: './schemas/Category.yaml#/CategoryTargetsResponse'
     CreateTargetRequest:
       $ref: './schemas/Category.yaml#/CreateTargetRequest'
     UpdateTargetRequest:
       $ref: './schemas/Category.yaml#/UpdateTargetRequest'
 
-    AccountRef:
-      $ref: './schemas/Transaction.yaml#/AccountRef'
-    CategoryRef:
-      $ref: './schemas/Transaction.yaml#/CategoryRef'
-    VendorRef:
-      $ref: './schemas/Transaction.yaml#/VendorRef'
-    TransactionBase:
-      $ref: './schemas/Transaction.yaml#/TransactionBase'
-    RegularTransactionResponse:
-      $ref: './schemas/Transaction.yaml#/RegularTransactionResponse'
-    TransferTransactionResponse:
-      $ref: './schemas/Transaction.yaml#/TransferTransactionResponse'
-    TransactionResponse:
-      $ref: './schemas/Transaction.yaml#/TransactionResponse'
-    TransactionListResponse:
-      $ref: './schemas/Transaction.yaml#/TransactionListResponse'
     CreateTransactionRequest:
       $ref: './schemas/Transaction.yaml#/CreateTransactionRequest'
     UpdateTransactionRequest:
       $ref: './schemas/Transaction.yaml#/UpdateTransactionRequest'
-    HasTransactionsResponse:
-      $ref: './schemas/Transaction.yaml#/HasTransactionsResponse'
 
     UserResponse:
       $ref: './schemas/Auth.yaml#/UserResponse'
@@ -262,26 +184,6 @@ components:
       $ref: './schemas/Settings.yaml#/ResetStructureRequest'
 
     # Overlay
-    InclusionMode:
-      $ref: './schemas/Overlay.yaml#/InclusionMode'
-    OverlayCategoryCap:
-      $ref: './schemas/Overlay.yaml#/OverlayCategoryCap'
-    OverlayRules:
-      $ref: './schemas/Overlay.yaml#/OverlayRules'
-    OverlayResponse:
-      $ref: './schemas/Overlay.yaml#/OverlayResponse'
-    OverlayListResponse:
-      $ref: './schemas/Overlay.yaml#/OverlayListResponse'
-    CreateOverlayRequest:
-      $ref: './schemas/Overlay.yaml#/CreateOverlayRequest'
-    UpdateOverlayRequest:
-      $ref: './schemas/Overlay.yaml#/UpdateOverlayRequest'
-    OverlayTransactionMembership:
-      $ref: './schemas/Overlay.yaml#/OverlayTransactionMembership'
-    OverlayTransactionResponse:
-      $ref: './schemas/Overlay.yaml#/OverlayTransactionResponse'
-    OverlayTransactionListResponse:
-      $ref: './schemas/Overlay.yaml#/OverlayTransactionListResponse'
     # Subscriptions
     SubscriptionStatus:
       $ref: './schemas/Subscription.yaml#/SubscriptionStatus'
