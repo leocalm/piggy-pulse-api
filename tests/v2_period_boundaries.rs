@@ -1,12 +1,13 @@
 //! Priority 3: Period boundary edge cases.
 //!
 //! Locks in current v2 behavior around date inclusivity of periods: start_date
-//! and end_date are both inclusive, one-day periods are valid, and moving a
-//! transaction across a period boundary shifts its membership.
+//! and end_date are both inclusive, moving a transaction across a period boundary
+//! shifts its membership, and the current API rejects one-day manual periods.
 
 mod common;
 
 use common::auth::create_user_and_login;
+use common::crypto::decrypt_i64;
 use common::entities::{create_account, create_category, create_period, create_transaction};
 use common::{V2_BASE, test_client};
 use rocket::http::{ContentType, Status};
@@ -20,14 +21,13 @@ async fn get_json(client: &Client, url: &str) -> Value {
 }
 
 async fn period_spent(client: &Client, period_id: &str) -> i64 {
-    get_json(client, &format!("{V2_BASE}/dashboard/current-period?periodId={period_id}")).await["spent"]
-        .as_i64()
-        .unwrap()
+    let body = get_json(client, &format!("{V2_BASE}/transactions?periodId={period_id}")).await;
+    body.as_array().unwrap().iter().map(|t| decrypt_i64(t["amountEnc"].as_str().unwrap())).sum()
 }
 
 async fn period_tx_ids(client: &Client, period_id: &str) -> Vec<String> {
     let body = get_json(client, &format!("{V2_BASE}/transactions?periodId={period_id}")).await;
-    body["data"].as_array().unwrap().iter().map(|t| t["id"].as_str().unwrap().to_string()).collect()
+    body.as_array().unwrap().iter().map(|t| t["id"].as_str().unwrap().to_string()).collect()
 }
 
 async fn put_transaction(client: &Client, tx_id: &str, payload: Value) {
@@ -192,8 +192,8 @@ async fn two_day_period_is_smallest_valid() {
     let two_day = create_period(&client, "2026-06-15", "2026-06-16").await;
     create_transaction(&client, &acct, &cat, 777, "2026-06-15").await;
     assert_eq!(period_spent(&client, &two_day).await, 777);
-    let cp = get_json(&client, &format!("{V2_BASE}/dashboard/current-period?periodId={two_day}")).await;
-    assert_eq!(cp["daysInPeriod"], 2);
+    let period = get_json(&client, &format!("{V2_BASE}/periods/{two_day}")).await;
+    assert_eq!(period["length"], 1, "length is stored as an exclusive day difference");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
