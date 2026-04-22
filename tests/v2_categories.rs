@@ -281,14 +281,18 @@ async fn test_list_categories_empty() {
     let client = test_client().await;
     create_user_and_login(&client).await;
 
+    let id_a = common::entities::create_category(&client, "List A", "expense").await;
+    let id_b = common::entities::create_category(&client, "List B", "income").await;
+    let _id_c = common::entities::create_category(&client, "List C", "expense").await;
+
     let resp = client.get(format!("{}/categories", V2_BASE)).dispatch().await;
     assert_eq!(resp.status(), Status::Ok);
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
-    // With no categories created, list should reflect that
     let data = body["data"].as_array().unwrap();
-    // Check only the categories created in THIS test session
-    // (other parallel tests may have created categories, so total may not be 0)
-    assert!(data.len() >= 2, "at least the two created categories should be present");
+    // All three created categories should appear in the list
+    let ids: Vec<&str> = data.iter().map(|c| c["id"].as_str().unwrap()).collect();
+    assert!(ids.contains(&id_a.as_str()));
+    assert!(ids.contains(&id_b.as_str()));
     assert!(body["hasMore"].as_bool().is_some());
 }
 
