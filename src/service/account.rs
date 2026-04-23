@@ -1,5 +1,5 @@
 use crate::crypto::Dek;
-use crate::database::postgres_repository::PostgresRepository;
+use crate::database::postgres_repository::{PostgresRepository, is_foreign_key_violation};
 use crate::dto::accounts::{
     AccountListResponse, AccountOptionListResponse, AccountOptionResponse, AccountStatus, AdjustBalanceRequest, CreateAccountRequest, EncryptedAccountResponse,
     UpdateAccountRequest, b64,
@@ -54,12 +54,12 @@ impl<'a> AccountService<'a> {
     }
 
     pub async fn create_account(&self, request: &CreateAccountRequest, user_id: &Uuid, dek: &Dek) -> Result<EncryptedAccountResponse, AppError> {
-        let account = self.repository.create_account(request, user_id, dek).await?;
+        let account = self.repository.create_account(request, user_id, dek).await.map_err(map_fk_violation)?;
         Ok(to_encrypted_response(&account))
     }
 
     pub async fn update_account(&self, id: &Uuid, request: &UpdateAccountRequest, user_id: &Uuid, dek: &Dek) -> Result<EncryptedAccountResponse, AppError> {
-        let account = self.repository.update_account(id, request, user_id, dek).await?;
+        let account = self.repository.update_account(id, request, user_id, dek).await.map_err(map_fk_violation)?;
         Ok(to_encrypted_response(&account))
     }
 
@@ -79,6 +79,15 @@ impl<'a> AccountService<'a> {
         let account = self.repository.adjust_balance(id, request.new_balance, user_id, dek).await?;
         Ok(to_encrypted_response(&account))
     }
+}
+
+fn map_fk_violation(err: AppError) -> AppError {
+    if let AppError::Db { ref source, .. } = err
+        && is_foreign_key_violation(source)
+    {
+        return AppError::BadRequest("Referenced currency not found".to_string());
+    }
+    err
 }
 
 fn to_encrypted_response(account: &Account) -> EncryptedAccountResponse {

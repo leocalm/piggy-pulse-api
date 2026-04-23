@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 use uuid::Uuid;
 
 use crate::crypto::Dek;
-use crate::database::postgres_repository::PostgresRepository;
+use crate::database::postgres_repository::{PostgresRepository, is_foreign_key_violation};
 use crate::dto::subscriptions::{CreateSubscriptionRequest, EncryptedSubscriptionResponse, SubscriptionListResponse, UpdateSubscriptionRequest};
 use crate::error::app_error::AppError;
 
@@ -20,11 +20,11 @@ impl<'a> SubscriptionService<'a> {
     }
 
     pub async fn create(&self, req: &CreateSubscriptionRequest, user_id: &Uuid, dek: &Dek) -> Result<EncryptedSubscriptionResponse, AppError> {
-        self.repository.create_subscription(req, user_id, dek).await
+        self.repository.create_subscription(req, user_id, dek).await.map_err(map_fk_violation)
     }
 
     pub async fn update(&self, id: &Uuid, req: &UpdateSubscriptionRequest, user_id: &Uuid, dek: &Dek) -> Result<EncryptedSubscriptionResponse, AppError> {
-        self.repository.update_subscription(id, req, user_id, dek).await
+        self.repository.update_subscription(id, req, user_id, dek).await.map_err(map_fk_violation)
     }
 
     pub async fn delete(&self, id: &Uuid, user_id: &Uuid) -> Result<(), AppError> {
@@ -34,4 +34,13 @@ impl<'a> SubscriptionService<'a> {
     pub async fn cancel(&self, id: &Uuid, user_id: &Uuid, cancellation_date: Option<&NaiveDate>) -> Result<EncryptedSubscriptionResponse, AppError> {
         self.repository.cancel_subscription(id, user_id, cancellation_date).await
     }
+}
+
+fn map_fk_violation(err: AppError) -> AppError {
+    if let AppError::Db { ref source, .. } = err
+        && is_foreign_key_violation(source)
+    {
+        return AppError::BadRequest("Referenced category or vendor not found".to_string());
+    }
+    err
 }
