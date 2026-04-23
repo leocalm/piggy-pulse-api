@@ -801,6 +801,36 @@ async fn test_options_no_auth() {
     assert_eq!(resp.status(), Status::Unauthorized);
 }
 
+// Regression: POST /accounts with paymentDueDay way above SMALLINT
+// range must return 400 (not 500). Surfaced by schemathesis.
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_create_account_numeric_overflow_returns_400() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+    let eur_id = common::auth::get_eur_currency_id(&client).await;
+
+    let payload = json!({
+        "accountType": "creditcard",
+        "name": "Overflow",
+        "color": "#ff0000",
+        "currencyId": eur_id,
+        "initialBalance": 0,
+        "paymentDueDay": 536870911i64,
+    });
+
+    let resp = client
+        .post(format!("{}/accounts", V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+
+    let status = resp.status();
+    let body = resp.into_string().await.unwrap_or_default();
+    assert_ne!(status, Status::InternalServerError, "got 500: {}", body);
+}
+
 // Regression: PUT /accounts/{id} must return 400 (not 500) when the
 // caller sends a different accountType (immutable per the Postgres
 // trigger reject_account_type_change) and/or an unknown currencyId
