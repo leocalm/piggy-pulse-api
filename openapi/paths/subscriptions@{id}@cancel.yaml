@@ -24,5 +24,7 @@ post:
       $ref: '../responses/Unauthorized.yaml'
     '404':
       $ref: '../responses/NotFound.yaml'
+    '422':
+      $ref: '../responses/UnprocessableEntity.yaml'
     '500':
       $ref: '../responses/InternalServerError.yaml'
