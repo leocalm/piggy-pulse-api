@@ -800,3 +800,64 @@ async fn test_options_no_auth() {
 
     assert_eq!(resp.status(), Status::Unauthorized);
 }
+
+// Regression: PUT /accounts/{id} must return 400 (not 500) when the
+// caller sends a different accountType (immutable per the Postgres
+// trigger reject_account_type_change) and/or an unknown currencyId
+// (FK violation on currencies). Surfaced by schemathesis on the
+// encryption-at-rest PR (#313).
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_update_account_bad_currency_returns_400() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+    let eur_id = common::auth::get_eur_currency_id(&client).await;
+
+    // Create a real account so the WHERE clause matches on UPDATE.
+    let create_payload = json!({
+        "accountType": "checking",
+        "name": "Seed Checking",
+        "color": "#ff9800",
+        "currencyId": eur_id,
+        "initialBalance": 100000,
+    });
+    let create_resp = client
+        .post(format!("{}/accounts", V2_BASE))
+        .header(ContentType::JSON)
+        .body(create_payload.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(create_resp.status(), Status::Created);
+    let created: Value = serde_json::from_str(&create_resp.into_string().await.unwrap()).unwrap();
+    let account_id = created["id"].as_str().unwrap().to_string();
+
+    // Now replay the schemathesis payload: target the existing account but
+    // swap currencyId to a random UUID so the FK fails.
+    let random_currency = Uuid::new_v4();
+    let payload = json!({
+        "accountType": "allowance",
+        "name": "",
+        "color": "",
+        "currencyId": random_currency,
+        "initialBalance": 0,
+        "spendLimit": 0,
+        "nextTransferAmount": 0,
+        "topUpAmount": 0,
+        "topUpCycle": "weekly",
+        "topUpDay": 0,
+        "statementCloseDay": 0,
+        "paymentDueDay": 0
+    });
+
+    let resp = client
+        .put(format!("{}/accounts/{}", V2_BASE, account_id))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+
+    let status = resp.status();
+    let body = resp.into_string().await.unwrap_or_default();
+    eprintln!("STATUS={} BODY={}", status, body);
+    assert_ne!(status, Status::InternalServerError, "got 500: {}", body);
+}

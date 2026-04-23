@@ -116,21 +116,26 @@ ORDER BY id
         let next_transfer_amount_enc = request.next_transfer_amount.map(|v| dek.encrypt_i64(v)).transpose()?;
         let top_up_amount_enc = request.top_up_amount.map(|v| dek.encrypt_i64(v)).transpose()?;
 
+        // account_type is intentionally omitted: the Postgres trigger
+        // reject_account_type_change (migration 20260327000004) makes
+        // it immutable. The DTO still carries the field because it is
+        // shared with CreateAccountRequest; including it in the UPDATE
+        // would raise P0001 and surface as a 500. Silently ignoring it
+        // matches the immutability contract.
         let account: Account = sqlx::query_as(
             r#"
 UPDATE account
-SET account_type = $1::text::account_type,
-    currency_id = $2,
-    name_enc = $3,
-    color_enc = $4,
-    spend_limit_enc = $5,
-    next_transfer_amount_enc = $6,
-    top_up_amount_enc = $7,
-    top_up_cycle = $8,
-    top_up_day = $9,
-    statement_close_day = $10,
-    payment_due_day = $11
-WHERE id = $12 AND user_id = $13
+SET currency_id = $1,
+    name_enc = $2,
+    color_enc = $3,
+    spend_limit_enc = $4,
+    next_transfer_amount_enc = $5,
+    top_up_amount_enc = $6,
+    top_up_cycle = $7,
+    top_up_day = $8,
+    statement_close_day = $9,
+    payment_due_day = $10
+WHERE id = $11 AND user_id = $12
 RETURNING
     id, account_type::text AS account_type, currency_id, is_archived,
     name_enc, color_enc, current_balance_enc,
@@ -138,7 +143,6 @@ RETURNING
     top_up_cycle, top_up_day, statement_close_day, payment_due_day
 "#,
         )
-        .bind(account_type_to_db(request.account_type.into()))
         .bind(request.currency_id)
         .bind(&name_enc)
         .bind(&color_enc)
