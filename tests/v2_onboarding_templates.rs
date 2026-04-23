@@ -7,6 +7,7 @@ use serde_json::Value;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /onboarding/category-templates
+// Template definitions are plaintext (not stored in DB).
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[rocket::async_test]
@@ -73,6 +74,7 @@ async fn test_list_category_templates_unauthenticated_returns_401() {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // POST /onboarding/apply-template
+// Returns Vec<EncryptedCategoryResponse> — fields are encrypted.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[rocket::async_test]
@@ -96,13 +98,13 @@ async fn test_apply_essential_template() {
     let categories = body.as_array().expect("response is array");
     assert_eq!(categories.len(), 5);
 
-    // Each returned category should have the standard fields
+    // Each returned category should have encrypted fields
     for cat in categories {
         assert!(cat["id"].is_string());
-        assert!(cat["name"].is_string());
+        assert!(!cat["nameEnc"].is_null(), "nameEnc should be present");
+        assert!(!cat["iconEnc"].is_null(), "iconEnc should be present");
         assert!(cat["type"].is_string());
-        assert!(cat["icon"].is_string());
-        assert!(cat["color"].is_string());
+        assert!(cat["status"].is_string());
     }
 }
 
@@ -177,12 +179,11 @@ async fn test_apply_template_creates_categories_visible_in_list() {
         .await;
     assert_eq!(apply_resp.status(), Status::Created);
 
-    // List categories — essential template creates 5 (plus the system Transfer category)
-    let list_resp = client.get(format!("{}/categories?limit=50", V2_BASE)).dispatch().await;
+    // List categories — essential template creates 5
+    let list_resp = client.get(format!("{}/categories", V2_BASE)).dispatch().await;
     assert_eq!(list_resp.status(), Status::Ok);
     let list_body: Value = serde_json::from_str(&list_resp.into_string().await.unwrap()).unwrap();
     let total = list_body["totalCount"].as_i64().unwrap_or(0);
-    // At minimum 5 categories were created (there may also be a system Transfer)
     assert!(total >= 5);
 }
 
@@ -192,7 +193,6 @@ async fn test_apply_template_missing_template_id_returns_error() {
     let client = test_client().await;
     create_user_and_login(&client).await;
 
-    // Send a JSON body that is missing the required templateId field
     let payload = serde_json::json!({});
 
     let resp = client
@@ -211,7 +211,9 @@ async fn test_apply_template_missing_template_id_returns_error() {
 
 #[rocket::async_test]
 #[ignore = "requires database"]
-async fn test_apply_template_twice_returns_400() {
+async fn test_apply_template_twice_returns_conflict() {
+    // Applying the same template twice creates duplicate category names.
+    // The API returns 409 Conflict (name uniqueness constraint).
     let client = test_client().await;
     create_user_and_login(&client).await;
 
@@ -226,12 +228,12 @@ async fn test_apply_template_twice_returns_400() {
         .await;
     assert_eq!(first.status(), Status::Created);
 
-    // Second apply — should fail because category names already exist
+    // Second apply — name uniqueness conflict → 409
     let second = client
         .post(format!("{}/onboarding/apply-template", V2_BASE))
         .header(ContentType::JSON)
         .body(payload.to_string())
         .dispatch()
         .await;
-    assert_eq!(second.status(), Status::BadRequest, "duplicate apply should return 400");
+    assert_eq!(second.status(), Status::Conflict, "duplicate template apply should return 409");
 }

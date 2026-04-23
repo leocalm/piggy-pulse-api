@@ -50,15 +50,24 @@ pub struct AuthenticatedResponse {
     /// One-time backup codes, only present after 2FA setup confirmation.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub backup_codes: Option<Vec<String>>,
+    /// Wrapped DEK for encryption-at-rest. Client should unwrap and POST to /v2/auth/unlock.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wrapped_dek: Option<String>,
+    /// DEK wrap parameters for client-side KEK derivation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dek_wrap_params: Option<serde_json::Value>,
 }
 
 impl AuthenticatedResponse {
+    #[allow(dead_code)]
     pub fn new(user: UserResponse, token: Option<String>) -> Self {
         Self {
             requires_two_factor: false,
             user,
             token,
             backup_codes: None,
+            wrapped_dek: None,
+            dek_wrap_params: None,
         }
     }
 
@@ -68,6 +77,19 @@ impl AuthenticatedResponse {
             user,
             token: None,
             backup_codes: Some(backup_codes),
+            wrapped_dek: None,
+            dek_wrap_params: None,
+        }
+    }
+
+    pub fn with_dek(user: UserResponse, token: Option<String>, wrapped_dek: Option<String>, dek_wrap_params: Option<serde_json::Value>) -> Self {
+        Self {
+            requires_two_factor: false,
+            user,
+            token,
+            backup_codes: None,
+            wrapped_dek,
+            dek_wrap_params,
         }
     }
 }
@@ -93,6 +115,24 @@ pub struct RegisterRequest {
     pub password: String,
     #[validate(length(min = 1))]
     pub name: String,
+    pub wrapped_dek: Option<String>,
+    pub dek_wrap_params: Option<serde_json::Value>,
+}
+
+// ===== Wrapped DEK =====
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WrappedDekResponse {
+    pub wrapped_dek: Option<String>,
+    pub dek_wrap_params: Option<serde_json::Value>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateWrappedDekRequest {
+    pub wrapped_dek: String,
+    pub dek_wrap_params: serde_json::Value,
 }
 
 // ===== 2FA Complete (after challenge) =====

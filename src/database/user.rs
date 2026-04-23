@@ -19,13 +19,20 @@ static DUMMY_HASH: LazyLock<String> = LazyLock::new(|| {
 });
 
 impl PostgresRepository {
-    pub async fn create_user(&self, name: &str, email: &str, password: &str) -> Result<User, AppError> {
+    pub async fn create_user(
+        &self,
+        name: &str,
+        email: &str,
+        password: &str,
+        wrapped_dek: Option<&[u8]>,
+        dek_wrap_params: Option<&serde_json::Value>,
+    ) -> Result<User, AppError> {
         let (salt, password_hash) = password_hash(password);
 
         let user = sqlx::query_as::<_, User>(
             r#"
-            INSERT INTO users (name, email, salt, password_hash)
-            VALUES($1, $2, $3, $4)
+            INSERT INTO users (name, email, salt, password_hash, wrapped_dek, dek_wrap_params)
+            VALUES($1, $2, $3, $4, $5, $6)
             RETURNING id, name, email, password_hash
             "#,
         )
@@ -33,10 +40,30 @@ impl PostgresRepository {
         .bind(email)
         .bind(&salt)
         .bind(&password_hash)
+        .bind(wrapped_dek)
+        .bind(dek_wrap_params)
         .fetch_one(&self.pool)
         .await?;
 
         Ok(user)
+    }
+
+    pub async fn get_wrapped_dek(&self, user_id: &Uuid) -> Result<(Option<Vec<u8>>, Option<serde_json::Value>), AppError> {
+        let row: (Option<Vec<u8>>, Option<serde_json::Value>) = sqlx::query_as("SELECT wrapped_dek, dek_wrap_params FROM users WHERE id = $1")
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(row)
+    }
+
+    pub async fn update_wrapped_dek(&self, user_id: &Uuid, wrapped_dek: &[u8], dek_wrap_params: &serde_json::Value) -> Result<(), AppError> {
+        sqlx::query("UPDATE users SET wrapped_dek = $1, dek_wrap_params = $2 WHERE id = $3")
+            .bind(wrapped_dek)
+            .bind(dek_wrap_params)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 
     pub async fn get_user_by_email(&self, email: &str) -> Result<Option<User>, AppError> {

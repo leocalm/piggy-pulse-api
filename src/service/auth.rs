@@ -182,8 +182,18 @@ impl<'a> AuthService<'a> {
     // ─── V2 methods ─────────────────────────────────────────────────────────
 
     /// Register a new user, create default resources, and start a session.
-    pub async fn register(&self, email: &str, password: &str, name: &str, user_agent: Option<&str>, client_ip: Option<&str>) -> Result<(User, Uuid), AppError> {
-        let user = self.repo.create_user(name, email, password).await.map_err(|e| {
+    #[allow(clippy::too_many_arguments)]
+    pub async fn register(
+        &self,
+        email: &str,
+        password: &str,
+        name: &str,
+        user_agent: Option<&str>,
+        client_ip: Option<&str>,
+        wrapped_dek: Option<&[u8]>,
+        dek_wrap_params: Option<&serde_json::Value>,
+    ) -> Result<(User, Uuid), AppError> {
+        let user = self.repo.create_user(name, email, password, wrapped_dek, dek_wrap_params).await.map_err(|e| {
             if let AppError::Db { ref source, .. } = e
                 && is_unique_violation(source)
             {
@@ -197,10 +207,9 @@ impl<'a> AuthService<'a> {
             tracing::warn!("Failed to create default settings for user {}: {}", user.id, e);
         }
 
-        // Best-effort: create system transfer category
-        if let Err(e) = self.repo.create_system_transfer_category(&user.id).await {
-            tracing::warn!("Failed to create system transfer category for user {}: {}", user.id, e);
-        }
+        // The system transfer category is created on-demand during
+        // onboarding once the user has unlocked (we need their DEK to
+        // encrypt the category name). Signup runs without a DEK.
 
         // Best-effort: send welcome email
         let email_service = crate::service::email::EmailService::new(self.config.email.clone());

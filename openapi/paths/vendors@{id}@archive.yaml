@@ -6,12 +6,8 @@ post:
   parameters:
     - $ref: '../parameters/Id.yaml'
   responses:
-    '200':
+    '204':
       description: Vendor archived
-      content:
-        application/json:
-          schema:
-            $ref: '../schemas/Vendor.yaml#/VendorResponse'
     '400':
       $ref: '../responses/BadRequest.yaml'
     '401':

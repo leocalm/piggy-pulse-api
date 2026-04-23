@@ -1,8 +1,22 @@
+#![allow(dead_code)]
 use crate::database::postgres_repository::PostgresRepository;
 use crate::dto::settings::{ColorTheme, DashboardLayout, DateFormat, NumberFormat, Theme};
 use crate::error::app_error::AppError;
 use crate::models::settings::Settings;
 use uuid::Uuid;
+
+#[derive(sqlx::FromRow)]
+pub struct ExportTransactionRow {
+    pub date: String,
+    pub description: String,
+    pub amount: i64,
+    pub currency: String,
+    pub category: String,
+    pub tx_type: String,
+    pub from_account: String,
+    pub to_account: String,
+    pub vendor: String,
+}
 
 // ── V2 helper types ──────────────────────────────────────────────────────────
 
@@ -22,19 +36,6 @@ struct PreferencesV2Row {
     compact_mode: bool,
     dashboard_layout: serde_json::Value,
     color_theme: String,
-}
-
-#[derive(sqlx::FromRow)]
-pub struct ExportTransactionRow {
-    pub date: String,
-    pub description: String,
-    pub amount: i64,
-    pub currency: String,
-    pub category: String,
-    pub tx_type: String,
-    pub from_account: String,
-    pub to_account: String,
-    pub vendor: String,
 }
 
 fn parse_theme(s: &str) -> Theme {
@@ -172,11 +173,11 @@ impl PostgresRepository {
         user_id: &Uuid,
         name: &str,
         currency_code: &str,
-        avatar: &str,
+        avatar: Option<&str>,
     ) -> Result<crate::dto::settings::ProfileResponse, AppError> {
         let mut tx = self.pool.begin().await?;
 
-        sqlx::query("UPDATE users SET name = $1, avatar = $2 WHERE id = $3")
+        sqlx::query("UPDATE users SET name = $1, avatar = COALESCE($2, avatar) WHERE id = $3")
             .bind(name)
             .bind(avatar)
             .bind(user_id)
@@ -272,8 +273,12 @@ impl PostgresRepository {
         self.get_preferences_v2(user_id).await
     }
 
-    // ── V2 Export ─────────────────────────────────────────────────────────────
-
+    // ── V2 Export (retired) ───────────────────────────────────────────────────
+    //
+    // Export and import are retired under encryption-at-rest. The
+    // server no longer has plaintext access to transaction amounts,
+    // descriptions, or entity names, so it cannot produce a CSV or
+    // JSON dump. The client exports from its own decrypted view.
     pub async fn export_transactions_v2(&self, user_id: &Uuid) -> Result<Vec<ExportTransactionRow>, AppError> {
         let rows = sqlx::query_as::<_, ExportTransactionRow>(
             r#"
@@ -547,7 +552,7 @@ impl PostgresRepository {
     // ── V2 Reset Structure ───────────────────────────────────────────────────
 
     /// V2 reset: also deletes vendors (unlike V1)
-    pub async fn reset_structure_v2(&self, user_id: &Uuid) -> Result<(), AppError> {
+    pub async fn reset_structure_v2(&self, user_id: &Uuid, dek: &crate::crypto::Dek) -> Result<(), AppError> {
         let mut tx = self.pool.begin().await?;
 
         // Bulk reset legitimately cascade-deletes transactions via the
@@ -571,14 +576,21 @@ impl PostgresRepository {
 
         sqlx::query("DELETE FROM vendor WHERE user_id = $1").bind(user_id).execute(&mut *tx).await?;
 
-        // Re-create the system Transfer category
+        // Encrypt the system category fields before storing.
+        let name_enc = dek.encrypt_string("Transfer").map_err(AppError::from)?;
+        let color_enc = dek.encrypt_string("#868E96").map_err(AppError::from)?;
+        let icon_enc = dek.encrypt_string("↔").map_err(AppError::from)?;
+
         sqlx::query(
             r#"
-            INSERT INTO category (user_id, name, color, icon, category_type, is_system)
-            VALUES ($1, 'Transfer', '#868E96', '↔', 'Transfer'::category_type, TRUE)
+            INSERT INTO category (user_id, name_enc, color_enc, icon_enc, category_type, is_system)
+            VALUES ($1, $2, $3, $4, 'Transfer'::category_type, TRUE)
             "#,
         )
         .bind(user_id)
+        .bind(&name_enc)
+        .bind(&color_enc)
+        .bind(&icon_enc)
         .execute(&mut *tx)
         .await?;
 

@@ -5,8 +5,9 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::auth::CurrentUser;
+use crate::crypto::Dek;
 use crate::database::postgres_repository::PostgresRepository;
-use crate::dto::transactions::{TransactionResponse, UpdateTransactionRequest};
+use crate::dto::transactions::{EncryptedTransactionResponse, UpdateTransactionRequest};
 use crate::error::app_error::AppError;
 use crate::service::transaction::TransactionService;
 
@@ -14,13 +15,13 @@ use crate::service::transaction::TransactionService;
 pub async fn update_transaction(
     pool: &State<PgPool>,
     user: CurrentUser,
+    dek: Dek,
     id: &str,
     payload: Json<UpdateTransactionRequest>,
-) -> Result<Json<TransactionResponse>, AppError> {
+) -> Result<Json<EncryptedTransactionResponse>, AppError> {
     let tx_id = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid transaction id", e))?;
-
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let service = TransactionService::new(&repo);
-    let response = service.update_transaction(&tx_id, &payload, &user.id).await?;
+    let response = service.update_transaction(&tx_id, &payload, &user.id, &dek).await?;
     Ok(Json(response))
 }

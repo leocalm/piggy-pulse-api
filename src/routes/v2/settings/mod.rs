@@ -1,7 +1,4 @@
 mod account;
-mod export_data;
-mod export_transactions;
-mod import_data;
 mod preferences;
 mod profile;
 mod reset_structure;
@@ -20,13 +17,5 @@ pub fn routes() -> Vec<rocket::Route> {
 }
 
 pub fn session_routes() -> Vec<rocket::Route> {
-    rocket::routes![sessions::list_sessions, session_revoke::revoke_session,]
-}
-
-pub fn export_routes() -> Vec<rocket::Route> {
-    rocket::routes![export_data::export_data, export_transactions::export_transactions,]
-}
-
-pub fn import_routes() -> Vec<rocket::Route> {
-    rocket::routes![import_data::import_data,]
+    rocket::routes![sessions::list_sessions, session_revoke::revoke_session]
 }

@@ -4,7 +4,6 @@ pub mod audit;
 pub mod budget_period;
 pub mod category;
 pub mod currency;
-pub mod overlay;
 pub mod pagination;
 pub mod password_reset;
 pub mod rate_limit;

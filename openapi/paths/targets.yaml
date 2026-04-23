@@ -12,7 +12,7 @@ get:
       content:
         application/json:
           schema:
-            $ref: '../schemas/Category.yaml#/CategoryTargetsResponse'
+            $ref: '../schemas/Category.yaml#/TargetListResponse'
     '400':
       $ref: '../responses/BadRequest.yaml'
     '401':
@@ -40,7 +40,7 @@ post:
       content:
         application/json:
           schema:
-            $ref: '../schemas/Category.yaml#/TargetItem'
+            $ref: '../schemas/Category.yaml#/EncryptedTargetResponse'
     '400':
       $ref: '../responses/BadRequest.yaml'
     '422':

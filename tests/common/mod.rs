@@ -3,6 +3,8 @@ pub mod assertions;
 #[allow(dead_code)]
 pub mod auth;
 #[allow(dead_code)]
+pub mod crypto;
+#[allow(dead_code)]
 pub mod entities;
 
 use piggy_pulse::{Config, build_rocket};

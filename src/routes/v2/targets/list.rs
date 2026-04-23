@@ -2,28 +2,16 @@ use rocket::State;
 use rocket::get;
 use rocket::serde::json::Json;
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use crate::auth::CurrentUser;
 use crate::database::postgres_repository::PostgresRepository;
-use crate::dto::categories::CategoryTargetsResponse;
+use crate::dto::categories::TargetListResponse;
 use crate::error::app_error::AppError;
 use crate::service::category::CategoryService;
 
-#[get("/?<periodId>")]
-pub async fn list_targets(
-    pool: &State<PgPool>,
-    user: CurrentUser,
-    #[allow(non_snake_case)] periodId: Option<String>,
-) -> Result<Json<CategoryTargetsResponse>, AppError> {
-    let period_uuid = match periodId {
-        Some(ref s) if !s.is_empty() && s != "null" => Uuid::parse_str(s).map_err(|e| AppError::uuid("Invalid periodId", e))?,
-        _ => return Err(AppError::BadRequest("periodId is required".to_string())),
-    };
-
+#[get("/")]
+pub async fn list_targets(pool: &State<PgPool>, user: CurrentUser) -> Result<Json<TargetListResponse>, AppError> {
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let service = CategoryService::new(&repo);
-
-    let response = service.list_targets(&period_uuid, &user.id).await?;
-    Ok(Json(response))
+    Ok(Json(service.list_targets(&user.id).await?))
 }

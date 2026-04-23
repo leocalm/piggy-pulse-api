@@ -1,6 +1,7 @@
 mod auth;
 mod config;
 mod cron_tasks;
+pub mod crypto;
 mod database;
 mod db;
 mod dto;
@@ -9,9 +10,7 @@ mod middleware;
 mod models;
 mod routes;
 mod service;
-
-#[cfg(test)]
-pub mod test_utils;
+pub mod session_dek;
 
 pub use config::Config;
 pub use cron_tasks::{GeneratePeriodsResult, cleanup_expired_tokens, generate_periods};
@@ -197,17 +196,13 @@ fn mount_v2_routes(mut rocket: Rocket<Build>, base_path: &str) -> Rocket<Build> 
     rocket = rocket.mount(join_base_path(base_path, "accounts"), app_routes::v2::accounts::routes());
     rocket = rocket.mount(join_base_path(base_path, "categories"), app_routes::v2::categories::routes());
     rocket = rocket.mount(join_base_path(base_path, "vendors"), app_routes::v2::vendors::routes());
-    rocket = rocket.mount(join_base_path(base_path, "overlays"), app_routes::v2::overlays::routes());
     rocket = rocket.mount(join_base_path(base_path, "periods"), app_routes::v2::periods::routes());
     rocket = rocket.mount(join_base_path(base_path, "targets"), app_routes::v2::targets::routes());
     rocket = rocket.mount(join_base_path(base_path, "transactions"), app_routes::v2::transactions::routes());
     // Settings (multiple route groups)
     rocket = rocket.mount(join_base_path(base_path, "settings"), app_routes::v2::settings::routes());
     rocket = rocket.mount(join_base_path(base_path, "settings/sessions"), app_routes::v2::settings::session_routes());
-    rocket = rocket.mount(join_base_path(base_path, "settings/export"), app_routes::v2::settings::export_routes());
-    rocket = rocket.mount(join_base_path(base_path, "settings/import"), app_routes::v2::settings::import_routes());
     // Dashboard, reference data, system
-    rocket = rocket.mount(join_base_path(base_path, "dashboard"), app_routes::v2::dashboard::routes());
     rocket = rocket.mount(join_base_path(base_path, "subscriptions"), app_routes::v2::subscriptions::routes());
     rocket = rocket.mount(join_base_path(base_path, "currencies"), app_routes::v2::currencies::routes());
     rocket = rocket.mount(join_base_path(base_path, "onboarding"), app_routes::v2::onboarding::routes());
@@ -231,6 +226,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
 
     let mut rocket = rocket::build()
         .manage(config.clone())
+        .manage(session_dek::SessionDekStore::new())
         .attach(cors)
         .attach(RequestLogger)
         .attach(stage_db(config.database, config.logging.slow_query_ms));

@@ -8,4 +8,7 @@ ignore = [
   # and proptest (0.9.2). No fix available upstream; impact requires a custom rand logger,
   # which this codebase does not install.
   "RUSTSEC-2026-0097",
+
+  # Used by lettre, no fix available yet
+  "RUSTSEC-2026-0104",
 ]

@@ -1,21 +1,15 @@
 use std::sync::LazyLock;
 
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as B64;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::{Validate, ValidationError};
 
-use crate::dto::common::{Date, PaginatedResponse};
+use crate::dto::common::PaginatedResponse;
 
 static EMOJI_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    // Matches a single emoji sequence: an Emoji_Presentation char optionally followed by
-    // a skin-tone modifier or variation selector, and zero or more ZWJ-joined pairs.
-    //
-    // Known limitations (acceptable for decorative category icons):
-    // - Regional indicator flag sequences (e.g. 🇺🇸 = \p{Regional_Indicator}{2}) are not matched
-    //   because each Regional_Indicator character lacks the Emoji_Presentation property on its own.
-    // - Keycap sequences that start with an ASCII digit or symbol (e.g. 1️⃣ = [0-9#*]\uFE0F\u20E3)
-    //   are not matched because their first character is plain ASCII, not Emoji_Presentation.
     Regex::new(r"^\p{Emoji_Presentation}(\p{Emoji_Modifier}|\u{FE0F}|\u{20E3})?(\u{200D}\p{Emoji_Presentation}(\p{Emoji_Modifier}|\u{FE0F})?)*$").unwrap()
 });
 
@@ -24,6 +18,10 @@ fn validate_emoji(value: &str) -> Result<(), ValidationError> {
         return Err(ValidationError::new("icon_must_be_emoji"));
     }
     Ok(())
+}
+
+fn b64(bytes: &[u8]) -> String {
+    B64.encode(bytes)
 }
 
 // ===== Enums =====
@@ -51,311 +49,81 @@ pub enum CategoryStatus {
     Inactive,
 }
 
-#[derive(Serialize, Debug, Copy, Clone, Eq, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum TargetStatus {
-    Active,
-    Excluded,
-}
-
-// ===== Color computation =====
-
-pub fn compute_color(category_type: crate::models::category::CategoryType, behavior: Option<crate::models::category::CategoryBehavior>) -> String {
-    use crate::models::category::CategoryBehavior as V1B;
-    use crate::models::category::CategoryType as V1T;
-
-    match category_type {
-        V1T::Transfer => "#868E96".to_string(),
-        V1T::Incoming => match behavior {
-            None | Some(V1B::Variable) => "#9AA0CC".to_string(),
-            Some(V1B::Fixed) => "#7CA8C4".to_string(),
-            Some(V1B::Subscription) => "#8B7EC8".to_string(),
-        },
-        V1T::Outgoing => match behavior {
-            None | Some(V1B::Variable) => "#D4A0B6".to_string(),
-            Some(V1B::Fixed) => "#C48BA0".to_string(),
-            Some(V1B::Subscription) => "#B088A0".to_string(),
-        },
-    }
-}
-
-// ===== CategoryBase =====
+// ===== Encrypted response =====
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct CategoryBase {
+pub struct EncryptedCategoryResponse {
     pub id: Uuid,
-    pub name: String,
     #[serde(rename = "type")]
     pub category_type: CategoryType,
-    pub icon: String,
-    pub color: String,
     pub behavior: Option<CategoryBehavior>,
     pub parent_id: Option<Uuid>,
+    pub is_system: bool,
     pub status: CategoryStatus,
+    pub name_enc: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color_enc: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon_enc: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description_enc: Option<String>,
 }
 
-// ===== CategoryResponse =====
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct CategoryResponse {
-    #[serde(flatten)]
-    pub base: CategoryBase,
-    pub description: Option<String>,
-    pub target: Option<i64>,
-    pub auto_computed_target: bool,
-}
-
-// ===== CategoryManagementListItem / Response =====
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct CategoryManagementListItem {
-    #[serde(flatten)]
-    pub base: CategoryBase,
-    pub description: Option<String>,
-    pub number_of_transactions: i64,
-}
-
-pub type CategoryManagementListResponse = PaginatedResponse<CategoryManagementListItem>;
-
-// ===== CategorySummaryItem =====
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct CategorySummaryItem {
-    #[serde(flatten)]
-    pub base: CategoryBase,
-    pub actual: i64,
-    pub projected: i64,
-    pub budgeted: Option<i64>,
-    pub variance: i64,
-}
-
-// ===== CategoryOverview =====
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct CategoryOverviewSummary {
-    pub period_name: String,
-    pub period_elapsed_percent: i64,
-    pub total_spent: i64,
-    pub total_budgeted: Option<i64>,
-    pub total_budgeted_incoming: Option<i64>,
-    pub variance: i64,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct CategoryOverviewResponse {
-    pub summary: CategoryOverviewSummary,
-    pub categories: Vec<CategorySummaryItem>,
-}
-
-// ===== CategoryDetailResponse =====
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct CategoryTransactionItem {
-    pub id: Uuid,
-    pub date: Date,
-    pub amount: i64,
-    pub description: String,
-    pub vendor_id: Option<Uuid>,
-    pub vendor_name: Option<String>,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct CategoryDetailResponse {
-    #[serde(flatten)]
-    pub base: CategoryResponse,
-    pub period_spend: i64,
-    pub transaction_count: i64,
-    pub budgeted: Option<i64>,
-    pub trend: Vec<CategoryTrendItem>,
-    pub recent_transactions: Vec<CategoryTransactionItem>,
-}
-
-// ===== CategoryTrendItem / Response =====
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct CategoryTrendItem {
-    pub period_id: Uuid,
-    pub period_name: String,
-    pub total_spend: i64,
-}
-
-pub type CategoryTrendResponse = Vec<CategoryTrendItem>;
-
-// ===== CategoryOptionResponse =====
+pub type CategoryListResponse = PaginatedResponse<EncryptedCategoryResponse>;
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct CategoryOptionResponse {
     pub id: Uuid,
-    pub name: String,
-    pub icon: String,
-    pub color: String,
+    #[serde(rename = "type")]
+    pub category_type: CategoryType,
+    pub behavior: Option<CategoryBehavior>,
+    pub name_enc: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color_enc: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon_enc: Option<String>,
 }
 
 pub type CategoryOptionListResponse = Vec<CategoryOptionResponse>;
 
-// ===== Category Requests =====
+// ===== Requests =====
 
 #[derive(Deserialize, Debug, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateCategoryRequest {
-    #[validate(length(min = 3))]
+    #[validate(length(min = 1))]
     pub name: String,
     #[serde(rename = "type")]
     pub category_type: CategoryType,
+    pub behavior: Option<CategoryBehavior>,
     #[validate(custom(function = "validate_emoji"))]
     pub icon: String,
-    pub behavior: Option<CategoryBehavior>,
+    pub color: Option<String>,
     pub description: Option<String>,
     pub parent_id: Option<Uuid>,
-    #[validate(range(min = 0))]
-    pub target: Option<i64>,
 }
 
 pub type UpdateCategoryRequest = CreateCategoryRequest;
 
-// ===== Type conversion helpers =====
-
-use crate::models::category::CategoryBehavior as V1CategoryBehavior;
-use crate::models::category::CategoryType as V1CategoryType;
-
-impl CategoryType {
-    pub fn to_v1(self) -> V1CategoryType {
-        match self {
-            CategoryType::Income => V1CategoryType::Incoming,
-            CategoryType::Expense => V1CategoryType::Outgoing,
-            CategoryType::Transfer => V1CategoryType::Transfer,
-        }
-    }
-
-    pub fn from_v1(ct: V1CategoryType) -> Self {
-        match ct {
-            V1CategoryType::Incoming => CategoryType::Income,
-            V1CategoryType::Outgoing => CategoryType::Expense,
-            V1CategoryType::Transfer => CategoryType::Transfer,
-        }
-    }
-}
-
-impl CategoryBehavior {
-    pub fn to_v1(self) -> V1CategoryBehavior {
-        match self {
-            CategoryBehavior::Fixed => V1CategoryBehavior::Fixed,
-            CategoryBehavior::Variable => V1CategoryBehavior::Variable,
-            CategoryBehavior::Subscription => V1CategoryBehavior::Subscription,
-        }
-    }
-
-    pub fn from_v1(b: V1CategoryBehavior) -> Self {
-        match b {
-            V1CategoryBehavior::Fixed => CategoryBehavior::Fixed,
-            V1CategoryBehavior::Variable => CategoryBehavior::Variable,
-            V1CategoryBehavior::Subscription => CategoryBehavior::Subscription,
-        }
-    }
-}
-
-impl CategoryStatus {
-    pub fn from_archived(is_archived: bool) -> Self {
-        if is_archived { CategoryStatus::Inactive } else { CategoryStatus::Active }
-    }
-}
-
-impl CategoryBase {
-    pub fn from_model(c: &crate::models::category::Category) -> Self {
-        let color = compute_color(c.category_type, c.behavior);
-        CategoryBase {
-            id: c.id,
-            name: c.name.clone(),
-            category_type: CategoryType::from_v1(c.category_type),
-            icon: c.icon.clone(),
-            color,
-            behavior: c.behavior.map(CategoryBehavior::from_v1),
-            parent_id: c.parent_id,
-            status: CategoryStatus::from_archived(c.is_archived),
-        }
-    }
-}
-
-impl CategoryResponse {
-    pub fn from_model(c: &crate::models::category::Category) -> Self {
-        let is_subscription = c.behavior == Some(crate::models::category::CategoryBehavior::Subscription);
-        CategoryResponse {
-            base: CategoryBase::from_model(c),
-            description: c.description.clone(),
-            target: None,
-            auto_computed_target: is_subscription,
-        }
-    }
-
-    pub fn from_model_with_target(c: &crate::models::category::Category, target: Option<i64>) -> Self {
-        let is_subscription = c.behavior == Some(crate::models::category::CategoryBehavior::Subscription);
-        CategoryResponse {
-            base: CategoryBase::from_model(c),
-            description: c.description.clone(),
-            target,
-            auto_computed_target: is_subscription,
-        }
-    }
-}
-
-// ===== TargetItem =====
+// ===== Targets (budget_category) =====
+//
+// Targets are stored per-category as a single budget_category row
+// with an encrypted budgeted_value. No period scoping — the value is
+// the user's standing target, used as-is by the client to render
+// progress bars against any period.
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct TargetItem {
+pub struct EncryptedTargetResponse {
     pub id: Uuid,
-    pub name: String,
-    #[serde(rename = "type")]
-    pub category_type: CategoryType,
-    pub parent_id: Option<Uuid>,
-    pub previous_target: Option<i64>,
-    pub current_target: Option<i64>,
-    pub projected_variance: i64,
-    pub status: TargetStatus,
-    pub spent_in_period: i64,
+    pub category_id: Uuid,
+    pub is_excluded: bool,
+    pub budgeted_value_enc: String,
 }
 
-// ===== TargetSummary =====
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct CategoriesWithTargets {
-    pub with_targets: i64,
-    pub total: i64,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct TargetSummary {
-    pub period_name: String,
-    pub period_start: Date,
-    pub period_end: Option<Date>,
-    pub current_position: i64,
-    pub income_target: i64,
-    pub categories_with_targets: CategoriesWithTargets,
-    pub period_progress: i64,
-}
-
-// ===== CategoryTargetsResponse =====
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct CategoryTargetsResponse {
-    pub summary: TargetSummary,
-    pub targets: Vec<TargetItem>,
-}
-
-// ===== Target Requests =====
+pub type TargetListResponse = Vec<EncryptedTargetResponse>;
 
 #[derive(Deserialize, Debug, Validate)]
 #[serde(rename_all = "camelCase")]
@@ -370,4 +138,87 @@ pub struct CreateTargetRequest {
 pub struct UpdateTargetRequest {
     #[validate(range(min = 0))]
     pub value: i64,
+}
+
+// ===== Conversions =====
+
+use crate::models::category::{Category, CategoryBehavior as ModelBehavior, CategoryType as ModelType};
+
+impl From<ModelType> for CategoryType {
+    fn from(t: ModelType) -> Self {
+        match t {
+            ModelType::Incoming => CategoryType::Income,
+            ModelType::Outgoing => CategoryType::Expense,
+            ModelType::Transfer => CategoryType::Transfer,
+        }
+    }
+}
+
+impl From<CategoryType> for ModelType {
+    fn from(t: CategoryType) -> Self {
+        match t {
+            CategoryType::Income => ModelType::Incoming,
+            CategoryType::Expense => ModelType::Outgoing,
+            CategoryType::Transfer => ModelType::Transfer,
+        }
+    }
+}
+
+impl From<ModelBehavior> for CategoryBehavior {
+    fn from(b: ModelBehavior) -> Self {
+        match b {
+            ModelBehavior::Fixed => CategoryBehavior::Fixed,
+            ModelBehavior::Variable => CategoryBehavior::Variable,
+            ModelBehavior::Subscription => CategoryBehavior::Subscription,
+        }
+    }
+}
+
+impl From<CategoryBehavior> for ModelBehavior {
+    fn from(b: CategoryBehavior) -> Self {
+        match b {
+            CategoryBehavior::Fixed => ModelBehavior::Fixed,
+            CategoryBehavior::Variable => ModelBehavior::Variable,
+            CategoryBehavior::Subscription => ModelBehavior::Subscription,
+        }
+    }
+}
+
+pub fn to_encrypted_response(category: &Category) -> EncryptedCategoryResponse {
+    EncryptedCategoryResponse {
+        id: category.id,
+        category_type: category.category_type.into(),
+        behavior: category.behavior.map(Into::into),
+        parent_id: category.parent_id,
+        is_system: category.is_system,
+        status: if category.is_archived {
+            CategoryStatus::Inactive
+        } else {
+            CategoryStatus::Active
+        },
+        name_enc: b64(&category.name_enc),
+        color_enc: category.color_enc.as_deref().map(b64),
+        icon_enc: category.icon_enc.as_deref().map(b64),
+        description_enc: category.description_enc.as_deref().map(b64),
+    }
+}
+
+pub fn to_option_response(category: &Category) -> CategoryOptionResponse {
+    CategoryOptionResponse {
+        id: category.id,
+        category_type: category.category_type.into(),
+        behavior: category.behavior.map(Into::into),
+        name_enc: b64(&category.name_enc),
+        color_enc: category.color_enc.as_deref().map(b64),
+        icon_enc: category.icon_enc.as_deref().map(b64),
+    }
+}
+
+pub fn target_to_response(id: Uuid, category_id: Uuid, is_excluded: bool, value_enc: &[u8]) -> EncryptedTargetResponse {
+    EncryptedTargetResponse {
+        id,
+        category_id,
+        is_excluded,
+        budgeted_value_enc: b64(value_enc),
+    }
 }

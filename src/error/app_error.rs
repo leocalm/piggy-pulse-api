@@ -74,6 +74,8 @@ pub enum AppError {
 
     #[error("Conflict: {0}")]
     Conflict(String),
+    #[error("Internal server error")]
+    Internal { message: String },
 }
 
 impl AppError {
@@ -136,6 +138,21 @@ impl From<&AppError> for Status {
             AppError::AccountLocked { .. } => Status { code: 423 },
             AppError::TwoFactorTokenRequired { .. } => Status::Forbidden,
             AppError::Conflict(_) => Status::Conflict,
+            AppError::Internal { .. } => Status::InternalServerError,
+        }
+    }
+}
+
+impl AppError {
+    pub fn internal(message: impl Into<String>) -> Self {
+        Self::Internal { message: message.into() }
+    }
+}
+
+impl From<crate::crypto::CryptoError> for AppError {
+    fn from(e: crate::crypto::CryptoError) -> Self {
+        AppError::Internal {
+            message: format!("crypto: {e}"),
         }
     }
 }
@@ -253,7 +270,7 @@ impl From<sqlx::Error> for AppError {
         // 400 Bad Request rather than 500, since the input is invalid.
         if let sqlx::Error::Database(ref db_err) = e
             && let Some(code) = db_err.code()
-            && matches!(code.as_ref(), "22021" | "22P05")
+            && matches!(code.as_ref(), "22021" | "22P05" | "22003")
         {
             // 22021 = character_not_in_repertoire (e.g. null byte \u0000 in UTF-8 text)
             // 22P05 = unsupported_unicode_escape_character

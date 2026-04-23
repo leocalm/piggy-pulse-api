@@ -61,48 +61,7 @@ components:
   schemas:
     HealthResponse:
       $ref: './schemas/Health.yaml#/HealthResponse'
-    CurrentPeriod:
-      $ref: './schemas/Dashboard.yaml#/CurrentPeriod'
-    NetPosition:
-      $ref: './schemas/Dashboard.yaml#/NetPosition'
-    BudgetStability:
-      $ref: './schemas/Dashboard.yaml#/BudgetStability'
-    NetPositionHistoryPoint:
-      $ref: './schemas/Dashboard.yaml#/NetPositionHistoryPoint'
-    NetPositionHistoryResponse:
-      $ref: './schemas/Dashboard.yaml#/NetPositionHistoryResponse'
-    CurrentPeriodHistoryPoint:
-      $ref: './schemas/Dashboard.yaml#/CurrentPeriodHistoryPoint'
-    CurrentPeriodHistoryResponse:
-      $ref: './schemas/Dashboard.yaml#/CurrentPeriodHistoryResponse'
-    CashFlowResponse:
-      $ref: './schemas/Dashboard.yaml#/CashFlowResponse'
-    SpendingTrendItem:
-      $ref: './schemas/Dashboard.yaml#/SpendingTrendItem'
-    SpendingTrendResponse:
-      $ref: './schemas/Dashboard.yaml#/SpendingTrendResponse'
-    TopVendorItem:
-      $ref: './schemas/Dashboard.yaml#/TopVendorItem'
-    TopVendorsResponse:
-      $ref: './schemas/Dashboard.yaml#/TopVendorsResponse'
-    FixedCategoryStatus:
-      $ref: './schemas/Dashboard.yaml#/FixedCategoryStatus'
-    FixedCategoryItem:
-      $ref: './schemas/Dashboard.yaml#/FixedCategoryItem'
-    FixedCategoriesResponse:
-      $ref: './schemas/Dashboard.yaml#/FixedCategoriesResponse'
-    VariableCategoryItem:
-      $ref: './schemas/Dashboard.yaml#/VariableCategoryItem'
-    VariableCategoriesResponse:
-      $ref: './schemas/Dashboard.yaml#/VariableCategoriesResponse'
-    SubscriptionDisplayStatus:
-      $ref: './schemas/Dashboard.yaml#/SubscriptionDisplayStatus'
-    DashboardBillingCycle:
-      $ref: './schemas/Dashboard.yaml#/DashboardBillingCycle'
-    SubscriptionDashboardItem:
-      $ref: './schemas/Dashboard.yaml#/SubscriptionDashboardItem'
-    SubscriptionsDashboardResponse:
-      $ref: './schemas/Dashboard.yaml#/SubscriptionsDashboardResponse'
+    # Dashboard schemas removed - now client-side computed from encrypted store
     DurationBased:
       $ref: './schemas/Period.yaml#/DurationBased'
     ManualEndDate:
@@ -126,40 +85,20 @@ components:
     UpdatePeriodScheduleRequest:
       $ref: './schemas/Period.yaml#/UpdatePeriodScheduleRequest'
     # Accounts
-    AccountBase:
-      $ref: './schemas/Accounts.yaml#/AccountBase'
-    AccountResponse:
-      $ref: './schemas/Accounts.yaml#/AccountResponse'
     AccountListResponse:
       $ref: './schemas/Accounts.yaml#/AccountListResponse'
     AccountOptionResponse:
       $ref: './schemas/Accounts.yaml#/AccountOptionResponse'
     AccountOptionListResponse:
       $ref: './schemas/Accounts.yaml#/AccountOptionListResponse'
-    AccountSummaryResponse:
-      $ref: './schemas/Accounts.yaml#/AccountSummaryResponse'
-    AccountSummaryListResponse:
-      $ref: './schemas/Accounts.yaml#/AccountSummaryListResponse'
-    AccountDetailsResponse:
-      $ref: './schemas/Accounts.yaml#/AccountDetailsResponse'
     CreateAccountRequest:
       $ref: './schemas/Accounts.yaml#/CreateAccountRequest'
     UpdateAccountRequest:
       $ref: './schemas/Accounts.yaml#/UpdateAccountRequest'
-    AccountBalanceHistoryPoint:
-      $ref: './schemas/Accounts.yaml#/AccountBalanceHistoryPoint'
-    AccountBalanceHistoryResponse:
-      $ref: './schemas/Accounts.yaml#/AccountBalanceHistoryResponse'
     AdjustBalanceRequest:
       $ref: './schemas/Accounts.yaml#/AdjustBalanceRequest'
 
     # Vendors
-    VendorBase:
-      $ref: './schemas/Vendor.yaml#/VendorBase'
-    VendorResponse:
-      $ref: './schemas/Vendor.yaml#/VendorResponse'
-    VendorSummaryResponse:
-      $ref: './schemas/Vendor.yaml#/VendorSummaryResponse'
     VendorListResponse:
       $ref: './schemas/Vendor.yaml#/VendorListResponse'
     VendorOptionResponse:
@@ -170,34 +109,8 @@ components:
       $ref: './schemas/Vendor.yaml#/CreateVendorRequest'
     UpdateVendorRequest:
       $ref: './schemas/Vendor.yaml#/UpdateVendorRequest'
-    MergeVendorRequest:
-      $ref: './schemas/Vendor.yaml#/MergeVendorRequest'
-    VendorTrendItem:
-      $ref: './schemas/Vendor.yaml#/VendorTrendItem'
-    VendorTopCategoryItem:
-      $ref: './schemas/Vendor.yaml#/VendorTopCategoryItem'
-    VendorTransactionItem:
-      $ref: './schemas/Vendor.yaml#/VendorTransactionItem'
-    VendorDetailResponse:
-      $ref: './schemas/Vendor.yaml#/VendorDetailResponse'
-    VendorStatsResponse:
-      $ref: './schemas/Vendor.yaml#/VendorStatsResponse'
 
     # Categories
-    CategoryBase:
-      $ref: './schemas/Category.yaml#/CategoryBase'
-    CategoryResponse:
-      $ref: './schemas/Category.yaml#/CategoryResponse'
-    CategoryManagementListItem:
-      $ref: './schemas/Category.yaml#/CategoryManagementListItem'
-    CategoryManagementListResponse:
-      $ref: './schemas/Category.yaml#/CategoryManagementListResponse'
-    CategorySummaryItem:
-      $ref: './schemas/Category.yaml#/CategorySummaryItem'
-    CategoryOverviewSummary:
-      $ref: './schemas/Category.yaml#/CategoryOverviewSummary'
-    CategoryOverviewResponse:
-      $ref: './schemas/Category.yaml#/CategoryOverviewResponse'
     CategoryOptionResponse:
       $ref: './schemas/Category.yaml#/CategoryOptionResponse'
     CategoryOptionListResponse:
@@ -206,49 +119,17 @@ components:
       $ref: './schemas/Category.yaml#/CreateCategoryRequest'
     UpdateCategoryRequest:
       $ref: './schemas/Category.yaml#/UpdateCategoryRequest'
-    CategoryTrendItem:
-      $ref: './schemas/Category.yaml#/CategoryTrendItem'
-    CategoryTransactionItem:
-      $ref: './schemas/Category.yaml#/CategoryTransactionItem'
-    CategoryDetailResponse:
-      $ref: './schemas/Category.yaml#/CategoryDetailResponse'
 
     # Targets
-    TargetStatus:
-      $ref: './schemas/Category.yaml#/TargetStatus'
-    TargetItem:
-      $ref: './schemas/Category.yaml#/TargetItem'
-    TargetSummary:
-      $ref: './schemas/Category.yaml#/TargetSummary'
-    CategoryTargetsResponse:
-      $ref: './schemas/Category.yaml#/CategoryTargetsResponse'
     CreateTargetRequest:
       $ref: './schemas/Category.yaml#/CreateTargetRequest'
     UpdateTargetRequest:
       $ref: './schemas/Category.yaml#/UpdateTargetRequest'
 
-    AccountRef:
-      $ref: './schemas/Transaction.yaml#/AccountRef'
-    CategoryRef:
-      $ref: './schemas/Transaction.yaml#/CategoryRef'
-    VendorRef:
-      $ref: './schemas/Transaction.yaml#/VendorRef'
-    TransactionBase:
-      $ref: './schemas/Transaction.yaml#/TransactionBase'
-    RegularTransactionResponse:
-      $ref: './schemas/Transaction.yaml#/RegularTransactionResponse'
-    TransferTransactionResponse:
-      $ref: './schemas/Transaction.yaml#/TransferTransactionResponse'
-    TransactionResponse:
-      $ref: './schemas/Transaction.yaml#/TransactionResponse'
-    TransactionListResponse:
-      $ref: './schemas/Transaction.yaml#/TransactionListResponse'
     CreateTransactionRequest:
       $ref: './schemas/Transaction.yaml#/CreateTransactionRequest'
     UpdateTransactionRequest:
       $ref: './schemas/Transaction.yaml#/UpdateTransactionRequest'
-    HasTransactionsResponse:
-      $ref: './schemas/Transaction.yaml#/HasTransactionsResponse'
 
     UserResponse:
       $ref: './schemas/Auth.yaml#/UserResponse'
@@ -303,26 +184,6 @@ components:
       $ref: './schemas/Settings.yaml#/ResetStructureRequest'
 
     # Overlay
-    InclusionMode:
-      $ref: './schemas/Overlay.yaml#/InclusionMode'
-    OverlayCategoryCap:
-      $ref: './schemas/Overlay.yaml#/OverlayCategoryCap'
-    OverlayRules:
-      $ref: './schemas/Overlay.yaml#/OverlayRules'
-    OverlayResponse:
-      $ref: './schemas/Overlay.yaml#/OverlayResponse'
-    OverlayListResponse:
-      $ref: './schemas/Overlay.yaml#/OverlayListResponse'
-    CreateOverlayRequest:
-      $ref: './schemas/Overlay.yaml#/CreateOverlayRequest'
-    UpdateOverlayRequest:
-      $ref: './schemas/Overlay.yaml#/UpdateOverlayRequest'
-    OverlayTransactionMembership:
-      $ref: './schemas/Overlay.yaml#/OverlayTransactionMembership'
-    OverlayTransactionResponse:
-      $ref: './schemas/Overlay.yaml#/OverlayTransactionResponse'
-    OverlayTransactionListResponse:
-      $ref: './schemas/Overlay.yaml#/OverlayTransactionListResponse'
     # Subscriptions
     SubscriptionStatus:
       $ref: './schemas/Subscription.yaml#/SubscriptionStatus'
@@ -345,10 +206,7 @@ components:
     UpdateSubscriptionRequest:
       $ref: './schemas/Subscription.yaml#/UpdateSubscriptionRequest'
 
-    UncategorizedTransaction:
-      $ref: './schemas/Dashboard.yaml#/UncategorizedTransaction'
-    UncategorizedResponse:
-      $ref: './schemas/Dashboard.yaml#/UncategorizedResponse'
+    # Uncategorized removed - now client-side computed
 
     # Misc
     CategoryTemplateCategory:
@@ -388,30 +246,6 @@ security:
 paths:
   /health:
     $ref: './paths/health.yaml'
-  /dashboard/current-period:
-    $ref: './paths/dashboard@current-period.yaml'
-  /dashboard/net-position:
-    $ref: './paths/dashboard@net-position.yaml'
-  /dashboard/budget-stability:
-    $ref: './paths/dashboard@budget-stability.yaml'
-  /dashboard/net-position-history:
-    $ref: './paths/dashboard@net-position-history.yaml'
-  /dashboard/current-period-history:
-    $ref: './paths/dashboard@current-period-history.yaml'
-  /dashboard/cash-flow:
-    $ref: './paths/dashboard@cash-flow.yaml'
-  /dashboard/spending-trend:
-    $ref: './paths/dashboard@spending-trend.yaml'
-  /dashboard/top-vendors:
-    $ref: './paths/dashboard@top-vendors.yaml'
-  /dashboard/fixed-categories:
-    $ref: './paths/dashboard@fixed-categories.yaml'
-  /dashboard/variable-categories:
-    $ref: './paths/dashboard@variable-categories.yaml'
-  /dashboard/subscriptions:
-    $ref: './paths/dashboard@subscriptions.yaml'
-  /dashboard/uncategorized:
-    $ref: './paths/dashboard@uncategorized.yaml'
   /periods:
     $ref: './paths/periods.yaml'
   /periods/schedule:
@@ -420,60 +254,39 @@ paths:
     $ref: './paths/periods@{id}.yaml'
   /accounts/options:
     $ref: './paths/accounts@options.yaml'
-  /accounts/summary:
-    $ref: './paths/accounts@summary.yaml'
-  /accounts/balance-history:
-    $ref: './paths/accounts@balance-history.yaml'
   /accounts:
     $ref: './paths/accounts.yaml'
   /accounts/{id}:
     $ref: './paths/accounts@{id}.yaml'
-  /accounts/{id}/details:
-    $ref: './paths/accounts@{id}@details.yaml'
   /accounts/{id}/archive:
     $ref: './paths/accounts@{id}@archive.yaml'
   /accounts/{id}/unarchive:
     $ref: './paths/accounts@{id}@unarchive.yaml'
-  /accounts/{id}/balance-history:
-    $ref: './paths/accounts@{id}@balance-history.yaml'
   /accounts/{id}/adjust-balance:
     $ref: './paths/accounts@{id}@adjust-balance.yaml'
 
   /vendors/options:
     $ref: './paths/vendors@options.yaml'
-  /vendors/stats:
-    $ref: './paths/vendors@stats.yaml'
   /vendors:
     $ref: './paths/vendors.yaml'
   /vendors/{id}:
     $ref: './paths/vendors@{id}.yaml'
-  /vendors/{id}/detail:
-    $ref: './paths/vendors@{id}@detail.yaml'
-  /vendors/{id}/merge:
-    $ref: './paths/vendors@{id}@merge.yaml'
   /vendors/{id}/archive:
     $ref: './paths/vendors@{id}@archive.yaml'
   /vendors/{id}/unarchive:
     $ref: './paths/vendors@{id}@unarchive.yaml'
-  # Static category paths first
-  /categories/overview:
-    $ref: './paths/categories@overview.yaml'
+
   /categories/options:
     $ref: './paths/categories@options.yaml'
   /categories:
     $ref: './paths/categories.yaml'
   /categories/{id}:
     $ref: './paths/categories@{id}.yaml'
-  /categories/{id}/detail:
-    $ref: './paths/categories@{id}@detail.yaml'
-  /categories/{id}/trend:
-    $ref: './paths/categories@{id}@trend.yaml'
   /categories/{id}/archive:
     $ref: './paths/categories@{id}@archive.yaml'
   /categories/{id}/unarchive:
     $ref: './paths/categories@{id}@unarchive.yaml'
 
-  # Targets as own resource
   /targets:
     $ref: './paths/targets.yaml'
   /targets/{id}:
@@ -483,10 +296,8 @@ paths:
 
   /transactions:
     $ref: './paths/transactions.yaml'
-  /transactions/has-any:
-    $ref: './paths/transactions@has-any.yaml'
-  /transactions/stats:
-    $ref: './paths/transactions@stats.yaml'
+  /transactions/range:
+    $ref: './paths/transactions@range.yaml'
   /transactions/{id}:
     $ref: './paths/transactions@{id}.yaml'
 
@@ -512,13 +323,11 @@ paths:
     $ref: './paths/auth@reset-password.yaml'
   /auth/password:
     $ref: './paths/auth@password.yaml'
+  /auth/unlock:
+    $ref: './paths/auth@unlock.yaml'
+  /auth/wrapped-dek:
+    $ref: './paths/auth@wrapped-dek.yaml'
 
-  /settings/export/transactions:
-    $ref: './paths/settings@export@transactions.yaml'
-  /settings/export/data:
-    $ref: './paths/settings@export@data.yaml'
-  /settings/import/data:
-    $ref: './paths/settings@import@data.yaml'
   /settings/sessions/{id}:
     $ref: './paths/settings@sessions@{id}.yaml'
   /settings/profile:
@@ -532,16 +341,6 @@ paths:
   /settings/account:
     $ref: './paths/settings@account.yaml'
 
-  /overlays/{id}/transactions/{txId}/include:
-    $ref: './paths/overlays@{id}@transactions@{txId}@include.yaml'
-  /overlays/{id}/transactions/{txId}/exclude:
-    $ref: './paths/overlays@{id}@transactions@{txId}@exclude.yaml'
-  /overlays/{id}/transactions:
-    $ref: './paths/overlays@{id}@transactions.yaml'
-  /overlays/{id}:
-    $ref: './paths/overlays@{id}.yaml'
-  /overlays:
-    $ref: './paths/overlays.yaml'
   /currencies/{code}:
     $ref: './paths/currencies@{code}.yaml'
   /currencies:
@@ -565,9 +364,7 @@ paths:
   /auth/2fa/status:
     $ref: './paths/auth@2fa@status.yaml'
 
-  # Subscriptions — static paths before parameterized
-  /subscriptions/upcoming:
-    $ref: './paths/subscriptions@upcoming.yaml'
+  # Subscriptions
   /subscriptions:
     $ref: './paths/subscriptions.yaml'
   /subscriptions/{id}:

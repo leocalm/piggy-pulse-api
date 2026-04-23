@@ -6,8 +6,9 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::auth::CurrentUser;
+use crate::crypto::Dek;
 use crate::database::postgres_repository::PostgresRepository;
-use crate::dto::categories::{CategoryResponse, UpdateCategoryRequest};
+use crate::dto::categories::{EncryptedCategoryResponse, UpdateCategoryRequest};
 use crate::error::app_error::AppError;
 use crate::service::category::CategoryService;
 
@@ -15,15 +16,13 @@ use crate::service::category::CategoryService;
 pub async fn update_category(
     pool: &State<PgPool>,
     user: CurrentUser,
+    dek: Dek,
     id: &str,
     payload: Json<UpdateCategoryRequest>,
-) -> Result<Json<CategoryResponse>, AppError> {
+) -> Result<Json<EncryptedCategoryResponse>, AppError> {
     payload.validate()?;
-
     let uuid = Uuid::parse_str(id).map_err(|e| AppError::uuid("Invalid category id", e))?;
     let repo = PostgresRepository { pool: pool.inner().clone() };
     let service = CategoryService::new(&repo);
-
-    let response = service.update_category(&uuid, &payload, &user.id).await?;
-    Ok(Json(response))
+    Ok(Json(service.update_category(&uuid, &payload, &user.id, &dek).await?))
 }

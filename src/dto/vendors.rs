@@ -1,127 +1,66 @@
-#![allow(dead_code)]
-
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as B64;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
-use crate::dto::common::{Date, PaginatedResponse, VendorMinimal};
+use crate::dto::common::PaginatedResponse;
+use crate::models::vendor::Vendor;
 
-// ===== Enums =====
+fn b64(bytes: &[u8]) -> String {
+    B64.encode(bytes)
+}
 
-#[derive(Serialize, Debug, Copy, Clone, Eq, PartialEq, Default)]
+#[derive(Serialize, Debug, Copy, Clone, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum VendorStatus {
-    #[default]
     Active,
     Inactive,
 }
 
-// ===== VendorBase =====
-
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct VendorBase {
+pub struct EncryptedVendorResponse {
     pub id: Uuid,
-    pub name: String,
     pub status: VendorStatus,
+    pub name_enc: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description_enc: Option<String>,
 }
 
-// ===== VendorResponse =====
+pub type VendorListResponse = PaginatedResponse<EncryptedVendorResponse>;
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct VendorResponse {
-    #[serde(flatten)]
-    pub base: VendorBase,
-    pub description: Option<String>,
-}
-
-// ===== VendorSummaryResponse =====
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct VendorSummaryResponse {
-    #[serde(flatten)]
-    pub base: VendorResponse,
-    pub number_of_transactions: i64,
-    pub total_spend: i64,
-}
-
-pub type VendorListResponse = PaginatedResponse<VendorSummaryResponse>;
-
-// ===== VendorDetailResponse =====
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct VendorTrendItem {
-    pub period_id: Uuid,
-    pub period_name: String,
-    pub total_spend: i64,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct VendorTopCategoryItem {
-    pub category_id: Uuid,
-    pub category_name: String,
-    pub total_spend: i64,
-    pub percentage: f64,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct VendorTransactionItem {
+pub struct VendorOptionResponse {
     pub id: Uuid,
-    pub date: Date,
-    pub amount: i64,
-    pub description: String,
-    pub category_id: Option<Uuid>,
-    pub category_name: Option<String>,
+    pub name_enc: String,
 }
 
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct VendorDetailResponse {
-    #[serde(flatten)]
-    pub base: VendorResponse,
-    pub period_spend: i64,
-    pub transaction_count: i64,
-    pub average_transaction_amount: i64,
-    pub trend: Vec<VendorTrendItem>,
-    pub top_categories: Vec<VendorTopCategoryItem>,
-    pub recent_transactions: Vec<VendorTransactionItem>,
-}
-
-// ===== VendorStatsResponse =====
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct VendorStatsResponse {
-    pub total_vendors: i64,
-    pub total_spend_this_period: i64,
-    pub avg_spend_per_vendor: i64,
-}
-
-// ===== VendorOptionResponse =====
-
-pub type VendorOptionResponse = VendorMinimal;
 pub type VendorOptionListResponse = Vec<VendorOptionResponse>;
-
-// ===== Requests =====
 
 #[derive(Deserialize, Debug, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateVendorRequest {
-    #[validate(length(min = 3))]
+    #[validate(length(min = 1))]
     pub name: String,
-    #[validate(length(max = 500))]
     pub description: Option<String>,
 }
 
 pub type UpdateVendorRequest = CreateVendorRequest;
 
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct MergeVendorRequest {
-    pub target_vendor_id: Uuid,
+pub fn to_encrypted_response(vendor: &Vendor) -> EncryptedVendorResponse {
+    EncryptedVendorResponse {
+        id: vendor.id,
+        status: if vendor.archived { VendorStatus::Inactive } else { VendorStatus::Active },
+        name_enc: b64(&vendor.name_enc),
+        description_enc: vendor.description_enc.as_deref().map(b64),
+    }
+}
+
+pub fn to_option_response(vendor: &Vendor) -> VendorOptionResponse {
+    VendorOptionResponse {
+        id: vendor.id,
+        name_enc: b64(&vendor.name_enc),
+    }
 }

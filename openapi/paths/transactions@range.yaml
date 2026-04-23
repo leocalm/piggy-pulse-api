@@ -1,0 +1,38 @@
+get:
+  tags:
+    - Transactions
+  summary: List effective transactions in a date range
+  description: |
+    Same shape as `GET /transactions?periodId=…`, but with an
+    arbitrary inclusive date range. Used for multi-period trend
+    views where the client wants a window that doesn't line up
+    with a budget period boundary.
+  operationId: listTransactionsByRange
+  parameters:
+    - name: from
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date
+    - name: to
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '../schemas/Transaction.yaml#/EncryptedTransactionResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'

@@ -1,13 +1,15 @@
 mod common;
 
 use common::auth::create_user_and_login;
-use common::entities::{create_account, create_category, create_transaction};
-use common::{TEST_PASSWORD, V2_BASE, test_client};
+use common::crypto::{decrypt_i64, decrypt_string};
+use common::entities::{create_account, create_category};
+use common::{V2_BASE, test_client};
 use rocket::http::{ContentType, Status};
 use serde_json::Value;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // POST /transactions/batch
+// Returns Vec<EncryptedTransactionResponse> — amount/description are encrypted.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[rocket::async_test]
@@ -49,10 +51,12 @@ async fn test_batch_create_transactions_happy() {
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
     let arr = body.as_array().expect("response is array");
     assert_eq!(arr.len(), 2);
-    assert_eq!(arr[0]["description"], "First");
-    assert_eq!(arr[0]["amount"], 1000);
-    assert_eq!(arr[1]["description"], "Second");
-    assert_eq!(arr[1]["amount"], 2000);
+
+    // Encrypted response fields
+    assert_eq!(decrypt_string(arr[0]["descriptionEnc"].as_str().unwrap()), "First");
+    assert_eq!(decrypt_i64(arr[0]["amountEnc"].as_str().unwrap()), 1000);
+    assert_eq!(decrypt_string(arr[1]["descriptionEnc"].as_str().unwrap()), "Second");
+    assert_eq!(decrypt_i64(arr[1]["amountEnc"].as_str().unwrap()), 2000);
 }
 
 #[rocket::async_test]
@@ -82,123 +86,6 @@ async fn test_batch_create_transactions_unauthenticated_returns_401() {
         .post(format!("{}/transactions/batch", V2_BASE))
         .header(ContentType::JSON)
         .body("[]")
-        .dispatch()
-        .await;
-
-    assert_eq!(resp.status(), Status::Unauthorized);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// POST /settings/import/data
-// ═══════════════════════════════════════════════════════════════════════════════
-
-#[rocket::async_test]
-#[ignore = "requires database"]
-async fn test_import_data_happy() {
-    let client = test_client().await;
-    create_user_and_login(&client).await;
-
-    // Create some data and export it
-    let _account_id = create_account(&client, "Import Source Account", 100_000).await;
-    let _cat_id = create_category(&client, "Import Source Cat", "expense").await;
-
-    let export_resp = client.get(format!("{}/settings/export/data", V2_BASE)).dispatch().await;
-    assert_eq!(export_resp.status(), Status::Ok);
-    let export_data: Value = serde_json::from_str(&export_resp.into_string().await.unwrap()).unwrap();
-
-    // Reset structure so the import doesn't hit uniqueness constraints
-    let reset_resp = client
-        .post(format!("{}/settings/reset-structure", V2_BASE))
-        .header(ContentType::JSON)
-        .body(serde_json::json!({ "password": TEST_PASSWORD }).to_string())
-        .dispatch()
-        .await;
-    assert_eq!(reset_resp.status(), Status::NoContent);
-
-    // Import the exported data back
-    let import_resp = client
-        .post(format!("{}/settings/import/data", V2_BASE))
-        .header(ContentType::JSON)
-        .body(export_data.to_string())
-        .dispatch()
-        .await;
-
-    assert_eq!(import_resp.status(), Status::Ok);
-    let body: Value = serde_json::from_str(&import_resp.into_string().await.unwrap()).unwrap();
-
-    // Verify response includes counts
-    assert!(body["imported"]["accounts"].as_i64().unwrap() >= 1);
-    assert!(body["imported"]["categories"].as_i64().unwrap() >= 1);
-}
-
-#[rocket::async_test]
-#[ignore = "requires database"]
-async fn test_import_data_with_transactions() {
-    let client = test_client().await;
-    create_user_and_login(&client).await;
-
-    let account_id = create_account(&client, "Import Tx Account", 200_000).await;
-    let cat_id = create_category(&client, "Import Tx Cat", "expense").await;
-    create_transaction(&client, &account_id, &cat_id, 5000, "2026-03-10").await;
-
-    let export_resp = client.get(format!("{}/settings/export/data", V2_BASE)).dispatch().await;
-    assert_eq!(export_resp.status(), Status::Ok);
-    let export_data: Value = serde_json::from_str(&export_resp.into_string().await.unwrap()).unwrap();
-
-    // Reset structure so the import doesn't hit uniqueness constraints
-    let reset_resp = client
-        .post(format!("{}/settings/reset-structure", V2_BASE))
-        .header(ContentType::JSON)
-        .body(serde_json::json!({ "password": TEST_PASSWORD }).to_string())
-        .dispatch()
-        .await;
-    assert_eq!(reset_resp.status(), Status::NoContent);
-
-    let import_resp = client
-        .post(format!("{}/settings/import/data", V2_BASE))
-        .header(ContentType::JSON)
-        .body(export_data.to_string())
-        .dispatch()
-        .await;
-
-    assert_eq!(import_resp.status(), Status::Ok);
-    let body: Value = serde_json::from_str(&import_resp.into_string().await.unwrap()).unwrap();
-    assert_eq!(body["imported"]["transactions"], 1);
-}
-
-#[rocket::async_test]
-#[ignore = "requires database"]
-async fn test_import_data_empty_payload() {
-    let client = test_client().await;
-    create_user_and_login(&client).await;
-
-    let payload = serde_json::json!({ "accounts": [], "categories": [], "transactions": [] });
-
-    let resp = client
-        .post(format!("{}/settings/import/data", V2_BASE))
-        .header(ContentType::JSON)
-        .body(payload.to_string())
-        .dispatch()
-        .await;
-
-    assert_eq!(resp.status(), Status::Ok);
-    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
-    assert_eq!(body["imported"]["accounts"], 0);
-    assert_eq!(body["imported"]["categories"], 0);
-    assert_eq!(body["imported"]["transactions"], 0);
-}
-
-#[rocket::async_test]
-#[ignore = "requires database"]
-async fn test_import_data_unauthenticated_returns_401() {
-    let client = test_client().await;
-
-    let payload = serde_json::json!({ "accounts": [], "categories": [], "transactions": [] });
-
-    let resp = client
-        .post(format!("{}/settings/import/data", V2_BASE))
-        .header(ContentType::JSON)
-        .body(payload.to_string())
         .dispatch()
         .await;
 

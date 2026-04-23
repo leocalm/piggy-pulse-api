@@ -7,6 +7,8 @@ mod refresh;
 mod register;
 mod reset_password;
 mod two_factor;
+mod unlock;
+mod wrapped_dek;
 
 pub fn routes() -> Vec<rocket::Route> {
     rocket::routes![
@@ -18,6 +20,9 @@ pub fn routes() -> Vec<rocket::Route> {
         password::change_password,
         forgot_password::forgot_password,
         reset_password::reset_password,
+        unlock::unlock,
+        wrapped_dek::get_wrapped_dek,
+        wrapped_dek::update_wrapped_dek,
     ]
 }
 

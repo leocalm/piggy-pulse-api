@@ -117,6 +117,17 @@ jobs:
             '{"name":"CI","currency":"USD","avatar":""}' >/dev/null
           echo "::endgroup::"
 
+          # Unlock the session DEK so subsequent encrypted endpoints
+          # (categories, accounts, vendors, transactions, subscriptions,
+          # targets) can decrypt/encrypt. The DEK is an arbitrary 32-byte
+          # value for CI — the seeded data is ephemeral and not re-read
+          # across sessions. Mirrors tests/common/auth.rs::unlock_session.
+          echo "::group::Unlock session"
+          # base64("\0" * 32) == "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+          req POST /auth/unlock \
+            '{"dek":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}' >/dev/null
+          echo "::endgroup::"
+
           echo "::group::Fetch currency id for account body"
           CURRENCY_ID=$(req GET /currencies | jq -r '.[0].id')
           echo "::endgroup::"
@@ -140,8 +151,11 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::Create account"
+          # `accountType` is a flat field since the Phase 2c encryption
+          # refactor (was previously a `type` discriminator on a tagged
+          # enum). Enum variants are lowercase on the wire.
           ACCOUNT_ID=$(req POST /accounts \
-            "{\"name\":\"Seed Checking\",\"type\":\"Checking\",\"color\":\"#ff9800\",\"initialBalance\":100000,\"currencyId\":\"$CURRENCY_ID\"}" \
+            "{\"name\":\"Seed Checking\",\"accountType\":\"checking\",\"color\":\"#ff9800\",\"initialBalance\":100000,\"currencyId\":\"$CURRENCY_ID\"}" \
             | jq -r '.id')
           echo "::endgroup::"
 
@@ -168,12 +182,6 @@ jobs:
             | jq -r '.id')
           echo "::endgroup::"
 
-          echo "::group::Create overlay"
-          OVERLAY_ID=$(req POST /overlays \
-            '{"name":"Seed Overlay","startDate":"2026-02-01","endDate":"2026-02-28","inclusionMode":"manual"}' \
-            | jq -r '.id')
-          echo "::endgroup::"
-
           {
             echo "token=$TOKEN"
             echo "period_id=$PERIOD_ID"
@@ -182,7 +190,6 @@ jobs:
             echo "vendor_id=$VENDOR_ID"
             echo "transaction_id=$TRANSACTION_ID"
             echo "subscription_id=$SUBSCRIPTION_ID"
-            echo "overlay_id=$OVERLAY_ID"
           } >> "$GITHUB_OUTPUT"
 
       - name: Write schemathesis config
@@ -200,7 +207,6 @@ jobs:
           vendorId = "$VENDOR_ID"
           transactionId = "$TRANSACTION_ID"
           subscriptionId = "$SUBSCRIPTION_ID"
-          overlayId = "$OVERLAY_ID"
           txId = "$TRANSACTION_ID"
           code = "USD"
 
@@ -233,11 +239,6 @@ jobs:
           include-path-regex = "^/subscriptions/"
           [operations.parameters]
           id = "$SUBSCRIPTION_ID"
-
-          [[operations]]
-          include-path-regex = "^/overlays/"
-          [operations.parameters]
-          id = "$OVERLAY_ID"
           TOML
 
       - name: Run schemathesis
@@ -248,7 +249,6 @@ jobs:
           VENDOR_ID: ${{ steps.seed.outputs.vendor_id }}
           TRANSACTION_ID: ${{ steps.seed.outputs.transaction_id }}
           SUBSCRIPTION_ID: ${{ steps.seed.outputs.subscription_id }}
-          OVERLAY_ID: ${{ steps.seed.outputs.overlay_id }}
         run: |
           pip install --quiet schemathesis
           schemathesis --config-file /tmp/schemathesis.toml run /tmp/v2_full.yaml \

@@ -11,7 +11,7 @@ get:
       content:
         application/json:
           schema:
-            $ref: '../schemas/Accounts.yaml#/AccountResponse'
+            $ref: '../schemas/Accounts.yaml#/EncryptedAccountResponse'
     '400':
       $ref: '../responses/BadRequest.yaml'
     '401':
@@ -40,7 +40,7 @@ put:
       content:
         application/json:
           schema:
-            $ref: '../schemas/Accounts.yaml#/AccountResponse'
+            $ref: '../schemas/Accounts.yaml#/EncryptedAccountResponse'
     '400':
       $ref: '../responses/BadRequest.yaml'
     '422':
@@ -49,6 +49,8 @@ put:
       $ref: '../responses/Unauthorized.yaml'
     '404':
       $ref: '../responses/NotFound.yaml'
+    '409':
+      $ref: '../responses/Conflict.yaml'
     '500':
       $ref: '../responses/InternalServerError.yaml'
 

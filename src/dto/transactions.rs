@@ -1,73 +1,76 @@
 #![allow(dead_code)]
 
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::dto::categories::CategoryType;
-use crate::dto::common::{Date, PaginatedResponse};
+use crate::dto::common::Date;
 
-// ===== Embedded refs (response) =====
+// ─────────────────────────────────────────────────────────────────────
+// Encrypted transaction response
+// ─────────────────────────────────────────────────────────────────────
+//
+// Under the encryption-at-rest design the server cannot decrypt the
+// transaction's amount or description to join them with plaintext entity
+// metadata. Instead the server returns the raw ciphertext envelopes plus
+// plaintext foreign-key ids. The client decrypts locally and joins
+// against its cached account/category/vendor lists.
 
+/// Server response shape for a newly-created or newly-corrected
+/// transaction. All numeric amounts and free-text descriptions are
+/// base64-encoded AES-GCM envelopes.
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct AccountRef {
+pub struct EncryptedTransactionResponse {
     pub id: Uuid,
-    pub name: String,
-    pub color: String,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct CategoryRef {
-    pub id: Uuid,
-    pub name: String,
-    pub color: String,
-    pub icon: String,
-    #[serde(rename = "type")]
-    pub category_type: CategoryType,
-}
-
-pub use crate::dto::common::VendorMinimal as VendorRef;
-
-// ===== TransactionResponse =====
-
-/// Discriminated variant flattened into TransactionResponse.
-/// The `transactionType` tag acts as the discriminator.
-#[derive(Serialize, Debug)]
-#[serde(tag = "transactionType", rename_all = "camelCase", rename_all_fields = "camelCase")]
-pub enum TransactionKind {
-    Regular { to_account: Option<AccountRef> },
-    Transfer { to_account: AccountRef },
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct TransactionResponse {
-    pub id: Uuid,
+    pub seq: i64,
     pub date: Date,
-    pub description: String,
-    pub amount: i64, // INVARIANT: amount >= 0, validated in route layer
-    pub from_account: AccountRef,
-    pub category: CategoryRef,
-    pub vendor: Option<VendorRef>,
-    #[serde(flatten)]
-    pub kind: TransactionKind,
+    /// ISO-8601 timestamp of the first insert for this logical id.
+    /// Stable across corrections.
+    pub first_created_at: String,
+    pub from_account_id: Uuid,
+    pub to_account_id: Option<Uuid>,
+    pub category_id: Option<Uuid>,
+    pub vendor_id: Option<Uuid>,
+    /// Base64-encoded AES-256-GCM envelope (12-byte nonce + ciphertext + 16-byte tag).
+    pub amount_enc: String,
+    /// Base64-encoded AES-256-GCM envelope.
+    pub description_enc: String,
 }
 
-pub type TransactionListResponse = PaginatedResponse<TransactionResponse>;
+impl From<crate::database::transaction::LedgerInsertResult> for EncryptedTransactionResponse {
+    fn from(r: crate::database::transaction::LedgerInsertResult) -> Self {
+        Self {
+            id: r.id,
+            seq: r.seq,
+            date: Date(r.occurred_at),
+            first_created_at: r.first_created_at.to_rfc3339(),
+            from_account_id: r.from_account_id,
+            to_account_id: r.to_account_id,
+            category_id: r.category_id,
+            vendor_id: r.vendor_id,
+            amount_enc: BASE64.encode(&r.amount_enc),
+            description_enc: BASE64.encode(&r.description_enc),
+        }
+    }
+}
 
-// ===== Requests =====
+// ─────────────────────────────────────────────────────────────────────
+// Requests
+// ─────────────────────────────────────────────────────────────────────
+//
+// Request bodies still carry plaintext amount + description inside the
+// authenticated session. The server encrypts on write with the session
+// DEK before touching the database.
 
-/// Top-level internally-tagged enum avoids the serde flatten+tag limitation on the Deserialize path.
-/// validator 0.20 does not support #[derive(Validate)] on enums; range/length validation for
-/// shared fields must be enforced explicitly by the route layer.
 #[derive(Deserialize, Debug)]
 #[serde(tag = "transactionType")]
 pub enum CreateTransactionRequest {
     Regular {
         date: Date,
         description: String,
-        amount: i64, // INVARIANT: amount >= 0, validated in route layer
+        amount: i64,
         #[serde(rename = "fromAccountId")]
         from_account_id: Uuid,
         #[serde(rename = "categoryId")]
@@ -78,7 +81,7 @@ pub enum CreateTransactionRequest {
     Transfer {
         date: Date,
         description: String,
-        amount: i64, // INVARIANT: amount >= 0, validated in route layer
+        amount: i64,
         #[serde(rename = "fromAccountId")]
         from_account_id: Uuid,
         #[serde(rename = "categoryId")]
@@ -91,22 +94,3 @@ pub enum CreateTransactionRequest {
 }
 
 pub type UpdateTransactionRequest = CreateTransactionRequest;
-
-// ===== Has Any =====
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct HasTransactionsResponse {
-    pub has_transactions: bool,
-}
-
-// ===== Stats =====
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct TransactionStatsResponse {
-    pub total_inflows: i64,
-    pub total_outflows: i64,
-    pub net_amount: i64,
-    pub transaction_count: i64,
-}

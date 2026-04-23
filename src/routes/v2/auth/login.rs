@@ -1,3 +1,5 @@
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use rocket::State;
 use rocket::http::{Cookie, CookieJar, SameSite};
 use rocket::post;
@@ -49,12 +51,20 @@ pub async fn login(
 
     match outcome {
         V2LoginOutcome::Success { session_id, user } => {
-            set_session_cookie(cookies, config, session_id, user.id);
-            let (access_token, _) = auth.issue_bearer_token(&user.id).await?;
-            let user_response = auth.build_user_response(user).await?;
-            Ok(Json(LoginResponse::Authenticated(AuthenticatedResponse::new(
+            let user_id = user.id;
+            set_session_cookie(cookies, config, session_id, user_id);
+            drop(user);
+            let (access_token, _) = auth.issue_bearer_token(&user_id).await?;
+            let user_response = auth.get_user_response(&user_id).await?;
+
+            // Fetch stored wrapped DEK to return to client
+            let (stored_wrapped_dek, stored_dek_params) = repo.get_wrapped_dek(&user_id).await?;
+
+            Ok(Json(LoginResponse::Authenticated(AuthenticatedResponse::with_dek(
                 user_response,
                 Some(access_token),
+                stored_wrapped_dek.map(|b| BASE64.encode(&b)),
+                stored_dek_params,
             ))))
         }
         V2LoginOutcome::TwoFactorRequired { two_factor_token } => {

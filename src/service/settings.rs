@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use uuid::Uuid;
 
 use crate::database::postgres_repository::PostgresRepository;
@@ -24,7 +25,7 @@ impl<'a> SettingsService<'a> {
 
     pub async fn update_profile(&self, user_id: &Uuid, request: &UpdateProfileRequest) -> Result<ProfileResponse, AppError> {
         self.repository
-            .update_profile_v2(user_id, &request.name, &request.currency, &request.avatar)
+            .update_profile_v2(user_id, &request.name, &request.currency, request.avatar.as_deref())
             .await
     }
 
@@ -129,9 +130,9 @@ impl<'a> SettingsService<'a> {
         self.repository.verify_password(&user, password).await.map_err(|_| AppError::InvalidCredentials)
     }
 
-    pub async fn reset_structure(&self, user_id: &Uuid, password: &str) -> Result<(), AppError> {
+    pub async fn reset_structure(&self, user_id: &Uuid, password: &str, dek: &crate::crypto::Dek) -> Result<(), AppError> {
         self.verify_password(user_id, password).await?;
-        self.repository.reset_structure_v2(user_id).await
+        self.repository.reset_structure_v2(user_id, dek).await
     }
 
     pub async fn delete_account(&self, user_id: &Uuid, password: &str) -> Result<(), AppError> {
