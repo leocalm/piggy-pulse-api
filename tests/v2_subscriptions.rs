@@ -280,7 +280,7 @@ async fn test_update_subscription_not_found_returns_404() {
 
 #[rocket::async_test]
 #[ignore = "requires database"]
-async fn test_update_subscription_invalid_category_returns_500() {
+async fn test_update_subscription_invalid_category_returns_400() {
     let client = test_client().await;
     create_user_and_login(&client).await;
 
@@ -305,8 +305,9 @@ async fn test_update_subscription_invalid_category_returns_500() {
         .dispatch()
         .await;
 
-    // The current encrypted API surfaces the foreign key violation as a 500.
-    assert_eq!(resp.status(), Status::InternalServerError);
+    // FK violations on referenced category/vendor are remapped to 400 in
+    // service/subscription.rs. Schemathesis drove that change (PR #313).
+    assert_eq!(resp.status(), Status::BadRequest);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
