@@ -21,6 +21,7 @@
 use crate::crypto::Dek;
 use crate::database::postgres_repository::PostgresRepository;
 use crate::error::app_error::AppError;
+use crate::models::account::AccountType;
 use crate::models::category::CategoryType;
 use crate::models::transaction::TransactionRequest;
 use chrono::NaiveDate;
@@ -341,16 +342,40 @@ impl PostgresRepository {
         Ok(())
     }
 
+    /// Look up the account type of a given account ID within the current transaction.
+    async fn get_account_type(&self, tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, account_id: &Uuid) -> Result<AccountType, AppError> {
+        let row: (String,) = sqlx::query_as("SELECT account_type::text FROM account WHERE id = $1")
+            .bind(account_id)
+            .fetch_one(&mut **tx)
+            .await?;
+        let account_type = match row.0.as_str() {
+            "Checking" => AccountType::Checking,
+            "Savings" => AccountType::Savings,
+            "CreditCard" => AccountType::CreditCard,
+            "Wallet" => AccountType::Wallet,
+            "Allowance" => AccountType::Allowance,
+            other => {
+                return Err(AppError::Internal {
+                    message: format!("Unknown account type: {other}"),
+                });
+            }
+        };
+        Ok(account_type)
+    }
+
     /// Apply the balance-side effect of a ledger insertion. The delta
-    /// depends on the category type:
+    /// depends on the category type AND the account type:
     ///
+    /// For regular accounts (checking, savings, wallet, allowance):
     ///   * Incoming: credit `from_account` with `+amount`
     ///   * Outgoing: debit `from_account` with `-amount`
     ///   * Transfer: debit `from_account` + credit `to_account`
-    ///   * Uncategorized (NULL category_id): no balance effect
     ///
-    /// Matches the semantics the ledger refactor's Phase 1 trigger used,
-    /// now in Rust because the trigger can't read plaintext amounts.
+    /// For credit card accounts (balance = debt owed, positive = owed):
+    ///   * Outgoing/Transfer FROM credit card: `+amount` (increase debt)
+    ///   * Incoming/Transfer TO credit card: `-amount` (decrease debt)
+    ///
+    /// Uncategorized (NULL category_id): no balance effect
     async fn apply_category_balance_effect(
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -360,17 +385,32 @@ impl PostgresRepository {
         to_account_id: Option<&Uuid>,
         dek: &Dek,
     ) -> Result<(), AppError> {
+        let from_type = self.get_account_type(tx, from_account_id).await?;
+        let to_type = if let Some(to) = to_account_id {
+            Some(self.get_account_type(tx, to).await?)
+        } else {
+            None
+        };
+
         match cat_type {
             Some(CategoryType::Incoming) => {
-                self.apply_account_balance_delta(tx, from_account_id, amount, dek).await?;
+                // Payment TO the from_account: decreases debt for credit cards
+                let delta = if from_type == AccountType::CreditCard { -amount } else { amount };
+                self.apply_account_balance_delta(tx, from_account_id, delta, dek).await?;
             }
             Some(CategoryType::Outgoing) => {
-                self.apply_account_balance_delta(tx, from_account_id, -amount, dek).await?;
+                // Purchase FROM the from_account: increases debt for credit cards
+                let delta = if from_type == AccountType::CreditCard { amount } else { -amount };
+                self.apply_account_balance_delta(tx, from_account_id, delta, dek).await?;
             }
             Some(CategoryType::Transfer) => {
-                self.apply_account_balance_delta(tx, from_account_id, -amount, dek).await?;
+                // Debit from_account, credit to_account
+                // For credit cards, invert the sign
+                let from_delta = if from_type == AccountType::CreditCard { amount } else { -amount };
+                self.apply_account_balance_delta(tx, from_account_id, from_delta, dek).await?;
                 if let Some(to) = to_account_id {
-                    self.apply_account_balance_delta(tx, to, amount, dek).await?;
+                    let to_delta = if to_type == Some(AccountType::CreditCard) { -amount } else { amount };
+                    self.apply_account_balance_delta(tx, to, to_delta, dek).await?;
                 }
             }
             None => {
