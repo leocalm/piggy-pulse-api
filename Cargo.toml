@@ -34,7 +34,7 @@ rand = "0.10"
 sqlx = { version = "0.8.6", default-features = false, features = ["chrono", "uuid", "migrate", "postgres", "runtime-tokio-rustls", "macros"] }
 # Two-Factor Authentication
 totp-rs = "5.7"
-data-encoding = "2.6"
+data-encoding = "2.11"
 qrcode = "0.14"
 aes-gcm = "0.10"
 base64 = "0.22"
