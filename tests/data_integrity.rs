@@ -2,7 +2,7 @@ mod common;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
-use common::auth::create_user_and_login;
+use common::auth::{create_user_and_login, get_eur_currency_id};
 use common::entities::{create_account, create_category, create_period, create_target, create_transaction};
 use common::{TEST_PASSWORD, V2_BASE, test_client};
 use rocket::http::{ContentType, Status};
@@ -100,6 +100,28 @@ async fn get_system_transfer_category_id(client: &Client) -> String {
     transfer["id"].as_str().expect("category id").to_string()
 }
 
+/// Create a credit card account and return its ID.
+async fn create_credit_card(client: &Client, name: &str, balance: i64) -> String {
+    let eur_id = get_eur_currency_id(client).await;
+    let payload = serde_json::json!({
+        "accountType": "creditcard",
+        "name": name,
+        "color": "#E17055",
+        "initialBalance": balance,
+        "currencyId": eur_id,
+        "spendLimit": null
+    });
+    let resp = client
+        .post(format!("{}/accounts", V2_BASE))
+        .header(ContentType::JSON)
+        .body(payload.to_string())
+        .dispatch()
+        .await;
+    assert_eq!(resp.status(), Status::Created, "create_credit_card failed");
+    let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
+    body["id"].as_str().expect("account id").to_string()
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Group 1: Transaction → Account Balance Cascade
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -165,6 +187,63 @@ async fn test_transfer_moves_balance_between_accounts() {
     // Assert: Savings increased by EUR 500
     let savings_balance = get_account_current_balance(&client, &savings_id).await;
     assert_eq!(savings_balance, 550_000); // 500000 + 50000
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_outgoing_transaction_increases_credit_card_balance() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let _period_id = create_period(&client, "2026-04-01", "2026-04-30").await;
+    let cc_id = create_credit_card(&client, "DI CC Amex", 84_400).await; // EUR 844.00
+    let expense_cat = create_category(&client, "DI CC Expense", "expense").await;
+
+    // Baseline
+    let balance_before = get_account_current_balance(&client, &cc_id).await;
+    assert_eq!(balance_before, 84_400);
+
+    // Action: three expenses totalling EUR 38.18
+    create_transaction(&client, &cc_id, &expense_cat, 81, "2026-04-05").await;
+    create_transaction(&client, &cc_id, &expense_cat, 1_014, "2026-04-06").await;
+    create_transaction(&client, &cc_id, &expense_cat, 2_723, "2026-04-07").await;
+
+    // Credit card balance = debt owed; purchases INCREASE it
+    // 84400 + 81 + 1014 + 2723 = 88218
+    let balance_after = get_account_current_balance(&client, &cc_id).await;
+    assert_eq!(
+        balance_after, 88_218,
+        "Credit card balance should INCREASE after purchases (more debt owed). \
+         Expected 88218 but got {}. The server is applying the wrong sign.",
+        balance_after
+    );
+}
+
+#[rocket::async_test]
+#[ignore = "requires database"]
+async fn test_incoming_transaction_decreases_credit_card_balance() {
+    let client = test_client().await;
+    create_user_and_login(&client).await;
+
+    let _period_id = create_period(&client, "2026-04-01", "2026-04-30").await;
+    let cc_id = create_credit_card(&client, "DI CC Visa", 100_000).await; // EUR 1000
+    let income_cat = create_category(&client, "DI CC Payment", "income").await;
+
+    // Baseline
+    let balance_before = get_account_current_balance(&client, &cc_id).await;
+    assert_eq!(balance_before, 100_000);
+
+    // Action: pay off EUR 400
+    create_transaction(&client, &cc_id, &income_cat, 40_000, "2026-04-06").await;
+
+    // Credit card balance should DECREASE after payment (less debt owed)
+    let balance_after = get_account_current_balance(&client, &cc_id).await;
+    assert_eq!(
+        balance_after, 60_000,
+        "Credit card balance should DECREASE after payment (less debt owed). \
+         Expected 60000 but got {}. The server is applying the wrong sign.",
+        balance_after
+    );
 }
 
 #[rocket::async_test]
