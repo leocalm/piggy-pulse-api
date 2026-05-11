@@ -558,8 +558,7 @@ PiggyPulse — Your financial pulse, calm, clear, and entirely yours.
 
         let creds = Credentials::new(self.config.smtp_username.clone(), self.config.smtp_password.clone());
 
-        let mailer = SmtpTransport::relay(&self.config.smtp_host)
-            .map_err(|e| AppError::email(format!("Failed to create SMTP transport: {}", e)))?
+        let mailer = SmtpTransport::builder_dangerous(&self.config.smtp_host)
             .credentials(creds)
             .port(self.config.smtp_port)
             .build();

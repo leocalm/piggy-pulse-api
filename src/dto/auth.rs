@@ -184,6 +184,7 @@ pub struct TwoFactorEnableResponse {
 
 #[derive(Deserialize, Debug, Validate)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct TwoFactorVerifyRequest {
     #[validate(length(min = 6, max = 6))]
     pub code: String,
