@@ -120,6 +120,11 @@ pub struct EmailConfig {
     pub from_address: String,
     pub from_name: String,
     pub enabled: bool,
+    /// Optional path to a PEM-encoded CA certificate to trust in addition to
+    /// the system roots. Useful for self-signed certs in test environments or
+    /// corporate SMTP relays behind a private CA.
+    #[serde(default)]
+    pub additional_ca_cert_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -269,6 +274,7 @@ impl Default for EmailConfig {
             from_address: "noreply@piggy-pulse.com".to_string(),
             from_name: "PiggyPulse".to_string(),
             enabled: false, // Disabled by default for safety
+            additional_ca_cert_path: None,
         }
     }
 }

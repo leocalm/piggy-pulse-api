@@ -120,18 +120,17 @@ RegisterRequest:
 TwoFactorCompleteRequest:
   type: object
   required:
-    - twoFactorToken
     - code
   properties:
     twoFactorToken:
       type: string
-      description: The short-lived token returned from the login challenge
+      description: The short-lived token returned from the login challenge. Omit or send an empty string when confirming authenticated 2FA setup.
       example: "eyJhbGciOiJIUzI1NiJ9..."
     code:
       type: string
-      description: 6-digit TOTP code from the authenticator app
+      description: 6-digit TOTP code from the authenticator app, or a backup code during login challenge verification.
       minLength: 6
-      maxLength: 6
+      maxLength: 16
       example: "123456"
 
 # ===== Token Refresh =====
@@ -189,18 +188,6 @@ TwoFactorEnableResponse:
       type: string
       description: otpauth:// URI for QR code generation
       example: "otpauth://totp/PiggyPulse:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=PiggyPulse"
-
-TwoFactorVerifyRequest:
-  type: object
-  required:
-    - code
-  properties:
-    code:
-      type: string
-      description: 6-digit TOTP code to confirm setup
-      minLength: 6
-      maxLength: 6
-      example: "123456"
 
 TwoFactorDisableRequest:
   type: object

@@ -140,8 +140,7 @@ pub struct UpdateWrappedDekRequest {
 #[derive(Deserialize, Debug, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct TwoFactorCompleteRequest {
-    #[validate(length(min = 1))]
-    pub two_factor_token: String,
+    pub two_factor_token: Option<String>,
     #[validate(length(min = 6, max = 16))]
     pub code: String,
 }
@@ -180,13 +179,6 @@ pub struct ResetPasswordRequest {
 pub struct TwoFactorEnableResponse {
     pub secret: String,
     pub qr_code_uri: String,
-}
-
-#[derive(Deserialize, Debug, Validate)]
-#[serde(rename_all = "camelCase")]
-pub struct TwoFactorVerifyRequest {
-    #[validate(length(min = 6, max = 6))]
-    pub code: String,
 }
 
 #[derive(Deserialize, Debug, Validate)]
