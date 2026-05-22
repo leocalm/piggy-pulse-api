@@ -5,7 +5,7 @@ use rocket::{Request, Response};
 use serde::Serialize;
 use std::io::Cursor;
 use thiserror::Error;
-use tracing::error;
+use tracing::{error, info};
 use validator::ValidationErrors;
 
 #[derive(Serialize)]
@@ -143,6 +143,10 @@ impl From<&AppError> for Status {
     }
 }
 
+fn logs_as_info(status: Status) -> bool {
+    status == Status::NotFound
+}
+
 impl AppError {
     pub fn internal(message: impl Into<String>) -> Self {
         Self::Internal { message: message.into() }
@@ -177,16 +181,28 @@ impl<'r> Responder<'r, 'static> for AppError {
             .map(|u| u.id.to_string())
             .unwrap_or_else(|| "anonymous".to_string());
 
-        error!(
-            error = ?self,
-            request_id = %request_id,
-            user_id = %user_id,
-            method = %method,
-            uri = %uri,
-            "request failed"
-        );
-
         let status = Status::from(&self);
+
+        if logs_as_info(status) {
+            info!(
+                error = ?self,
+                request_id = %request_id,
+                user_id = %user_id,
+                method = %method,
+                uri = %uri,
+                "request failed"
+            );
+        } else {
+            error!(
+                error = ?self,
+                request_id = %request_id,
+                user_id = %user_id,
+                method = %method,
+                uri = %uri,
+                "request failed"
+            );
+        }
+
         let body = match &self {
             AppError::TwoFactorRequired => {
                 // Special case for 2FA required - return custom JSON
@@ -303,6 +319,31 @@ mod rate_limit_error_tests {
             message: "Account locked".to_string(),
         };
         assert_eq!(Status::from(&error), Status { code: 423 });
+    }
+}
+
+#[cfg(test)]
+mod logging_tests {
+    use super::*;
+
+    #[test]
+    fn not_found_errors_log_at_info() {
+        assert!(logs_as_info(Status::NotFound));
+    }
+
+    #[test]
+    fn non_not_found_errors_do_not_log_at_info() {
+        let cases = [
+            Status::BadRequest,
+            Status::Unauthorized,
+            Status::Forbidden,
+            Status::TooManyRequests,
+            Status::InternalServerError,
+        ];
+
+        for status in cases {
+            assert!(!logs_as_info(status), "{} should not log at INFO", status.code);
+        }
     }
 }
 
