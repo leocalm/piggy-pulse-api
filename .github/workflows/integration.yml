@@ -52,7 +52,7 @@ jobs:
       - name: Install sqlx-cli
         uses: taiki-e/install-action@v2
         with:
-          tool: sqlx-cli
+          tool: sqlx-cli@0.8.6
 
       - name: Run migrations
         run: sqlx migrate run

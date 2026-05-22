@@ -6,6 +6,10 @@ use rocket::http::{ContentType, Status};
 use serde_json::Value;
 use uuid::Uuid;
 
+fn date_after(days: i64) -> String {
+    (chrono::Utc::now().date_naive() + chrono::Duration::days(days)).format("%Y-%m-%d").to_string()
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // POST /periods (create)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -16,10 +20,11 @@ async fn test_create_period_duration_asserts_all_fields() {
     let client = test_client().await;
     create_user_and_login(&client).await;
 
+    let start_date = date_after(1);
     let payload = serde_json::json!({
         "periodType": "Duration",
-        "startDate": "2026-04-01",
-        "name": "April Duration",
+        "startDate": start_date,
+        "name": "Duration Period",
         "duration": {
             "durationUnits": 30,
             "durationUnit": "days"
@@ -37,14 +42,12 @@ async fn test_create_period_duration_asserts_all_fields() {
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
 
     common::assertions::assert_uuid(&body["id"]);
-    assert_eq!(body["name"], "April Duration");
-    assert_eq!(body["startDate"], "2026-04-01");
+    assert_eq!(body["name"], "Duration Period");
+    assert_eq!(body["startDate"], start_date);
     assert_eq!(body["periodType"], "duration");
     assert_eq!(body["length"], 30);
     assert_eq!(body["numberOfTransactions"], 0);
-    // Status depends on whether start_date is in the past/present/future relative to today
-    let status = body["status"].as_str().unwrap();
-    assert!(status == "active" || status == "upcoming", "expected active or upcoming, got {status}");
+    assert_eq!(body["status"], "upcoming");
     // Duration-based fields
     assert_eq!(body["duration"]["durationUnits"], 30);
     assert_eq!(body["duration"]["durationUnit"], "days");
@@ -58,11 +61,13 @@ async fn test_create_period_manual_end_date_asserts_all_fields() {
     let client = test_client().await;
     create_user_and_login(&client).await;
 
+    let start_date = date_after(1);
+    let end_date = date_after(31);
     let payload = serde_json::json!({
         "periodType": "ManualEndDate",
-        "startDate": "2026-05-01",
-        "name": "May Manual",
-        "manualEndDate": "2026-05-31"
+        "startDate": start_date,
+        "name": "Manual Period",
+        "manualEndDate": end_date
     });
 
     let resp = client
@@ -76,11 +81,11 @@ async fn test_create_period_manual_end_date_asserts_all_fields() {
     let body: Value = serde_json::from_str(&resp.into_string().await.unwrap()).unwrap();
 
     common::assertions::assert_uuid(&body["id"]);
-    assert_eq!(body["name"], "May Manual");
-    assert_eq!(body["startDate"], "2026-05-01");
+    assert_eq!(body["name"], "Manual Period");
+    assert_eq!(body["startDate"], start_date);
     assert_eq!(body["periodType"], "manualEndDate");
-    assert_eq!(body["manualEndDate"], "2026-05-31");
-    assert_eq!(body["length"], 30); // May 1 to May 31 = 30 days
+    assert_eq!(body["manualEndDate"], end_date);
+    assert_eq!(body["length"], 30);
     assert_eq!(body["numberOfTransactions"], 0);
     assert_eq!(body["status"], "upcoming");
     assert!(body["remainingDays"].as_i64().unwrap() > 0);
