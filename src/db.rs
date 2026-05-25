@@ -7,11 +7,21 @@ use sqlx::migrate::Migrator;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use std::str::FromStr;
 use std::time::Duration;
+use tracing::info;
 
 // Embed migrations into the binary at compile time.
 static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 
 pub async fn init_pool(db_config: &DatabaseConfig, slow_query_ms: u64) -> Result<PgPool, sqlx::Error> {
+    info!(
+        max_connections = db_config.max_connections,
+        min_connections = db_config.min_connections,
+        connection_timeout_secs = db_config.connection_timeout,
+        acquire_timeout_secs = db_config.acquire_timeout,
+        slow_query_ms = slow_query_ms,
+        "initializing postgres connection pool"
+    );
+
     let connect_options = PgConnectOptions::from_str(&db_config.url)?
         .log_statements(LevelFilter::Debug)
         .log_slow_statements(LevelFilter::Warn, Duration::from_millis(slow_query_ms));
@@ -26,6 +36,7 @@ pub async fn init_pool(db_config: &DatabaseConfig, slow_query_ms: u64) -> Result
         .await?;
 
     MIGRATOR.run(&pool).await?;
+    info!("database migrations applied successfully");
 
     Ok(pool)
 }

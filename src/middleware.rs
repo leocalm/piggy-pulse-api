@@ -1,5 +1,5 @@
 use rocket::fairing::{Fairing, Info, Kind};
-use rocket::http::Header;
+use rocket::http::{Header, uri::Origin};
 use rocket::request::{FromRequest, Outcome, Request};
 use rocket::{Data, Response};
 use std::time::Instant;
@@ -41,6 +41,28 @@ impl<'r> FromRequest<'r> for RequestId {
 #[derive(Debug, Clone, Copy)]
 struct RequestStartTime(Instant);
 
+pub(crate) fn query_keys(uri: &Origin<'_>) -> Vec<&str> {
+    uri.query()
+        .map(|query| {
+            query
+                .as_str()
+                .split('&')
+                .filter(|segment| !segment.is_empty())
+                .map(|segment| segment.split_once('=').map(|(key, _)| key).unwrap_or(segment))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub(crate) fn query_keys_display(uri: &Origin<'_>) -> String {
+    let keys = query_keys(uri);
+    if keys.is_empty() {
+        "-".to_string()
+    } else {
+        keys.join(",")
+    }
+}
+
 /// Fairing that adds request ID to all requests and logs request/response information
 pub struct RequestLogger;
 
@@ -56,8 +78,12 @@ impl Fairing for RequestLogger {
     async fn on_request(&self, request: &mut Request<'_>, _: &mut Data<'_>) {
         let request_id = RequestId::new();
         let method = request.method().to_string();
-        let uri = request.uri().to_string();
+        let path = request.uri().path().to_string();
+        let query_key_list = query_keys_display(request.uri());
+        let query_keys_count = request.uri().query().map(|_| query_keys(request.uri()).len()).unwrap_or(0);
         let request_bytes = request.headers().get_one("Content-Length").and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+        let client_ip = request.client_ip().map(|ip| ip.to_string());
+        let user_agent = request.headers().get_one("User-Agent").map(str::to_owned);
 
         // Extract user_id from cookie without DB hit
         let user_id = request.cookies().get_private("user").and_then(|c| {
@@ -73,8 +99,12 @@ impl Fairing for RequestLogger {
         info!(
             request_id = %request_id.0,
             method = %method,
-            uri = %uri,
+            path = %path,
+            query_keys = %query_key_list,
+            query_keys_count = query_keys_count,
             user_id = user_id.as_deref().unwrap_or("-"),
+            client_ip = client_ip.as_deref().unwrap_or("-"),
+            user_agent = user_agent.as_deref().unwrap_or("-"),
             request_bytes = request_bytes,
             "incoming request"
         );
@@ -93,7 +123,11 @@ impl Fairing for RequestLogger {
 
         let status = response.status();
         let method = request.method();
-        let uri = request.uri();
+        let path = request.uri().path().to_string();
+        let query_key_list = query_keys_display(request.uri());
+        let query_keys_count = request.uri().query().map(|_| query_keys(request.uri()).len()).unwrap_or(0);
+        let client_ip = request.client_ip().map(|ip| ip.to_string());
+        let user_agent = request.headers().get_one("User-Agent").map(str::to_owned);
 
         let response_bytes = response
             .headers()
@@ -131,12 +165,16 @@ impl Fairing for RequestLogger {
             warn!(
                 request_id = %request_id,
                 method = %method,
-                uri = %uri,
+                path = %path,
+                query_keys = %query_key_list,
+                query_keys_count = query_keys_count,
                 status = status.code,
                 duration_ms = duration_ms,
                 request_bytes = request_bytes,
                 response_bytes = response_bytes,
                 user_id = user_id.as_deref().unwrap_or("-"),
+                client_ip = client_ip.as_deref().unwrap_or("-"),
+                user_agent = user_agent.as_deref().unwrap_or("-"),
                 slow = if is_slow { Some(true) } else { None },
                 "request completed{}{}",
                 if is_error { " with error" } else { "" },
@@ -146,12 +184,16 @@ impl Fairing for RequestLogger {
             info!(
                 request_id = %request_id,
                 method = %method,
-                uri = %uri,
+                path = %path,
+                query_keys = %query_key_list,
+                query_keys_count = query_keys_count,
                 status = status.code,
                 duration_ms = duration_ms,
                 request_bytes = request_bytes,
                 response_bytes = response_bytes,
                 user_id = user_id.as_deref().unwrap_or("-"),
+                client_ip = client_ip.as_deref().unwrap_or("-"),
+                user_agent = user_agent.as_deref().unwrap_or("-"),
                 "request completed"
             );
         }
@@ -212,6 +254,24 @@ mod tests {
         let id1 = RequestId::new();
         let id2 = RequestId::new();
         assert_ne!(id1.0, id2.0);
+    }
+
+    #[test]
+    fn test_query_keys_extracts_names_only() {
+        let uri = Origin::parse("/v2/transactions?cursor=abc123&limit=20&flag").expect("valid origin");
+        assert_eq!(query_keys(&uri), vec!["cursor", "limit", "flag"]);
+    }
+
+    #[test]
+    fn test_query_keys_display_uses_dash_when_absent() {
+        let uri = Origin::parse("/v2/transactions").expect("valid origin");
+        assert_eq!(query_keys_display(&uri), "-");
+    }
+
+    #[test]
+    fn test_query_keys_display_joins_multiple_keys() {
+        let uri = Origin::parse("/v2/transactions?cursor=abc123&limit=20").expect("valid origin");
+        assert_eq!(query_keys_display(&uri), "cursor,limit");
     }
 
     #[test]

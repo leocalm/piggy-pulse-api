@@ -1,10 +1,11 @@
-use crate::middleware::RequestId;
+use crate::middleware::{RequestId, query_keys_display};
 use rocket::http::{ContentType, Header, Status};
 use rocket::response::{Responder, Result as ResponseResult};
 use rocket::serde::Serialize;
 use rocket::serde::json::Json;
 use rocket::{Request, Response, catch};
 use std::io::Cursor;
+use tracing::info;
 
 #[derive(Serialize)]
 #[serde(crate = "rocket::serde")]
@@ -25,9 +26,23 @@ fn get_request_id(req: &Request) -> String {
 
 #[catch(404)]
 pub fn not_found(req: &Request) -> Json<Error> {
+    let request_id = get_request_id(req);
+    let method = req.method();
+    let path = req.uri().path().to_string();
+    let query_keys = query_keys_display(req.uri());
+
+    info!(
+        request_id = %request_id,
+        method = %method,
+        path = %path,
+        query_keys = %query_keys,
+        status = Status::NotFound.code,
+        "request completed with not found"
+    );
+
     Json(Error {
         message: "Not found".to_string(),
-        request_id: get_request_id(req),
+        request_id,
     })
 }
 

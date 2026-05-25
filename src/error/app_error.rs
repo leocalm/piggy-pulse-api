@@ -165,7 +165,8 @@ impl<'r> Responder<'r, 'static> for AppError {
     fn respond_to(self, req: &Request<'_>) -> rocket::response::Result<'static> {
         // Extract request context for better error logging
         let method = req.method();
-        let uri = req.uri();
+        let path = req.uri().path().to_string();
+        let query_keys = crate::middleware::query_keys_display(req.uri());
 
         // Try to get request_id from local_cache
         let request_id = req
@@ -189,7 +190,8 @@ impl<'r> Responder<'r, 'static> for AppError {
                 request_id = %request_id,
                 user_id = %user_id,
                 method = %method,
-                uri = %uri,
+                path = %path,
+                query_keys = %query_keys,
                 "request failed"
             );
         } else {
@@ -198,7 +200,8 @@ impl<'r> Responder<'r, 'static> for AppError {
                 request_id = %request_id,
                 user_id = %user_id,
                 method = %method,
-                uri = %uri,
+                path = %path,
+                query_keys = %query_keys,
                 "request failed"
             );
         }

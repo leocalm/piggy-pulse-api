@@ -20,6 +20,8 @@ use crate::middleware::RequestLogger;
 use crate::routes as app_routes;
 use rocket::{Build, Rocket, catchers, http::Method};
 use rocket_cors::{AllowedOrigins, CorsOptions};
+use tracing::{info, warn};
+use tracing_log::LogTracer;
 use tracing_subscriber::EnvFilter;
 
 fn init_tracing(log_level: &str, json_format: bool) {
@@ -27,6 +29,8 @@ fn init_tracing(log_level: &str, json_format: bool) {
     static TRACING_INIT: Once = Once::new();
 
     TRACING_INIT.call_once(|| {
+        LogTracer::init().expect("failed to bridge log records into tracing");
+
         // Configure logging with environment variable support
         // RUST_LOG environment variable can be used for fine-grained control per module:
         // Examples:
@@ -175,6 +179,41 @@ fn normalize_base_path(raw: &str) -> String {
     normalized
 }
 
+fn log_startup_config(config: &Config, base_path: &str) {
+    let profile = std::env::var("ROCKET_PROFILE").unwrap_or_else(|_| "debug".to_string());
+    let cors = if config.cors.allowed_origins.is_empty() {
+        "disabled".to_string()
+    } else if config.cors.allowed_origins.len() == 1 && config.cors.allowed_origins[0] == "*" {
+        "wildcard".to_string()
+    } else {
+        format!("{} origins", config.cors.allowed_origins.len())
+    };
+
+    info!(
+        profile = %profile,
+        address = %config.server.address,
+        port = config.server.port,
+        api_base_path = %base_path,
+        log_level = %config.logging.level,
+        log_json = config.logging.json_format,
+        slow_request_ms = config.logging.slow_request_ms,
+        slow_query_ms = config.logging.slow_query_ms,
+        db_max_connections = config.database.max_connections,
+        db_min_connections = config.database.min_connections,
+        cors = %cors,
+        allow_credentials = config.cors.allow_credentials,
+        "starting piggy-pulse api"
+    );
+
+    if config.logging.level.eq_ignore_ascii_case("debug") || config.logging.level.eq_ignore_ascii_case("trace") {
+        warn!(
+            profile = %profile,
+            log_level = %config.logging.level,
+            "verbose application logging is enabled"
+        );
+    }
+}
+
 fn join_base_path(base_path: &str, path: &str) -> String {
     let base = base_path.trim_end_matches('/');
     let suffix = path.trim_start_matches('/');
@@ -223,6 +262,7 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
     let cors = build_cors(&config.cors).to_cors().expect("Failed to create CORS fairing");
 
     let base_path = normalize_base_path(&config.api.base_path);
+    log_startup_config(&config, &base_path);
 
     let mut rocket = rocket::build()
         .manage(config.clone())
