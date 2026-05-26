@@ -147,7 +147,13 @@ impl<'r> FromRequest<'r> for CurrentUser {
             }
         }
 
-        Outcome::Error((Status::Unauthorized, AppError::InvalidCredentials))
+        // Forward instead of Error so Rocket can fall through to a
+        // higher-rank route (e.g. the unauthenticated 2FA login verify).
+        // Single-handler routes that relied on a 401 guard rejection will
+        // now return 404 for unauthenticated requests (because Forward
+        // means "route not matched"). The frontend redirects to login
+        // on any non-2xx, so this is safe.
+        Outcome::Forward(Status::Unauthorized)
     }
 }
 

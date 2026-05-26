@@ -1,0 +1,12 @@
+[cors]
+allowed_origins = ["http://localhost:5173"]
+allow_credentials = true
+
+[email]
+smtp_host = "127.0.0.1"
+smtp_port = 1025
+smtp_username = ""
+smtp_password = ""
+from_address = "noreply@piggy-pulse.com"
+from_name = "PiggyPulse"
+enabled = true
