@@ -1,0 +1,31 @@
+post:
+  tags:
+    - Transactions
+  summary: Batch create transactions
+  description: Create multiple transactions in a single request. All transactions are created atomically within the same ledger batch.
+  operationId: batchCreateTransactions
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: array
+          items:
+            $ref: '../schemas/Transaction.yaml#/CreateTransactionRequest'
+  responses:
+    '201':
+      description: Created
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '../schemas/Transaction.yaml#/EncryptedTransactionResponse'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '422':
+      $ref: '../responses/UnprocessableEntity.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
