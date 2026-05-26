@@ -20,7 +20,49 @@ use crate::middleware::RequestLogger;
 use crate::routes as app_routes;
 use rocket::{Build, Rocket, catchers, http::Method};
 use rocket_cors::{AllowedOrigins, CorsOptions};
+use tracing::Level;
+use tracing::field::{Field, Visit};
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::layer::{Context, Filter};
+use tracing_subscriber::prelude::*;
+
+#[derive(Clone, Copy)]
+struct SuppressRocketRouteMiss;
+
+impl<S> Filter<S> for SuppressRocketRouteMiss {
+    fn enabled(&self, _metadata: &tracing::Metadata<'_>, _cx: &Context<'_, S>) -> bool {
+        true
+    }
+
+    fn event_enabled(&self, event: &tracing::Event<'_>, _cx: &Context<'_, S>) -> bool {
+        !is_rocket_route_miss_event(event)
+    }
+}
+
+#[derive(Default)]
+struct EventMessage {
+    message: Option<String>,
+}
+
+impl Visit for EventMessage {
+    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+        if field.name() == "message" {
+            self.message = Some(format!("{value:?}").trim_matches('"').to_string());
+        }
+    }
+}
+
+fn is_rocket_route_miss_event(event: &tracing::Event<'_>) -> bool {
+    let metadata = event.metadata();
+    let mut fields = EventMessage::default();
+    event.record(&mut fields);
+
+    is_rocket_route_miss_parts(metadata.level(), metadata.target(), fields.message.as_deref())
+}
+
+fn is_rocket_route_miss_parts(level: &Level, target: &str, message: Option<&str>) -> bool {
+    *level == Level::ERROR && target.starts_with("rocket::server") && message.is_some_and(|message| message.starts_with("No matching routes for "))
+}
 
 fn init_tracing(log_level: &str, json_format: bool) {
     use std::sync::Once;
@@ -36,16 +78,29 @@ fn init_tracing(log_level: &str, json_format: bool) {
         //   RUST_LOG=info,piggy_pulse::routes=debug - Global info, routes at debug
         let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
 
-        let subscriber = tracing_subscriber::fmt()
-            .with_env_filter(filter)
-            .with_target(true)
-            .with_line_number(true)
-            .with_thread_ids(false);
-
         if json_format {
-            subscriber.json().init();
+            tracing_subscriber::registry()
+                .with(filter)
+                .with(
+                    tracing_subscriber::fmt::layer()
+                        .json()
+                        .with_target(true)
+                        .with_line_number(true)
+                        .with_thread_ids(false)
+                        .with_filter(SuppressRocketRouteMiss),
+                )
+                .init();
         } else {
-            subscriber.init();
+            tracing_subscriber::registry()
+                .with(filter)
+                .with(
+                    tracing_subscriber::fmt::layer()
+                        .with_target(true)
+                        .with_line_number(true)
+                        .with_thread_ids(false)
+                        .with_filter(SuppressRocketRouteMiss),
+                )
+                .init();
         }
     });
 }
@@ -244,4 +299,36 @@ pub fn build_rocket(config: Config) -> Rocket<Build> {
     rocket = rocket.register(base_path.as_str(), all_catchers);
 
     rocket
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rocket_route_miss_errors_are_suppressed_from_error_logs() {
+        assert!(is_rocket_route_miss_parts(
+            &Level::ERROR,
+            "rocket::server::_",
+            Some("No matching routes for GET /v2/missing.")
+        ));
+    }
+
+    #[test]
+    fn non_route_miss_rocket_errors_are_not_suppressed() {
+        assert!(!is_rocket_route_miss_parts(
+            &Level::ERROR,
+            "rocket::server::_",
+            Some("No 401 catcher registered. Using Rocket default.")
+        ));
+    }
+
+    #[test]
+    fn route_miss_info_events_are_not_suppressed() {
+        assert!(!is_rocket_route_miss_parts(
+            &Level::INFO,
+            "rocket::server::_",
+            Some("No matching routes for GET /v2/missing.")
+        ));
+    }
 }

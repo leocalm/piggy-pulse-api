@@ -250,6 +250,8 @@ paths:
     $ref: './paths/periods@schedule.yaml'
   /periods/{id}:
     $ref: './paths/periods@{id}.yaml'
+  /periods/gaps:
+    $ref: './paths/periods@gaps.yaml'
   /accounts/options:
     $ref: './paths/accounts@options.yaml'
   /accounts:
@@ -298,6 +300,8 @@ paths:
     $ref: './paths/transactions@range.yaml'
   /transactions/{id}:
     $ref: './paths/transactions@{id}.yaml'
+  /transactions/batch:
+    $ref: './paths/transactions@batch.yaml'
 
   /auth/2fa/enable:
     $ref: './paths/auth@2fa@enable.yaml'
