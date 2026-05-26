@@ -1,0 +1,17 @@
+get:
+  tags:
+    - Periods
+  summary: List period gaps
+  description: Returns periods of time not covered by any budget period. Helps users identify and fill gaps in their budget timeline.
+  operationId: getPeriodGaps
+  responses:
+    '200':
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Period.yaml#/PeriodGapsResponse'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '500':
+      $ref: '../responses/InternalServerError.yaml'
