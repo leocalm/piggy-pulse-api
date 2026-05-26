@@ -270,3 +270,25 @@ CreatePeriodScheduleRequest:
 UpdatePeriodScheduleRequest:
   allOf:
     - $ref: '#/CreatePeriodScheduleRequest'
+
+# ===== Period Gaps =====
+
+PeriodGap:
+  type: object
+  required:
+    - startDate
+    - endDate
+  properties:
+    startDate:
+      type: string
+      format: date
+      example: "2026-06-01"
+    endDate:
+      type: string
+      format: date
+      example: "2026-06-30"
+
+PeriodGapsResponse:
+  type: array
+  items:
+    $ref: '#/PeriodGap'
