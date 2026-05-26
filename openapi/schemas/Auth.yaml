@@ -67,6 +67,8 @@ AuthenticatedResponse:
     - requiresTwoFactor
     - user
     - token
+    - wrappedDek
+    - dekWrapParams
   properties:
     requiresTwoFactor:
       type: boolean
@@ -77,6 +79,12 @@ AuthenticatedResponse:
       type: [string, "null"]
       description: Bearer token. Present when authenticated via token (iOS). Null for session-based auth (web).
       example: "pp_tok_abc123..."
+    wrappedDek:
+      type: [string, "null"]
+      description: Base64-encoded wrapped DEK for encryption-at-rest. Client should unwrap and POST to /v2/auth/unlock.
+    dekWrapParams:
+      type: [object, "null"]
+      description: Argon2id parameters for KEK derivation. Contains salt (base64), m, t, p, and wrapNonce.
 
 LoginResponse:
   discriminator:
