@@ -59,7 +59,7 @@ TwoFactorChallengeResponse:
     twoFactorToken:
       type: string
       description: Short-lived opaque token used to complete 2FA verification
-      example: "eyJhbGciOiJIUzI1NiJ9..."
+      example: "eyJhbG...NiJ9..."
 
 AuthenticatedResponse:
   type: object
@@ -77,6 +77,12 @@ AuthenticatedResponse:
       type: [string, "null"]
       description: Bearer token. Present when authenticated via token (iOS). Null for session-based auth (web).
       example: "pp_tok_abc123..."
+    wrappedDek:
+      type: [string, "null"]
+      description: Base64-encoded wrapped DEK for encryption-at-rest. Client should unwrap and POST to /v2/auth/unlock. May be null for legacy users who registered before encryption was enabled.
+    dekWrapParams:
+      type: [object, "null"]
+      description: Argon2id parameters for KEK derivation. Contains salt (base64), m, t, p, and wrapNonce. May be null for legacy users.
 
 LoginResponse:
   discriminator:
@@ -126,7 +132,7 @@ TwoFactorCompleteRequest:
     twoFactorToken:
       type: string
       description: The short-lived token returned from the login challenge
-      example: "eyJhbGciOiJIUzI1NiJ9..."
+      example: "eyJhbG...NiJ9..."
     code:
       type: string
       description: 6-digit TOTP code from the authenticator app
