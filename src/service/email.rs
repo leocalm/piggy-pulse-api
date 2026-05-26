@@ -1,6 +1,7 @@
 use crate::config::EmailConfig;
 use crate::error::app_error::AppError;
 use lettre::transport::smtp::authentication::Credentials;
+use lettre::transport::smtp::client::{Certificate, Tls, TlsParameters};
 use lettre::{Message, SmtpTransport, Transport};
 
 pub struct EmailService {
@@ -539,8 +540,8 @@ PiggyPulse — Your financial pulse, calm, clear, and entirely yours.
     }
 
     // ── SMTP transport ───────────────────────────────────────────────────
-
     async fn send_email(&self, to_email: &str, subject: &str, html_body: &str, text_body: &str) -> Result<(), AppError> {
+        // Build the email message
         let email = Message::builder()
             .from(
                 format!("{} <{}>", self.config.from_name, self.config.from_address)
@@ -556,13 +557,28 @@ PiggyPulse — Your financial pulse, calm, clear, and entirely yours.
             )
             .map_err(|e| AppError::email(format!("Failed to build email: {}", e)))?;
 
+        // Build TLS parameters, optionally trusting an additional CA cert.
+        let mut tls_builder = TlsParameters::builder(self.config.smtp_host.clone());
+        if let Some(ca_path) = &self.config.additional_ca_cert_path {
+            let pem = std::fs::read(ca_path).map_err(|e| AppError::email(format!("Failed to read CA cert from {}: {}", ca_path, e)))?;
+            let cert = Certificate::from_pem(&pem).map_err(|e| AppError::email(format!("Failed to parse CA cert: {}", e)))?;
+            tls_builder = tls_builder.add_root_certificate(cert);
+        }
+        let tls_params = tls_builder
+            .build()
+            .map_err(|e| AppError::email(format!("Failed to build TLS parameters: {}", e)))?;
+
+        // Configure SMTP transport with STARTTLS on the submission port.
         let creds = Credentials::new(self.config.smtp_username.clone(), self.config.smtp_password.clone());
 
-        let mailer = SmtpTransport::builder_dangerous(&self.config.smtp_host)
+        let mailer = SmtpTransport::starttls_relay(&self.config.smtp_host)
+            .map_err(|e| AppError::email(format!("Failed to create SMTP transport: {}", e)))?
             .credentials(creds)
             .port(self.config.smtp_port)
+            .tls(Tls::Required(tls_params))
             .build();
 
+        // Send the email (blocking operation, should be run in a separate thread)
         let result = tokio::task::spawn_blocking(move || mailer.send(&email))
             .await
             .map_err(|e| AppError::email(format!("Failed to spawn email sending task: {}", e)))?;
@@ -587,6 +603,7 @@ mod tests {
             from_address: "noreply@piggy-pulse.com".to_string(),
             from_name: "PiggyPulse".to_string(),
             enabled: false,
+            additional_ca_cert_path: None,
         }
     }
 

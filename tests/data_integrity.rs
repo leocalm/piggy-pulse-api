@@ -11,7 +11,7 @@ use serde_json::Value;
 
 // Test DEK — must match the one sent in unlock_session (32 zero bytes, base64-encoded).
 const TEST_DEK_BYTES: [u8; 32] = [0u8; 32];
-const _TEST_DEK_B64: &str = "AAAAAAAAAAAAAAAAAAAAAA==";
+const _TEST_DEK_B64: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 
 /// Helper to decrypt an AES-GCM envelope with the test DEK (all zeros).
 fn decrypt_test_dek(envelope_b64: &str) -> Vec<u8> {
