@@ -3,7 +3,7 @@ use rocket::http::Header;
 use rocket::request::{FromRequest, Outcome, Request};
 use rocket::{Data, Response};
 use std::time::Instant;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use uuid::Uuid;
 
 /// Request ID that is attached to every request for tracking
