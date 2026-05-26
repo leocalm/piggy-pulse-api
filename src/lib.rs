@@ -22,6 +22,7 @@ use rocket::{Build, Rocket, catchers, http::Method};
 use rocket_cors::{AllowedOrigins, CorsOptions};
 use tracing::Level;
 use tracing::field::{Field, Visit};
+use tracing::warn;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::{Context, Filter};
 use tracing_subscriber::prelude::*;
@@ -61,7 +62,14 @@ fn is_rocket_route_miss_event(event: &tracing::Event<'_>) -> bool {
 }
 
 fn is_rocket_route_miss_parts(level: &Level, target: &str, message: Option<&str>) -> bool {
-    *level == Level::ERROR && target.starts_with("rocket::server") && message.is_some_and(|message| message.starts_with("No matching routes for "))
+    if *level == Level::ERROR && target.starts_with("rocket::server") && message.is_some_and(|message| message.starts_with("No matching routes for ")) {
+        // Demote to WARN: route misses (404) are client errors, not server errors.
+        // The RequestLogger fairing already logs the full 404 response at INFO.
+        warn!("{}", message.unwrap_or("No matching routes"));
+        true
+    } else {
+        false
+    }
 }
 
 fn init_tracing(log_level: &str, json_format: bool) {

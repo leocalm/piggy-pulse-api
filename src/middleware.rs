@@ -3,7 +3,7 @@ use rocket::http::Header;
 use rocket::request::{FromRequest, Outcome, Request};
 use rocket::{Data, Response};
 use std::time::Instant;
-use tracing::{info, warn};
+use tracing::{error, info};
 use uuid::Uuid;
 
 /// Request ID that is attached to every request for tracking
@@ -128,7 +128,7 @@ impl Fairing for RequestLogger {
         let is_slow = duration_ms > slow_request_ms;
 
         if is_error || is_slow {
-            warn!(
+            error!(
                 request_id = %request_id,
                 method = %method,
                 uri = %uri,
