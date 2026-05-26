@@ -153,8 +153,6 @@ components:
       $ref: './schemas/Auth.yaml#/ResetPasswordRequest'
     TwoFactorEnableResponse:
       $ref: './schemas/Auth.yaml#/TwoFactorEnableResponse'
-    TwoFactorVerifyRequest:
-      $ref: './schemas/Auth.yaml#/TwoFactorVerifyRequest'
     TwoFactorDisableRequest:
       $ref: './schemas/Auth.yaml#/TwoFactorDisableRequest'
 

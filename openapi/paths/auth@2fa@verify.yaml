@@ -9,11 +9,13 @@ post:
     **Setup confirmation (authenticated):**
     Called after `POST /auth/2fa/enable` to activate 2FA with a valid TOTP code.
     Requires an active session cookie. Request body: `{ "code": "123456" }`.
+    For backward compatibility, `{ "code": "123456", "twoFactorToken": "" }` is also accepted.
 
     **Login challenge (unauthenticated):**
     Called after a login that returned `requiresTwoFactor: true`, using the
     `twoFactorToken` from the login response. No session cookie required.
     Request body: `{ "code": "123456", "twoFactorToken": "..." }`.
+    The `code` field may contain either an authenticator code or a backup code.
   requestBody:
     required: true
     content:
