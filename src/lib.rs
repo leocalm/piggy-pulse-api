@@ -21,7 +21,7 @@ use crate::routes as app_routes;
 use rocket::{Build, Rocket, catchers, http::Method};
 use rocket_cors::{AllowedOrigins, CorsOptions};
 use tracing::Level;
-use tracing::{field::Field, Visit, warn};
+use tracing::{Visit, field::Field, warn};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::{Context, Filter};
 use tracing_subscriber::prelude::*;
