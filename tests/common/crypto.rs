@@ -15,8 +15,8 @@ pub fn decrypt_envelope(envelope_b64: &str) -> Vec<u8> {
     }
     let (nonce_bytes, ciphertext) = envelope.split_at(12);
     let cipher = Aes256Gcm::new_from_slice(&TEST_DEK_BYTES).expect("valid key");
-    let nonce = Nonce::from_slice(nonce_bytes);
-    cipher.decrypt(nonce, ciphertext).expect("decrypt with test DEK")
+    let nonce = Nonce::try_from(nonce_bytes).expect("nonce is always 12 bytes");
+    cipher.decrypt(&nonce, ciphertext).expect("decrypt with test DEK")
 }
 
 /// Decrypt an encrypted i64 field from an AES-GCM envelope.
