@@ -3,7 +3,7 @@ use crate::error::app_error::AppError;
 use crate::models::two_factor::{BackupCode, EmergencyToken, TwoFactorAuth, TwoFactorRateLimit};
 use aes_gcm::{
     Aes256Gcm, Nonce,
-    aead::{Aead, KeyInit, OsRng},
+    aead::{Aead, KeyInit},
 };
 use argon2::Argon2;
 use argon2::password_hash::{PasswordHasher, PasswordVerifier, SaltString};
@@ -11,6 +11,7 @@ use base64::{Engine as _, engine::general_purpose};
 use data_encoding::BASE32_NOPAD;
 use qrcode::QrCode;
 use rand::Rng;
+use rand_core::OsRng;
 use sha2::{Digest, Sha256};
 use std::time::SystemTime;
 use totp_rs::{Algorithm, Secret, TOTP};
@@ -40,10 +41,10 @@ impl PostgresRepository {
         let mut rng = rand::rng();
         let mut nonce_bytes = [0u8; 12];
         rng.fill_bytes(&mut nonce_bytes);
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let nonce = Nonce::try_from(nonce_bytes.as_slice()).expect("nonce is always 12 bytes");
 
         let ciphertext = cipher
-            .encrypt(nonce, secret.as_bytes())
+            .encrypt(&nonce, secret.as_bytes())
             .map_err(|e| AppError::BadRequest(format!("Encryption failed: {}", e)))?;
 
         let encrypted_base64 = general_purpose::STANDARD.encode(&ciphertext);
@@ -64,10 +65,10 @@ impl PostgresRepository {
             .decode(nonce_base64)
             .map_err(|e| AppError::BadRequest(format!("Failed to decode nonce: {}", e)))?;
 
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let nonce = Nonce::try_from(nonce_bytes.as_slice()).expect("nonce is always 12 bytes");
 
         let plaintext = cipher
-            .decrypt(nonce, ciphertext.as_ref())
+            .decrypt(&nonce, ciphertext.as_ref())
             .map_err(|e| AppError::BadRequest(format!("Decryption failed: {}", e)))?;
 
         String::from_utf8(plaintext).map_err(|e| AppError::BadRequest(format!("Invalid UTF-8 in decrypted secret: {}", e)))

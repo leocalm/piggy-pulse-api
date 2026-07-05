@@ -67,8 +67,8 @@ impl Dek {
     pub fn encrypt_bytes(&self, plaintext: &[u8]) -> Result<Vec<u8>, CryptoError> {
         let mut nonce_bytes = [0u8; 12];
         rand::rng().fill_bytes(&mut nonce_bytes);
-        let nonce = Nonce::from_slice(&nonce_bytes);
-        let ciphertext = self.cipher().encrypt(nonce, plaintext).map_err(|_| CryptoError::EncryptFailed)?;
+        let nonce = Nonce::try_from(nonce_bytes.as_slice()).expect("nonce is always 12 bytes");
+        let ciphertext = self.cipher().encrypt(&nonce, plaintext).map_err(|_| CryptoError::EncryptFailed)?;
         let mut out = Vec::with_capacity(12 + ciphertext.len());
         out.extend_from_slice(&nonce_bytes);
         out.extend_from_slice(&ciphertext);
@@ -82,8 +82,8 @@ impl Dek {
             return Err(CryptoError::EnvelopeTooShort);
         }
         let (nonce_bytes, ciphertext) = envelope.split_at(12);
-        let nonce = Nonce::from_slice(nonce_bytes);
-        self.cipher().decrypt(nonce, ciphertext).map_err(|_| CryptoError::DecryptFailed)
+        let nonce = Nonce::try_from(nonce_bytes).expect("nonce is always 12 bytes");
+        self.cipher().decrypt(&nonce, ciphertext).map_err(|_| CryptoError::DecryptFailed)
     }
 
     /// Encrypt an i64 (little-endian).
