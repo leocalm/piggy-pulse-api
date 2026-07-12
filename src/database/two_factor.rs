@@ -11,7 +11,7 @@ use base64::{Engine as _, engine::general_purpose};
 use data_encoding::BASE32_NOPAD;
 use qrcode::QrCode;
 use rand::Rng;
-use rand_core::OsRng;
+use argon2::password_hash::rand_core::OsRng;
 use sha2::{Digest, Sha256};
 use std::time::SystemTime;
 use totp_rs::{Algorithm, Secret, TOTP};
