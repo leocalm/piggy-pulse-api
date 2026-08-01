@@ -20,7 +20,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 log = "0.4.32"
 async-trait = "0.1.89"
-validator = { version = "0.20", features = ["derive"] }
+validator = { version = "0.21", features = ["derive"] }
 regex = "1"
 thiserror = "2.0"
 zxcvbn = "3.1"
