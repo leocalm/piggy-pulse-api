@@ -14,7 +14,7 @@ use qrcode::QrCode;
 use rand::Rng;
 use sha2::{Digest, Sha256};
 use std::time::SystemTime;
-use totp_rs::{Algorithm, Secret, TOTP};
+use totp_rs::{Algorithm, Builder, Secret};
 use uuid::Uuid;
 
 const TOTP_DIGITS: usize = 6;
@@ -99,15 +99,20 @@ impl PostgresRepository {
 
     /// Verify a TOTP code with time skew tolerance
     pub fn verify_totp_code(secret: &str, code: &str) -> Result<bool, AppError> {
-        let secret_bytes = Secret::Encoded(secret.to_string())
-            .to_bytes()
-            .map_err(|e| AppError::BadRequest(format!("Failed to decode secret: {}", e)))?;
+        let secret = Secret::try_from_base32(secret).map_err(|e| AppError::BadRequest(format!("Failed to decode secret: {}", e)))?;
 
-        let totp =
-            TOTP::new(Algorithm::SHA1, TOTP_DIGITS, 1, TOTP_STEP, secret_bytes).map_err(|e| AppError::BadRequest(format!("Failed to create TOTP: {}", e)))?;
+        let totp = Builder::new()
+            .with_algorithm(Algorithm::SHA1)
+            .with_digits(TOTP_DIGITS as u8)
+            .with_skew(1)
+            .with_step_duration(TOTP_STEP)
+            .with_secret(secret)
+            .build()
+            .map_err(|e| AppError::BadRequest(format!("Failed to create TOTP: {}", e)))?;
 
-        // Use constant-time comparison through totp-rs
-        Ok(totp.check(code, SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()))
+        Ok(totp
+            .check(code, SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs())
+            .is_some())
     }
 
     /// Create initial 2FA setup (unverified state)
