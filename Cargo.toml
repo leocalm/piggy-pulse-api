@@ -33,7 +33,7 @@ rand = "0.10"
 # Database access with sqlx
 sqlx = { version = "0.8.6", default-features = false, features = ["chrono", "uuid", "migrate", "postgres", "runtime-tokio-rustls", "macros"] }
 # Two-Factor Authentication
-totp-rs = "5.7"
+totp-rs = "6.0"
 data-encoding = "2.11"
 qrcode = "0.14"
 aes-gcm = "0.11"
